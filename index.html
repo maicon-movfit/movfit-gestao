@@ -2934,7 +2934,7 @@ async function iniciarAvaliacaoColab(unidId, colabId, cicloId){
     // Salvar unidade atual temporariamente
     unidadeAtual = UNIDADES.find(u=>u.id===unidId) || {id:unidId,nome:unidId,cor:'#a78bfa'};
     
-    document.getElementById('radarModalTitulo').textContent = `Autoavaliação — ${colab.data().nome}`;
+    document.getElementById('radarModalTitulo').textContent = `Autoavaliação — ${colabId.replace(/_/g,' ')}`;
     document.getElementById('radarModalSub').textContent = 'Responda com honestidade. Suas respostas ficam salvas automaticamente.';
     
     // Esconder tudo e mostrar só o modal
