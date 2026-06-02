@@ -3412,3 +3412,519 @@ if(!verificarLinkRadar()){
 </script>
 </body>
 </html>
+
+#!/usr/bin/env python3
+"""
+MOV FIT — Integração Automática
+Execute: python3 patch_movfit.py
+Requer: index.html na mesma pasta
+Gera:   index_integrado.html (pronto para substituir o index.html no GitHub)
+"""
+import sys, os
+
+with open('index.html','r',encoding='utf-8') as f:
+    src = f.read()
+
+with open('integration_css.css','r',encoding='utf-8') as f:
+    css = f.read()
+
+with open('integration_js.js','r',encoding='utf-8') as f:
+    js = f.read()
+
+# 1. Inject CSS before </style>
+if '</style>' not in src:
+    print("ERRO: </style> não encontrado no index.html")
+    sys.exit(1)
+src = src.replace('</style>', css + '\n</style>', 1)
+print("✓ CSS injetado")
+
+# 2. Add Timeline tab button
+TAB_MARKER = "id=\"pti-pdi\"" 
+if TAB_MARKER in src:
+    # Find end of the pti-pdi button line
+    pos = src.find(TAB_MARKER)
+    end = src.find('>', pos) + 1
+    # Skip to after "Plano de Ação</button>"
+    end2 = src.find('</button>', end) + 9
+    TIMELINE_BTN = """\n        <button onclick="perfilTabInline('timeline')" id="pti-timeline" style="padding:12px 16px;font-size:12px;font-weight:500;cursor:pointer;color:#76768a;border:none;background:none;font-family:'Inter',sans-serif;">📅 Timeline</button>"""
+    src = src[:end2] + TIMELINE_BTN + src[end2:]
+    print("✓ Aba Timeline adicionada")
+else:
+    print("AVISO: botão pti-pdi não encontrado — aba timeline não foi adicionada")
+
+# 3. Inject JS before last </script>
+last_script = src.rfind('</script>')
+if last_script == -1:
+    print("ERRO: </script> não encontrado")
+    sys.exit(1)
+src = src[:last_script] + js + '\n</script>' + src[last_script+9:]
+print("✓ JavaScript injetado")
+
+with open('index_integrado.html','w',encoding='utf-8') as f:
+    f.write(src)
+
+size = os.path.getsize('index_integrado.html')
+print(f"\n✅ Arquivo gerado: index_integrado.html ({size:,} bytes)")
+print("\nPróximo passo: renomeie para index.html e faça o upload no GitHub.")
+
+/* ══ PDI + TIMELINE INTEGRADO ══ */
+/* ── TIMELINE ── */
+.tl-wrap { position:relative; padding-left:28px; }
+.tl-wrap::before { content:''; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:linear-gradient(to bottom, var(--red), rgba(232,39,42,0.15), rgba(255,255,255,0.05)); border-radius:2px; }
+.tl-item { position:relative; margin-bottom:0; }
+.tl-item:last-child { margin-bottom:0; }
+.tl-dot {
+  position:absolute; left:-23px; top:12px;
+  width:14px; height:14px; border-radius:50%;
+  border:2px solid; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:7px; font-weight:700;
+  transition:all 0.2s;
+}
+.tl-dot.done    { background:var(--green); border-color:var(--green); color:#fff; }
+.tl-dot.late    { background:var(--red-muted); border-color:var(--red); color:var(--red-light); }
+.tl-dot.today   { background:var(--yellow-muted); border-color:var(--yellow); color:var(--yellow); box-shadow:0 0 8px rgba(255,183,0,0.4); }
+.tl-dot.pending { background:var(--dark3); border-color:var(--dark5); color:var(--gray); }
+.tl-dot.milestone-next-rt { background:rgba(59,130,246,0.15); border-color:var(--blue); color:var(--blue); }
+
+.tl-card {
+  background:var(--dark3); border:1px solid rgba(255,255,255,0.05);
+  border-radius:9px; padding:10px 13px; margin-bottom:8px;
+  transition:all 0.15s; cursor:default;
+  display:flex; flex-direction:column; gap:4px;
+}
+.tl-card:hover { border-color:rgba(255,255,255,0.1); background:var(--dark4); }
+.tl-card.done-card  { border-color:rgba(34,197,94,0.2); background:rgba(34,197,94,0.04); }
+.tl-card.late-card  { border-color:rgba(232,39,42,0.25); background:rgba(232,39,42,0.04); }
+.tl-card.today-card { border-color:rgba(255,183,0,0.3); background:rgba(255,183,0,0.04); }
+.tl-card.rt-card    { border-color:rgba(59,130,246,0.25); background:rgba(59,130,246,0.04); }
+
+.tl-card-top { display:flex; align-items:center; gap:8px; }
+.tl-type-badge { padding:2px 7px; border-radius:8px; font-size:9px; font-weight:600; white-space:nowrap; flex-shrink:0; }
+.tl-badge-leitura { background:rgba(59,130,246,0.12); color:#60A5FA; }
+.tl-badge-pratica  { background:rgba(139,92,246,0.12); color:var(--purple); }
+.tl-badge-check30  { background:rgba(255,183,0,0.12); color:var(--yellow); }
+.tl-badge-check60  { background:rgba(249,115,22,0.12); color:var(--orange); }
+.tl-badge-rt       { background:rgba(59,130,246,0.12); color:var(--blue); }
+
+.tl-card-title { font-size:12px; font-weight:500; color:var(--white); flex:1; }
+.tl-status-btn {
+  margin-left:auto; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:500;
+  cursor:pointer; border:1px solid rgba(255,255,255,0.08); background:var(--dark4); color:var(--gray);
+  transition:all 0.15s; white-space:nowrap; flex-shrink:0;
+}
+.tl-status-btn:hover { background:var(--dark5); color:var(--white); }
+.tl-status-btn.is-done { background:var(--green-muted); color:var(--green); border-color:rgba(34,197,94,0.2); }
+.tl-card-meta { display:flex; align-items:center; gap:10px; }
+.tl-date { font-size:10px; color:var(--gray); display:flex; align-items:center; gap:4px; }
+.tl-date strong { color:var(--gray-light); }
+.tl-days-badge { font-size:9px; padding:1px 6px; border-radius:6px; font-weight:600; }
+.tl-days-done   { background:var(--green-muted); color:var(--green); }
+.tl-days-late   { background:var(--red-muted); color:var(--red-light); }
+.tl-days-soon   { background:var(--yellow-muted); color:var(--yellow); }
+.tl-days-future { background:rgba(255,255,255,0.05); color:var(--gray); }
+.tl-dim-ref { font-size:9px; color:var(--gray); }
+.tl-progress-bar { height:2px; background:var(--dark5); border-radius:1px; overflow:hidden; margin-top:2px; }
+.tl-progress-fill { height:100%; border-radius:1px; transition:width 0.6s; }
+
+/* ocultar timeline no print (está no PDI) */
+@media print { #card-timeline { display:none !important; } }
+
+
+/* Perfil inline melhorado */
+.pdi-result-card{background:rgba(224,31,45,.04);border:1px solid rgba(224,31,45,.2);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+.pdi-result-dim{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#e01f2d;margin-bottom:5px;}
+.pdi-result-score{font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#e01f2d;}
+.pdi-result-title{font-size:13px;font-weight:600;color:#f0f0f2;margin-bottom:10px;}
+.pdi-task-block{background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:11px 13px;margin-bottom:8px;}
+.pdi-task-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:9px;font-weight:600;margin-bottom:6px;}
+.pdi-task-leitura{background:rgba(59,130,246,.12);color:#60A5FA;}
+.pdi-task-pratica{background:rgba(139,92,246,.12);color:#8B5CF6;}
+.pdi-task-text{font-size:11px;color:rgba(240,240,242,.75);line-height:1.55;}
+.pdi-obs-line{border-top:1px dashed rgba(255,255,255,.12);margin:10px 0 3px;}
+.pdi-sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+.pdi-sign-box{background:#18181d;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px;text-align:center;}
+.pdi-sign-line{border-top:1px solid rgba(255,255,255,.15);width:160px;margin:0 auto 6px;padding-top:8px;font-size:11px;color:#C0C0C0;}
+.pdi-sign-role{font-size:9px;color:#555;}
+/* Timeline no perfil inline */
+.itl-wrap{position:relative;padding-left:22px;}
+.itl-wrap::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:linear-gradient(to bottom,#e01f2d,rgba(224,31,45,.1));border-radius:2px;}
+.itl-item{position:relative;margin-bottom:7px;}
+.itl-dot{position:absolute;left:-18px;top:10px;width:11px;height:11px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;}
+.itl-dot.done{background:#2ecc71;border-color:#2ecc71;color:#fff;}
+.itl-dot.late{background:rgba(224,31,45,.15);border-color:#e01f2d;color:#e01f2d;}
+.itl-dot.today{background:rgba(245,166,35,.15);border-color:#f5a623;color:#f5a623;}
+.itl-dot.pending{background:#18181d;border-color:#2e2e3e;}
+.itl-dot.rt-dot{background:rgba(79,142,247,.15);border-color:#4f8ef7;color:#4f8ef7;}
+.itl-card{background:#18181d;border:1px solid rgba(255,255,255,.06);border-radius:7px;padding:8px 11px;}
+.itl-card.done-c{border-color:rgba(46,204,113,.2);background:rgba(46,204,113,.04);}
+.itl-card.late-c{border-color:rgba(224,31,45,.2);background:rgba(224,31,45,.04);}
+.itl-card.today-c{border-color:rgba(245,166,35,.2);background:rgba(245,166,35,.04);}
+.itl-card.rt-c{border-color:rgba(79,142,247,.2);background:rgba(79,142,247,.04);}
+.itl-title{font-size:11px;font-weight:500;color:#f0f0f2;margin-bottom:3px;}
+.itl-meta{display:flex;align-items:center;gap:8px;}
+.itl-date{font-size:10px;color:#76768a;}
+.itl-pill{font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600;}
+.itl-done{background:rgba(46,204,113,.12);color:#2ecc71;}
+.itl-late{background:rgba(224,31,45,.1);color:#e01f2d;}
+.itl-soon{background:rgba(245,166,35,.12);color:#f5a623;}
+.itl-future{background:rgba(255,255,255,.05);color:#76768a;}
+
+// ══════════════════════════════════════════════════════════════
+// INTEGRAÇÃO PDI + TIMELINE — MOV FIT Central v3
+// ══════════════════════════════════════════════════════════════
+
+const DIMS=[
+  {id:0,title:'Técnica, Execução e Segurança',pilar:'P1'},
+  {id:1,title:'Prescrição, Progressão e Qualidade',pilar:'P1'},
+  {id:2,title:'Condução, Experiência e Retenção',pilar:'P1'},
+  {id:3,title:'Compromisso com Resultado do Aluno',pilar:'P1'},
+  {id:4,title:'Alinhamento com a Cultura MOV FIT',pilar:'P2'},
+  {id:5,title:'Trabalho em Equipe e Contribuição',pilar:'P2'},
+  {id:6,title:'Comunicação e Postura Profissional',pilar:'P2'},
+  {id:7,title:'Visão de Futuro e Clareza de Propósito',pilar:'P3'},
+  {id:8,title:'Entrega Acima do Básico e Proatividade',pilar:'P3'},
+  {id:9,title:'Inteligência Emocional e Resiliência',pilar:'P3'},
+  {id:10,title:'Execução dos Processos e Organização',pilar:'P4'},
+  {id:11,title:'Autoconhecimento e Mentalidade de Crescimento',pilar:'P4'},
+];
+
+const PDI_TASKS={
+  0:{leitura:'Leia "O Corpo Fala" de Pierre Weil e observe como a postura e linguagem corporal de seus alunos refletem padrões de execução — registre 3 observações por semana.',pratica:'Durante 4 semanas, ao final de cada aula registre no celular: qual foi a correção técnica mais frequente do dia e qual ajuste gerou resultado imediato.'},
+  1:{leitura:'Estude o método de periodização linear e ondulatória — assista à série "Princípios do Treinamento" no YouTube do CREF e tome notas sobre progressão de volume e intensidade.',pratica:'Redesenhe o programa de treino de 3 alunos com objetivos distintos aplicando progressão estruturada. Registre evolução a cada 2 semanas.'},
+  2:{leitura:'Leia "Experiência do Cliente" de Shep Hyken e identifique 5 práticas aplicáveis ao atendimento durante o treino físico.',pratica:'Implemente um ritual de encerramento em todas as suas aulas: nos últimos 2 minutos, pergunte ao aluno como ele se sentiu e registre a resposta.'},
+  3:{leitura:'Leia o artigo "Motivação intrínseca no treinamento físico" e estude como comunicar progresso de forma tangível ao aluno.',pratica:'Escolha 5 alunos e crie uma planilha simples de acompanhamento com metas e marcos. Revise com cada um deles quinzenalmente.'},
+  4:{leitura:'Releia o Manual de Cultura MOV FIT e identifique os 3 valores em que você se sente mais alinhado e os 2 que ainda são um desafio. Escreva uma reflexão de 1 página.',pratica:'Por 30 dias, antes de cada turno faça uma pergunta a si mesmo: "Que comportamento vou demonstrar hoje que reflete quem somos?" Registre no final do dia se cumpriu.'},
+  5:{leitura:'Leia "A Arte da Guerra" de Sun Tzu focando nos capítulos sobre cooperação e alianças estratégicas. Relacione cada princípio com situações do dia a dia na equipe.',pratica:'Identifique um colega que está com dificuldade em alguma dimensão e ofereça apoio prático por 3 semanas. Documente como foi a experiência.'},
+  6:{leitura:'Assista ao curso gratuito "Comunicação Não-Violenta" no YouTube de Marshall Rosenberg e anote os 5 princípios mais impactantes para você.',pratica:'Pratique o protocolo CNV em 3 situações de feedback ou conflito durante o ciclo. Descreva o antes e depois de cada situação em um diário curto.'},
+  7:{leitura:'Leia "Os 7 Hábitos das Pessoas Altamente Eficazes" de Stephen Covey — foco nos hábitos 2 (Comece com o fim em mente) e 3 (Primeiro o mais importante).',pratica:'Escreva sua visão profissional para 1, 2 e 3 anos em no máximo uma página. Compartilhe com seu avaliador e revise ao final do ciclo de 60 dias.'},
+  8:{leitura:'Leia "Extreme Ownership" de Jocko Willink. Escreva 3 insights aplicáveis à sua rotina na unidade.',pratica:'Identifique uma iniciativa não solicitada que você pode tomar na unidade (melhoria de processo, apoio a colega, ideia nova) e execute-a até o final do ciclo.'},
+  9:{leitura:'Leia "Inteligência Emocional" de Daniel Goleman — foco nos capítulos 4 e 5 sobre autorregulação e empatia.',pratica:'Implemente uma prática diária de 5 minutos antes do início do expediente: respire, identifique como está se sentindo e defina uma intenção emocional para o dia. Registre por 4 semanas.'},
+  10:{leitura:'Estude o método "Getting Things Done" de David Allen. Identifique quais dos seus processos MOV FIT poderiam se beneficiar deste sistema.',pratica:'Crie uma rotina semanal documentada com checklist dos processos que você é responsável. Siga-a por 4 semanas e registre onde houve falhas e ajustes.'},
+  11:{leitura:'Leia "Mindset: A Nova Psicologia do Sucesso" de Carol Dweck. Identifique em que dimensões você ainda opera com mentalidade fixa.',pratica:'Peça feedback genuíno a 3 pessoas: um colega, um aluno de confiança e seu avaliador. Escreva o que ouviu, o que te surpreendeu e um plano de ação de 3 pontos.'},
+};
+
+// ── PDI automático no perfil inline ──────────────────────────────────────────
+function renderPdiInline() {
+  const el = document.getElementById('perfilConteudoInline');
+  if(!el || !perfilColabAtual) return;
+
+  const ciclo = perfilColabAtual.ciclos[0];
+  if(!ciclo || (!ciclo.notasRt && !ciclo.notasColab)) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:#76768a;"><div style="font-size:32px;margin-bottom:10px;">🎯</div><p>Realize a avaliação primeiro para gerar o PDI.</p></div>';
+    return;
+  }
+
+  const notas = ciclo.notasColab || ciclo.notasRt;
+  // Calcular médias por dimensão (média RT + colab se ambos existirem)
+  const mediaDimsLocal = DIMS.map((d,i) => {
+    const nr = ciclo.notasRt ? (ciclo.notasRt[i]?.nota || 0) : null;
+    const nc = ciclo.notasColab ? (ciclo.notasColab[i]?.nota || 0) : null;
+    if(nr !== null && nc !== null) return parseFloat(((nr+nc)/2).toFixed(1));
+    return nr !== null ? nr : (nc !== null ? nc : 0);
+  });
+
+  const sorted = mediaDimsLocal.map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);
+  const p1idx = sorted[0].i, p2idx = sorted[1].i;
+
+  // Divergências
+  const divs = [];
+  if(ciclo.notasRt && ciclo.notasColab) {
+    DIMS.forEach((d,i) => {
+      const nr = ciclo.notasRt[i]?.nota||0, nc = ciclo.notasColab[i]?.nota||0;
+      if(Math.abs(nr-nc) >= 2) divs.push({dim:d.title, nr, nc, diff:Math.abs(nr-nc)});
+    });
+  }
+
+  const deadlineDate = new Date(); deadlineDate.setDate(deadlineDate.getDate()+60);
+  const deadline = deadlineDate.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+
+  let html = '';
+
+  // Alerta de divergências
+  if(divs.length) {
+    html += `<div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:9px;padding:11px 14px;margin-bottom:16px;font-size:11px;color:#f5a623;">
+      <strong>⚠ Divergências ≥ 2 pontos:</strong> ${divs.map(d=>`<strong>${d.dim.split(' e ')[0]}</strong> (Δ${d.diff}pts)`).join(', ')}. Recomenda-se alinhamento presencial.
+    </div>`;
+  }
+
+  // Cards de prioridade
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+    ${[{idx:p1idx,rank:1,color:'#e01f2d'},{idx:p2idx,rank:2,color:'#f97316'}].map(({idx,rank,color})=>`
+    <div style="background:rgba(224,31,45,.04);border:1px solid ${rank===1?'rgba(224,31,45,.35)':'rgba(249,115,22,.3)'};border-radius:9px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div style="width:22px;height:22px;border-radius:5px;background:${rank===1?'rgba(224,31,45,.15)':'rgba(249,115,22,.12)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${color};">${rank}</div>
+        <div style="font-size:10px;color:#76768a;">${DIMS[idx].pilar}</div>
+        <div style="margin-left:auto;font-family:'DM Mono',monospace;font-weight:700;font-size:18px;color:${color};">${mediaDimsLocal[idx]}</div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:#f0f0f2;">${DIMS[idx].title}</div>
+    </div>`).join('')}
+  </div>`;
+
+  // Tarefas
+  [p1idx, p2idx].forEach((idx, rank) => {
+    const d = DIMS[idx];
+    const tasks = PDI_TASKS[idx];
+    const color = rank===0?'#e01f2d':'#f97316';
+    const tlKey = 'movfit_tl_'+perfilColabAtual.id+'_ciclo';
+    const tlState = JSON.parse(sessionStorage.getItem(tlKey)||'{}');
+
+    html += `<div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0 10px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:10px;">
+        <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:${rank===0?'rgba(224,31,45,.12)':'rgba(249,115,22,.1)'};color:${color};">${rank+1}ª Prioridade</span>
+        <span style="font-size:12px;font-weight:600;color:${color};">${d.title}</span>
+        <span style="margin-left:auto;font-size:10px;color:#76768a;">Prazo: ${deadline}</span>
+      </div>
+      <div class="pdi-task-block">
+        <span class="pdi-task-badge pdi-task-leitura">📖 Leitura / Conteúdo</span>
+        <div class="pdi-task-text">${tasks.leitura}</div>
+      </div>
+      <div class="pdi-task-block">
+        <span class="pdi-task-badge pdi-task-pratica">⚡ Prática / Comportamento</span>
+        <div class="pdi-task-text">${tasks.pratica}</div>
+      </div>
+      <div style="margin-top:8px;">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#555;margin-bottom:3px;">Observações do Avaliador</div>
+        <div class="pdi-obs-line"></div>
+        <div class="pdi-obs-line" style="margin-top:16px;"></div>
+      </div>
+    </div>`;
+  });
+
+  // Assinaturas
+  html += `<div class="pdi-sign-grid">
+    <div class="pdi-sign-box">
+      <div class="pdi-sign-line">${perfilColabAtual.nome.split(' ').slice(0,3).join(' ')}</div>
+      <div class="pdi-sign-role">Assinatura · Data: ___/___/______</div>
+    </div>
+    <div class="pdi-sign-box">
+      <div class="pdi-sign-line">Avaliador / Gestor</div>
+      <div class="pdi-sign-role">Assinatura · Data: ___/___/______</div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+// ── TIMELINE no perfil inline ─────────────────────────────────────────────────
+function renderTimelineInline() {
+  const el = document.getElementById('perfilConteudoInline');
+  if(!el || !perfilColabAtual) return;
+
+  const ciclo = perfilColabAtual.ciclos[0];
+  if(!ciclo) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:#76768a;"><div style="font-size:32px;margin-bottom:10px;">📅</div><p>Realize a avaliação para gerar a timeline.</p></div>';
+    return;
+  }
+
+  const notas = ciclo.notasColab || ciclo.notasRt;
+  const sorted = DIMS.map((d,i)=>({v:notas[i]?.nota||0,i})).sort((a,b)=>a.v-b.v);
+  const p1i = sorted[0]?.i??0, p2i = sorted[1]?.i??1;
+  const d1 = DIMS[p1i]?.title.split(' e ')[0]||'Dimensão 1';
+  const d2 = DIMS[p2i]?.title.split(' e ')[0]||'Dimensão 2';
+
+  const tlKey = 'movfit_tl_'+perfilColabAtual.id+'_ciclo';
+  const tlState = JSON.parse(sessionStorage.getItem(tlKey)||'{}');
+
+  const baseDate = new Date(ciclo.criadoEm||new Date()); baseDate.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+  function fmtDate(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});}
+  function diffDays(d){return Math.round((d-today)/(1000*60*60*24));}
+  function nextCiclo(){const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];const d=addDays(baseDate,90);return meses[d.getMonth()]+'/'+String(d.getFullYear()).slice(2);}
+
+  const items = [
+    {id:'inicio',   day:0,  badge:'▶ Início',      title:'Início do PDI', fixed:true},
+    {id:'p1_lei',   day:7,  badge:'📖 Leitura',    title:'Leitura: '+d1},
+    {id:'p2_lei',   day:14, badge:'📖 Leitura',    title:'Leitura: '+d2},
+    {id:'p1_pra',   day:30, badge:'⚡ Prática',    title:'Prática: '+d1},
+    {id:'p2_pra',   day:30, badge:'⚡ Prática',    title:'Prática: '+d2},
+    {id:'check30',  day:30, badge:'🔄 Check 30d',  title:'Check intermediário 30 dias', isMarco:true},
+    {id:'check60',  day:60, badge:'✅ Check 60d',  title:'Encerramento do PDI — 60 dias', isMarco:true},
+    {id:'prox_rt',  day:90, badge:'🎯 Próx. RT',   title:'Próxima Avaliação RT — '+nextCiclo(), isRT:true},
+  ].sort((a,b)=>a.day-b.day);
+
+  const total = items.filter(it=>!it.fixed&&!it.isMarco&&!it.isRT).length;
+  const done  = items.filter(it=>!it.fixed&&!it.isMarco&&!it.isRT&&tlState[it.id]).length;
+
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-size:12px;color:#76768a;">${done}/${total} tarefas concluídas</div>
+    <div style="font-size:10px;color:#76768a;">Iniciado: ${fmtDate(baseDate)}</div>
+  </div>
+  <div class="itl-wrap">`;
+
+  items.forEach(item => {
+    const itemDate = addDays(baseDate, item.day);
+    const diff = diffDays(itemDate);
+    const isDone = !!tlState[item.id] || item.fixed;
+    const isLate = !isDone && diff < 0;
+    const isToday = diff === 0;
+    const dotCls = isDone?'done':isLate?'late':isToday?'today':item.isRT?'rt-dot':'pending';
+    const cardCls = isDone?'done-c':isLate?'late-c':isToday?'today-c':item.isRT?'rt-c':'';
+    const pillCls = isDone?'itl-done':isLate?'itl-late':(diff<=7&&diff>=0)?'itl-soon':'itl-future';
+    const pillTxt = isDone&&!item.fixed?'Concluído':item.fixed?'Início':isLate?Math.abs(diff)+'d atraso':isToday?'Hoje':'Em '+diff+'d';
+    const canMark = !item.fixed && !item.isRT;
+    const dotIcon = isDone?'✓':isLate?'!':'';
+
+    if(item.isMarco && !item.fixed) {
+      html += `<div style="font-size:9px;color:#555;text-align:center;padding:5px 0 3px;">── ${item.badge} · ${fmtDate(itemDate)} ──</div>`;
+    }
+
+    html += `<div class="itl-item">
+      <div class="itl-dot ${dotCls}">${dotIcon}</div>
+      <div class="itl-card ${cardCls}">
+        <div class="itl-title">${item.badge} <span style="color:#c0c0c0;">${item.title}</span></div>
+        <div class="itl-meta">
+          <span class="itl-date">📅 ${fmtDate(itemDate)}</span>
+          <span class="itl-pill ${pillCls}">${pillTxt}</span>
+          ${canMark?`<button onclick="toggleTLInline('${item.id}','${tlKey}')" style="margin-left:auto;padding:1px 7px;border-radius:4px;font-size:9px;font-weight:500;cursor:pointer;border:1px solid rgba(255,255,255,.1);background:#18181d;color:${isDone?'#2ecc71':'#76768a'};transition:all .15s;">${isDone?'✓':'Marcar'}</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function toggleTLInline(id, key) {
+  const s = JSON.parse(sessionStorage.getItem(key)||'{}');
+  s[id] = !s[id];
+  sessionStorage.setItem(key, JSON.stringify(s));
+  renderTimelineInline();
+}
+
+// ── Patch perfilTabInline para incluir PDI e Timeline melhorados ──────────────
+const _origRenderPerfilInline = typeof renderPerfilInline === 'function' ? renderPerfilInline : null;
+function renderPerfilInlinePatched() {
+  if(perfilTabAtualInline === 'pdi') { renderPdiInline(); return; }
+  if(perfilTabAtualInline === 'timeline') { renderTimelineInline(); return; }
+  if(_origRenderPerfilInline) _origRenderPerfilInline();
+}
+
+// Override renderPerfilInline
+window.renderPerfilInline = renderPerfilInlinePatched;
+
+// ── Patch perfilTabInline para incluir 'timeline' ─────────────────────────────
+const _origPerfilTabInline = perfilTabInline;
+window.perfilTabInline = function(tab) {
+  perfilTabAtualInline = tab;
+  ['carteira','radar','historico','pdi','timeline'].forEach(t => {
+    const btn = document.getElementById('pti-'+t);
+    if(!btn) return;
+    btn.style.color = t===tab ? '#fff' : '#76768a';
+    btn.style.fontWeight = t===tab ? '600' : '500';
+    btn.style.borderBottom = t===tab ? '2px solid #e01f2d' : 'none';
+  });
+  renderPerfilInlinePatched();
+};
+
+// ── Patch abrirPerfilProfessor para adicionar aba Timeline ────────────────────
+const _origAbrirPerfil = abrirPerfilProfessor;
+window.abrirPerfilProfessor = async function(nomeProf) {
+  await _origAbrirPerfil(nomeProf);
+  // Após modal criado, adicionar aba Timeline se não existir
+  setTimeout(() => {
+    const tabsEl = document.getElementById('perfilTabsDin');
+    if(tabsEl && !document.getElementById('ptDinTimeline')) {
+      const btn = document.createElement('button');
+      btn.id = 'ptDinTimeline';
+      btn.textContent = '📅 Timeline';
+      btn.style.cssText = 'padding:12px 16px;font-size:12px;font-weight:500;cursor:pointer;color:#76768a;border:none;background:none;font-family:"Inter",sans-serif;';
+      btn.onclick = () => perfilGoTabDin('timeline');
+      tabsEl.appendChild(btn);
+    }
+    // Patch perfilGoTabDin para timeline
+    const _origGoTabDin = perfilGoTabDin;
+    window.perfilGoTabDin = function(tab) {
+      if(tab === 'timeline') {
+        perfilTabAtualDin = 'timeline';
+        ['carteira','radar','historico','pdi','timeline'].forEach(t => {
+          const btn = document.getElementById('ptDin'+t.charAt(0).toUpperCase()+t.slice(1));
+          if(btn) {
+            btn.style.color = t===tab?'#fff':'#76768a';
+            btn.style.fontWeight = t===tab?'600':'500';
+            btn.style.borderBottom = t===tab?'2px solid #e01f2d':'none';
+          }
+        });
+        const el = document.getElementById('perfilConteudoDin');
+        if(el) { renderTimelineInline(); const src=document.getElementById('perfilConteudoInline'); if(src) el.innerHTML=src.innerHTML; }
+        return;
+      }
+      _origGoTabDin(tab);
+    };
+  }, 500);
+};
+
+// ── Patch finalizarAvaliacao para passar dados ao resultado ───────────────────
+const _origFinalizar = finalizarAvaliacao;
+window.finalizarAvaliacao = async function() {
+  // Salvar no Firebase (lógica original)
+  showLoading(true);
+  const campo = radarModoAtual === 'rt' ? 'notasRt' : 'notasColab';
+  const dados = {};
+  RADAR_DIMENSOES.forEach((_,i)=>{ dados[i] = radarRespostas[i] || {nota:0,justif:''}; });
+
+  // Buscar nome do professor
+  const hist = getHistorico();
+  let nomeProf = radarColabAtual.replace(/_/g,' ');
+  for(const mes of hist){
+    const p = mes.professores.find(x=>x.nome.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()===radarColabAtual);
+    if(p){ nomeProf = p.nome; break; }
+  }
+
+  try {
+    await ciclosRef(unidadeAtual.id, radarColabAtual).doc(radarCicloAtual).set(
+      {[campo]:dados,[`${campo}Em`]:new Date().toISOString()}, {merge:true}
+    );
+
+    // Buscar ciclo completo para passar ao resultado
+    const snap = await ciclosRef(unidadeAtual.id, radarColabAtual).doc(radarCicloAtual).get();
+    const cicloCompleto = snap.exists ? snap.data() : {};
+    const scores = DIMS.map((_,i) => dados[i]?.nota ?? null);
+    const justifs = DIMS.map((_,i) => dados[i]?.justif ?? '');
+    const avg = scores.filter(s=>s!==null).reduce((a,b)=>a+b,0) / scores.filter(s=>s!==null).length;
+    const now = new Date();
+
+    // Guardar no sessionStorage para movfit_resultado.html
+    const result = {
+      profId: radarColabAtual,
+      ciclo: now.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace(' ','/')
+             .replace(/^(\w)(\w+)\//,(m,a,b)=>a.toUpperCase()+b+'/'),
+      mode: radarModoAtual === 'rt' ? 'avaliador' : 'autoavaliacao',
+      nome: nomeProf,
+      cargo: 'Professor',
+      scores,
+      justifs,
+      avg,
+      date: now.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}),
+      time: now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+      ts: now.toISOString(),
+      // Se RT avaliou e colab também, passar notas do avaliador
+      avaliadorScores: radarModoAtual === 'rt' ? scores : (cicloCompleto.notasRt ? DIMS.map((_,i)=>cicloCompleto.notasRt[i]?.nota??0) : null),
+    };
+
+    // Histórico fictício compatível com movfit_resultado.html
+    // (o resultado.html usa histData interno; passa dados reais via sessionStorage)
+    sessionStorage.setItem('movfit_result', JSON.stringify(result));
+
+    showLoading(false);
+    document.getElementById('modalRadar').style.display = 'none';
+
+    if(radarModoAtual === 'colab') {
+      // Colaborador: redireciona para resultado com viewer=avaliado
+      window.location.href = 'movfit_resultado.html?viewer=avaliado';
+    } else {
+      // RT: abre resultado em nova aba
+      mostrarToast('✓ Avaliação salva! Abrindo resultado...');
+      setTimeout(() => window.open('movfit_resultado.html', '_blank'), 600);
+      if(perfilColabAtual) await abrirPerfil(radarColabAtual);
+      else renderColabGrid();
+    }
+  } catch(e) {
+    showLoading(false);
+    alert('Erro ao salvar: ' + e.message);
+  }
+};
+
+console.log('✅ MOV FIT — PDI + Timeline + Resultado integrados');
