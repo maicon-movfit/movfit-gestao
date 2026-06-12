@@ -674,7 +674,7 @@ tbody tr:last-child td{border-bottom:none;}
   </div>
   <div style="display:none;"><span id="radarDimCounter">1</span></div>
 </header>
-    <main style="background:#0D0D0D;overflow-y:auto;padding:16px 20px 24px;display:flex;flex-direction:column;gap:16px;flex:1;" id="radarMainScroll">
+    <main style="background:#0D0D0D;overflow-y:auto;padding:10px 16px 12px;display:flex;flex-direction:column;gap:8px;flex:1;" id="radarMainScroll">
       <div id="radarInner">
         <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:4px;">
           <div id="radarDimNumBox" style="width:46px;height:46px;border:2px solid #E8272A;border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;color:#E8272A;flex-shrink:0;">1</div>
@@ -709,7 +709,7 @@ tbody tr:last-child td{border-bottom:none;}
           <div style="font-size:10px;color:#76768a;margin-top:1px;">Adiciona <code style="background:#18181d;padding:1px 4px;border-radius:3px;">ambiente: "teste"</code></div>
         </div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;padding-bottom:10px;">
+      <div style="display:flex;gap:10px;align-items:center;padding-bottom:4px;">
           <button id="radarBtnPrev" onclick="radarNavegarNovo(-1)" style="height:42px;padding:0 18px;border-radius:10px;background:transparent;color:#888;border:1px solid rgba(255,255,255,0.1);font-family:'Inter',sans-serif;font-weight:500;font-size:13px;cursor:pointer;">← Anterior</button>
           <button id="radarBtnNext" onclick="radarNavegarNovo(1)" style="height:42px;padding:0 22px;border-radius:10px;background:#E8272A;color:#fff;border:none;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;">Próxima →</button>
           <span style="margin-left:auto;font-size:12px;color:#888;"><strong id="radarStepCur" style="color:#f5f4f0;">1</strong> / 12</span>
@@ -748,7 +748,6 @@ tbody tr:last-child td{border-bottom:none;}
 <div id="screen-portal" style="display:none;"></div>
 
 <script>
-
 // ══ INVESTIGAÇÃO FORENSE — handlers globais ══
 window.addEventListener('error', function(e) {
   console.error('[FORENSE GLOBAL ERROR]',
@@ -1889,31 +1888,26 @@ let _radarModoCanvas = 'completo'; // 'simplificado' apenas no modo colab
 // Substitui o bloco Data polygon + Dots quando _radarModoCanvas === 'simplificado'
 // 3 estados: ● atual | ○ respondido | · pendente
 function radarDesenharCanvasSimplificado(ctx, cx, cy, R, N) {
-  // Estado ·: pontos pendentes (borda do radar, discretos)
-  for (let i = 0; i < N; i++) {
-    if (i === _radarDimAtual || _radarScores[i] !== null) continue;
-    const a = (Math.PI * 2 / N) * i - Math.PI / 2;
-    ctx.beginPath();
-    ctx.arc(cx + R * Math.cos(a), cy + R * Math.sin(a), 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fill();
-  }
-  // Estado ○: dimensões já respondidas (posição real da nota)
+  // Pontos respondidos: posição real da nota, sólidos e visíveis
+  // Construção progressiva — sem linhas, sem polígono, sem preenchimento
   for (let i = 0; i < N; i++) {
     if (i === _radarDimAtual || _radarScores[i] === null) continue;
     const a = (Math.PI * 2 / N) * i - Math.PI / 2;
     const r = R * _radarScores[i] / 10;
+    ctx.shadowColor = 'rgba(232,39,42,0.35)';
+    ctx.shadowBlur = 5;
     ctx.beginPath();
-    ctx.arc(cx + r * Math.cos(a), cy + r * Math.sin(a), 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(232,39,42,0.55)';
+    ctx.arc(cx + r * Math.cos(a), cy + r * Math.sin(a), 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#E8272A';
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
-  // Estado ●: dimensão atual (borda, destacado)
+  // Ponto atual: borda do radar, destaque máximo
   const aCur = (Math.PI * 2 / N) * _radarDimAtual - Math.PI / 2;
   ctx.shadowColor = '#FF3B3F';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 14;
   ctx.beginPath();
-  ctx.arc(cx + R * Math.cos(aCur), cy + R * Math.sin(aCur), 6, 0, Math.PI * 2);
+  ctx.arc(cx + R * Math.cos(aCur), cy + R * Math.sin(aCur), 7, 0, Math.PI * 2);
   ctx.fillStyle = '#FF3B3F';
   ctx.fill();
   ctx.shadowBlur = 0;
@@ -5315,9 +5309,9 @@ function radarRenderMain() {
   if(next) next.textContent = _radarDimAtual===11 ? 'Finalizar →' : 'Próxima →';
 
   setHTML('radarCriteriaList', d.criteria.map((c,i) => `
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 13px;background:#141414;border:1px solid rgba(255,255,255,0.06);border-radius:9px;">
-      <div style="width:20px;height:20px;background:#242424;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#888;flex-shrink:0;margin-top:1px;">${i+1}</div>
-      <div style="font-size:13px;color:rgba(245,244,240,0.8);line-height:1.55;">${c}</div>
+    <div style="display:flex;align-items:flex-start;gap:7px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+      <span style="font-size:10px;color:#E8272A;font-weight:700;flex-shrink:0;margin-top:2px;font-family:'DM Mono',monospace;">${i+1}</span>
+      <div style="font-size:12px;color:rgba(245,244,240,0.82);line-height:1.45;">${c}</div>
     </div>`).join(''));
 
   const sb = document.getElementById('radarScoreBtns');
@@ -5699,8 +5693,6 @@ function radarNavegarNovo(dir) {
   _radarDimAtual = next;
   radarRenderNovoTudo();
 }
-
-
 
 </script>
 </body>
