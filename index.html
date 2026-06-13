@@ -4691,8 +4691,11 @@ function renderPerfilConteudoDin() {
       });
 
       // ── PDI PROTAGONISTA: inicialização ──────────────────────────────────────
-      (function() {
-        const dims = typeof RADAR_DIMS_FULL !== 'undefined' ? RADAR_DIMS_FULL : [];
+      // Usar setTimeout para garantir que RADAR_DIMS_FULL já foi declarado
+      setTimeout(function() {
+        const dims = (typeof RADAR_DIMS_FULL !== 'undefined' && RADAR_DIMS_FULL.length)
+                       ? RADAR_DIMS_FULL
+                       : (window.RADAR_DIMS_FULL || []);
         const notasRt = (ultimoCiclo && ultimoCiclo.notasRt) ? ultimoCiclo.notasRt : {};
 
         // Calcular dimensão sugerida (menor nota RT)
@@ -4740,7 +4743,19 @@ function renderPerfilConteudoDin() {
 
         // Validação em tempo real (habilita/desabilita botão ativar)
         function validarPDI() {
-          const foco     = (document.getElementById('pdiFocoPrincipalSel') || {}).value || '';
+          const focoSel  = document.getElementById('pdiFocoPrincipalSel');
+          const btn      = document.getElementById('btnAtivarPortalF1');
+          const erroDiv  = document.getElementById('pdiValidErro');
+
+          // Se o select ainda não tem opções (RADAR_DIMS_FULL não carregou),
+          // não bloquear o botão — deixar o RT clicar
+          const selCarregado = focoSel && focoSel.options.length > 1;
+          if(!selCarregado) {
+            if(btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+            return;
+          }
+
+          const foco     = (focoSel || {}).value || '';
           const acColab  = ((document.getElementById('pdiFocoAcaoColabTA') || {}).value || '').trim();
           const acRt     = ((document.getElementById('pdiFocoAcaoRtTA') || {}).value || '').trim();
           const checkIn  = (document.getElementById('pdiCheckInDataInput') || {}).value || '';
@@ -4748,8 +4763,6 @@ function renderPerfilConteudoDin() {
           const sec1Ac   = ((document.getElementById('pdiSec1Acao') || {}).value || '').trim();
           const sec2     = (document.getElementById('pdiSec2Sel') || {}).value || '';
           const sec2Ac   = ((document.getElementById('pdiSec2Acao') || {}).value || '').trim();
-          const btn      = document.getElementById('btnAtivarPortalF1');
-          const erroDiv  = document.getElementById('pdiValidErro');
 
           let erros = [];
           if(!foco)                             erros.push('Selecione o foco principal.');
@@ -4788,7 +4801,7 @@ function renderPerfilConteudoDin() {
 
         // Guardar sugeridoIdx para uso no clique
         window._pdiSugeridoIdx = sugeridoIdx;
-      })();
+      }, 50);
 
       // Botão de ativar — com gate pós-devolutiva
       document.getElementById('btnAtivarPortalF1').addEventListener('click', function() {
