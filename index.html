@@ -1782,6 +1782,122 @@ function renderPortalScreen(data, ids) {
     // ── CONTEÚDO DA ABA ──
     '<div id="portalTabContent"></div>' +
 
+    // ── PDI PROTAGONISTA ──────────────────────────────────────────────────────
+    (function() {
+      const dims  = typeof RADAR_DIMS_FULL !== 'undefined' ? RADAR_DIMS_FULL : [];
+      const foco  = data.pdiFocoPrincipal;
+      if(!foco && foco !== 0) return ''; // sem PDI confirmado — não renderiza
+
+      const focoIdx   = parseInt(foco, 10);
+      const focoNome  = dims[focoIdx] ? dims[focoIdx].title : 'Dimensão de foco';
+      const acColab   = data.pdiFocoAcaoColab   || '';
+      const acRt      = data.pdiFocoAcaoRt      || '';
+      const rtNome    = data.pdiCheckInRtNome   || 'seu RT';
+      const checkIn   = data.pdiCheckInData     || '';
+      const sec1Idx   = data.pdiSecundaria1 !== null && data.pdiSecundaria1 !== undefined
+                          ? parseInt(data.pdiSecundaria1, 10) : null;
+      const sec1Nome  = sec1Idx !== null && dims[sec1Idx] ? dims[sec1Idx].title : null;
+      const sec1Ac    = data.pdiSecundaria1Acao || '';
+      const sec2Idx   = data.pdiSecundaria2 !== null && data.pdiSecundaria2 !== undefined
+                          ? parseInt(data.pdiSecundaria2, 10) : null;
+      const sec2Nome  = sec2Idx !== null && dims[sec2Idx] ? dims[sec2Idx].title : null;
+      const sec2Ac    = data.pdiSecundaria2Acao || '';
+
+      // Formatar data
+      let checkInFmt = '';
+      if(checkIn) {
+        const d = new Date(checkIn + 'T12:00:00');
+        const meses = ['janeiro','fevereiro','março','abril','maio','junho',
+                       'julho','agosto','setembro','outubro','novembro','dezembro'];
+        checkInFmt = d.getDate() + ' de ' + meses[d.getMonth()] + ' de ' + d.getFullYear();
+      }
+
+      // Secundárias HTML
+      const temSec = sec1Nome || sec2Nome;
+      let secHTML = '';
+      if(temSec) {
+        const makeSecCard = (nome, acao) => nome ? `
+          <div style="flex:1;background:#18181d;border:1px solid rgba(255,255,255,.08);
+            border-radius:10px;padding:12px 14px;">
+            <div style="font-size:12px;font-weight:600;color:#f0f0f2;margin-bottom:6px;">${esc(nome)}</div>
+            ${acao ? `<div style="font-size:11px;color:#76768a;line-height:1.5;">
+              <span style="color:#a78bfa;">Você vai →</span> ${esc(acao)}</div>` : ''}
+          </div>` : '';
+        secHTML = `
+          <div style="margin-bottom:16px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+              color:#76768a;margin-bottom:8px;">Também em desenvolvimento</div>
+            <div style="display:flex;gap:10px;">
+              ${makeSecCard(sec1Nome, sec1Ac)}
+              ${makeSecCard(sec2Nome, sec2Ac)}
+            </div>
+          </div>`;
+      }
+
+      const pdiBlock = `
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,.07);">
+          <!-- Cabeçalho PDI -->
+          <div style="margin-bottom:16px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+              color:#76768a;margin-bottom:2px;">Seu plano de desenvolvimento</div>
+            <div style="font-size:11px;color:#76768a;">${esc(rtNome)} · ${new Date().toLocaleDateString('pt-BR')}</div>
+          </div>
+
+          <!-- Foco principal -->
+          <div style="background:#18181d;border:1px solid rgba(46,204,113,.18);border-radius:12px;
+            padding:16px 18px;margin-bottom:12px;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+              color:#2ecc71;margin-bottom:8px;">Foco principal</div>
+            <div style="font-size:20px;font-weight:700;color:#f0f0f2;margin-bottom:12px;line-height:1.2;">
+              ${esc(focoNome)}
+            </div>
+            ${acColab ? `
+            <div style="margin-bottom:8px;">
+              <span style="font-size:11px;font-weight:600;color:#2ecc71;">Você vai →</span>
+              <span style="font-size:12px;color:#b0b0c0;margin-left:4px;">${esc(acColab)}</span>
+            </div>` : ''}
+            ${acRt ? `
+            <div>
+              <span style="font-size:11px;font-weight:600;color:#a78bfa;">${esc(rtNome)} vai →</span>
+              <span style="font-size:12px;color:#b0b0c0;margin-left:4px;">${esc(acRt)}</span>
+            </div>` : ''}
+          </div>
+
+          ${secHTML}
+
+          <!-- Check-in -->
+          ${checkInFmt ? `
+          <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:14px;
+            display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px;">📅</span>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:#76768a;text-transform:uppercase;
+                letter-spacing:.07em;margin-bottom:2px;">Próximo check-in</div>
+              <div style="font-size:13px;color:#f0f0f2;font-weight:500;">
+                ${checkInFmt} · com ${esc(rtNome)}
+              </div>
+            </div>
+          </div>` : ''}
+        </div>`;
+
+      // Injetar no DOM após renderização
+      setTimeout(() => {
+        const wrapper = document.querySelector('#portalWrapper, [id^="portal"]');
+        // Buscar o portalWrapperDiv pelo conteúdo já renderizado
+        const allDivs = document.querySelectorAll('div');
+        let portalRoot = null;
+        allDivs.forEach(d => { if(d.id && d.id.startsWith('portalWrap')) portalRoot = d; });
+        if(portalRoot) {
+          const pdiDiv = document.createElement('div');
+          pdiDiv.id = 'pdiProtagonistBlock';
+          pdiDiv.innerHTML = pdiBlock;
+          portalRoot.appendChild(pdiDiv);
+        }
+      }, 100);
+
+      return pdiBlock;
+    })();
+
     '</div>'; // portalWrapper
 
   // Renderizar aba inicial
@@ -4450,6 +4566,105 @@ function renderPerfilConteudoDin() {
           </div>
         </div>
 
+        <!-- ── PDI PROTAGONISTA ── -->
+        <div id="pdiProtBloco" style="background:rgba(46,204,113,.05);border:1px solid rgba(46,204,113,.18);
+          border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="font-size:14px;">🎯</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;color:#2ecc71;">Plano de Desenvolvimento</div>
+              <div style="font-size:10px;color:#76768a;margin-top:1px;">
+                Defina o foco e os comprometimentos que o colaborador verá no portal.
+              </div>
+            </div>
+          </div>
+
+          <!-- Foco principal -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+              color:#76768a;margin-bottom:4px;">Foco principal <span style="color:#e01f2d;">*</span></div>
+            <select id="pdiFocoPrincipalSel"
+              style="width:100%;background:#18181d;border:1px solid rgba(255,255,255,.12);border-radius:7px;
+              color:#f0f0f2;font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;">
+              <option value="">— selecione a dimensão de foco —</option>
+            </select>
+            <div id="pdiFocoSugeridoLabel" style="font-size:10px;color:#2ecc71;margin-top:3px;display:none;">
+              ✦ Sugerido pelo diagnóstico com base nas notas
+            </div>
+          </div>
+
+          <!-- Ação do colaborador -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+              color:#76768a;margin-bottom:4px;">O que o colaborador vai fazer <span style="color:#e01f2d;">*</span></div>
+            <textarea id="pdiFocoAcaoColabTA" rows="2" maxlength="200"
+              placeholder="Ex: Nas aberturas com novos alunos, fazer 2 perguntas antes de apresentar o programa."
+              style="width:100%;background:#18181d;border:1px solid rgba(255,255,255,.12);border-radius:7px;
+              color:#f0f0f2;font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;
+              line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
+            <div style="text-align:right;font-size:10px;color:#76768a;margin-top:2px;" id="pdiFocoAcaoColabC">0 / 200</div>
+          </div>
+
+          <!-- Ação do RT -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+              color:#76768a;margin-bottom:4px;">O que você vai fazer para apoiar <span style="color:#e01f2d;">*</span></div>
+            <textarea id="pdiFocoAcaoRtTA" rows="2" maxlength="200"
+              placeholder="Ex: Observar uma abertura por semana e dar feedback específico até o check-in."
+              style="width:100%;background:#18181d;border:1px solid rgba(255,255,255,.12);border-radius:7px;
+              color:#f0f0f2;font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;
+              line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
+            <div style="text-align:right;font-size:10px;color:#76768a;margin-top:2px;" id="pdiFocoAcaoRtC">0 / 200</div>
+          </div>
+
+          <!-- Dimensões secundárias -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+              color:#76768a;margin-bottom:6px;">Dimensões secundárias (opcional — até 2)</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;gap:6px;align-items:flex-start;">
+                <select id="pdiSec1Sel" style="flex:0 0 45%;background:#18181d;border:1px solid rgba(255,255,255,.1);
+                  border-radius:7px;color:#f0f0f2;font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;">
+                  <option value="">— nenhuma —</option>
+                </select>
+                <textarea id="pdiSec1Acao" rows="1" maxlength="150"
+                  placeholder="Ação do colaborador nessa dimensão"
+                  style="flex:1;background:#18181d;border:1px solid rgba(255,255,255,.1);border-radius:7px;
+                  color:#f0f0f2;font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;resize:none;
+                  line-height:1.4;outline:none;box-sizing:border-box;"></textarea>
+              </div>
+              <div style="display:flex;gap:6px;align-items:flex-start;">
+                <select id="pdiSec2Sel" style="flex:0 0 45%;background:#18181d;border:1px solid rgba(255,255,255,.1);
+                  border-radius:7px;color:#f0f0f2;font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;">
+                  <option value="">— nenhuma —</option>
+                </select>
+                <textarea id="pdiSec2Acao" rows="1" maxlength="150"
+                  placeholder="Ação do colaborador nessa dimensão"
+                  style="flex:1;background:#18181d;border:1px solid rgba(255,255,255,.1);border-radius:7px;
+                  color:#f0f0f2;font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;resize:none;
+                  line-height:1.4;outline:none;box-sizing:border-box;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Data do check-in -->
+          <div style="margin-bottom:4px;">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+              color:#76768a;margin-bottom:4px;">Data do check-in <span style="color:#e01f2d;">*</span></div>
+            <input type="date" id="pdiCheckInDataInput"
+              style="background:#18181d;border:1px solid rgba(255,255,255,.12);border-radius:7px;
+              color:#f0f0f2;font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;"
+              min="${new Date().toISOString().split('T')[0]}">
+            <div id="pdiCheckInErr" style="font-size:10px;color:#e01f2d;margin-top:3px;display:none;">
+              A data deve ser futura.
+            </div>
+          </div>
+
+          <!-- Erros de validação -->
+          <div id="pdiValidErro" style="font-size:11px;color:#e01f2d;margin-top:8px;display:none;"></div>
+        </div>
+
         <div style="display:flex;justify-content:flex-end;">
           <button id="btnAtivarPortalF1"
             style="background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.25);
@@ -4475,9 +4690,183 @@ function renderPerfilConteudoDin() {
         }
       });
 
-      // Botão de ativar
+      // ── PDI PROTAGONISTA: inicialização ──────────────────────────────────────
+      (function() {
+        const dims = typeof RADAR_DIMS_FULL !== 'undefined' ? RADAR_DIMS_FULL : [];
+        const notasRt = (ultimoCiclo && ultimoCiclo.notasRt) ? ultimoCiclo.notasRt : {};
+
+        // Calcular dimensão sugerida (menor nota RT)
+        let sugeridoIdx = null;
+        if(dims.length > 0) {
+          const scores = dims.map((d,i) => ({ i, nota: notasRt[i] ? (notasRt[i].nota || 0) : 0 }))
+                             .filter(x => x.nota > 0);
+          scores.sort((a,b) => a.nota - b.nota);
+          if(scores.length > 0) sugeridoIdx = String(scores[0].i);
+        }
+
+        // Popular selects
+        ['pdiFocoPrincipalSel','pdiSec1Sel','pdiSec2Sel'].forEach(id => {
+          const sel = document.getElementById(id);
+          if(!sel) return;
+          dims.forEach((d,i) => {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = d.title;
+            if(id === 'pdiFocoPrincipalSel' && String(i) === sugeridoIdx) {
+              opt.textContent += ' ✦';
+              opt.selected = true;
+            }
+            sel.appendChild(opt);
+          });
+        });
+
+        // Mostrar label de sugestão
+        if(sugeridoIdx !== null) {
+          const lbl = document.getElementById('pdiFocoSugeridoLabel');
+          if(lbl) lbl.style.display = 'block';
+        }
+
+        // Contadores textarea PDI
+        [['pdiFocoAcaoColabTA','pdiFocoAcaoColabC',200],
+         ['pdiFocoAcaoRtTA','pdiFocoAcaoRtC',200]].forEach(([tid,cid,max]) => {
+          const ta = document.getElementById(tid);
+          const cnt = document.getElementById(cid);
+          if(ta && cnt) ta.addEventListener('input', () => {
+            const n = ta.value.length;
+            cnt.textContent = n + ' / ' + max;
+            cnt.style.color = n >= max ? '#e01f2d' : n >= max*0.85 ? '#f5a623' : '#76768a';
+          });
+        });
+
+        // Validação em tempo real (habilita/desabilita botão ativar)
+        function validarPDI() {
+          const foco     = (document.getElementById('pdiFocoPrincipalSel') || {}).value || '';
+          const acColab  = ((document.getElementById('pdiFocoAcaoColabTA') || {}).value || '').trim();
+          const acRt     = ((document.getElementById('pdiFocoAcaoRtTA') || {}).value || '').trim();
+          const checkIn  = (document.getElementById('pdiCheckInDataInput') || {}).value || '';
+          const sec1     = (document.getElementById('pdiSec1Sel') || {}).value || '';
+          const sec1Ac   = ((document.getElementById('pdiSec1Acao') || {}).value || '').trim();
+          const sec2     = (document.getElementById('pdiSec2Sel') || {}).value || '';
+          const sec2Ac   = ((document.getElementById('pdiSec2Acao') || {}).value || '').trim();
+          const btn      = document.getElementById('btnAtivarPortalF1');
+          const erroDiv  = document.getElementById('pdiValidErro');
+
+          let erros = [];
+          if(!foco)                             erros.push('Selecione o foco principal.');
+          if(acColab.length < 20)               erros.push('Ação do colaborador: mínimo 20 caracteres.');
+          if(acRt.length < 20)                  erros.push('Ação do RT: mínimo 20 caracteres.');
+          if(!checkIn)                          erros.push('Defina a data do check-in.');
+          else if(new Date(checkIn) <= new Date()) erros.push('A data do check-in deve ser futura.');
+          if(sec1 && sec1Ac.length < 10)        erros.push('Adicione a ação da dimensão secundária 1 (mín 10 chars).');
+          if(sec2 && sec2Ac.length < 10)        erros.push('Adicione a ação da dimensão secundária 2 (mín 10 chars).');
+          if(foco && sec1 && foco === sec1)     erros.push('Foco principal não pode ser igual à secundária 1.');
+          if(foco && sec2 && foco === sec2)     erros.push('Foco principal não pode ser igual à secundária 2.');
+          if(sec1 && sec2 && sec1 === sec2)     erros.push('As duas dimensões secundárias devem ser diferentes.');
+
+          if(erroDiv) {
+            erroDiv.textContent = erros.join(' ');
+            erroDiv.style.display = erros.length > 0 ? 'block' : 'none';
+          }
+          if(btn) {
+            btn.disabled = erros.length > 0;
+            btn.style.opacity = erros.length > 0 ? '0.45' : '1';
+            btn.style.cursor  = erros.length > 0 ? 'not-allowed' : 'pointer';
+          }
+        }
+
+        // Escutar mudanças em todos os campos PDI
+        ['pdiFocoPrincipalSel','pdiFocoAcaoColabTA','pdiFocoAcaoRtTA',
+         'pdiSec1Sel','pdiSec1Acao','pdiSec2Sel','pdiSec2Acao','pdiCheckInDataInput']
+        .forEach(id => {
+          const el2 = document.getElementById(id);
+          if(el2) el2.addEventListener('change', validarPDI);
+          if(el2) el2.addEventListener('input', validarPDI);
+        });
+
+        // Validar ao carregar (botão começa desabilitado)
+        validarPDI();
+
+        // Guardar sugeridoIdx para uso no clique
+        window._pdiSugeridoIdx = sugeridoIdx;
+      })();
+
+      // Botão de ativar — com gate pós-devolutiva
       document.getElementById('btnAtivarPortalF1').addEventListener('click', function() {
-        ativarPortal(ultimoCiclo.id);
+        // Coletar campos PDI
+        const dims = typeof RADAR_DIMS_FULL !== 'undefined' ? RADAR_DIMS_FULL : [];
+        const focoIdx   = (document.getElementById('pdiFocoPrincipalSel') || {}).value || null;
+        const acColab   = ((document.getElementById('pdiFocoAcaoColabTA') || {}).value || '').trim();
+        const acRt      = ((document.getElementById('pdiFocoAcaoRtTA') || {}).value || '').trim();
+        const sec1Idx   = (document.getElementById('pdiSec1Sel') || {}).value || null;
+        const sec1Ac    = ((document.getElementById('pdiSec1Acao') || {}).value || '').trim();
+        const sec2Idx   = (document.getElementById('pdiSec2Sel') || {}).value || null;
+        const sec2Ac    = ((document.getElementById('pdiSec2Acao') || {}).value || '').trim();
+        const checkInDt = (document.getElementById('pdiCheckInDataInput') || {}).value || null;
+        const rtNome    = usuarioLogado ? (usuarioLogado.displayName || usuarioLogado.email) : '';
+
+        // Gravar PDI no Firebase antes do gate
+        const pdiExtra = {
+          pdiFocoPrincipal:   focoIdx   || null,
+          pdiFocoAcaoColab:   acColab   || null,
+          pdiFocoAcaoRt:      acRt      || null,
+          pdiSecundaria1:     sec1Idx   || null,
+          pdiSecundaria1Acao: sec1Ac    || null,
+          pdiSecundaria2:     sec2Idx   || null,
+          pdiSecundaria2Acao: sec2Ac    || null,
+          pdiCheckInData:     checkInDt || null,
+          pdiCheckInRtNome:   rtNome,
+          pdiFocoSugerido:    window._pdiSugeridoIdx || null,
+        };
+
+        // ── GATE PÓS-DEVOLUTIVA ─────────────────────────────────────────────
+        // Verificar se é primeira ativação (não reenvio)
+        const _isReenvio = (ultimoCiclo.portalStatus === 'ativo');
+        if(!_isReenvio) {
+          // Criar modal de confirmação pós-devolutiva
+          const gateDiv = document.createElement('div');
+          gateDiv.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;' +
+            'display:flex;align-items:center;justify-content:center;padding:20px;';
+          gateDiv.innerHTML = `
+            <div style="background:#1a1a20;border:1px solid rgba(255,255,255,.12);border-radius:12px;
+              padding:24px;max-width:400px;width:100%;font-family:Inter,sans-serif;">
+              <div style="font-size:14px;font-weight:600;color:#f0f0f2;margin-bottom:8px;">
+                Confirmação pós-devolutiva
+              </div>
+              <div style="font-size:12px;color:#76768a;margin-bottom:20px;line-height:1.6;">
+                O foco principal foi ajustado após a conversa de devolutiva?
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <button id="gateSimBtn" style="background:rgba(46,204,113,.12);color:#2ecc71;
+                  border:1px solid rgba(46,204,113,.25);border-radius:8px;padding:10px 16px;
+                  font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;text-align:left;">
+                  ✏️  Sim, quero ajustar o foco agora
+                </button>
+                <button id="gateNaoBtn" style="background:rgba(167,139,250,.1);color:#a78bfa;
+                  border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:10px 16px;
+                  font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;text-align:left;">
+                  ✓  Não, o foco está correto — ativar o portal
+                </button>
+              </div>
+            </div>`;
+          document.body.appendChild(gateDiv);
+
+          document.getElementById('gateSimBtn').addEventListener('click', function() {
+            // Fechar gate — RT fica no formulário para ajustar
+            document.body.removeChild(gateDiv);
+          });
+
+          document.getElementById('gateNaoBtn').addEventListener('click', async function() {
+            document.body.removeChild(gateDiv);
+            // Atualizar PDI com valores atuais e ativar portal
+            const cicloRef2 = ciclosRef(unidadeAtual.id, perfilColabAtual.id).doc(ultimoCiclo.id);
+            await cicloRef2.update(pdiExtra).catch(e => console.error('PDI update:', e));
+            ativarPortal(ultimoCiclo.id);
+          });
+
+        } else {
+          // Reenvio: ativar diretamente sem gate
+          ativarPortal(ultimoCiclo.id);
+        }
       });
     }
 
@@ -5222,15 +5611,28 @@ function gerarSugestaoPDI(ciclo) {
  * prioridades: [dimIdx0, dimIdx1, dimIdx2]
  * itens: [{status, obs, responsavel}, ...]
  */
-async function confirmarPDI(cicloId, prioridades, itens) {
+async function confirmarPDI(cicloId, prioridades, itens, pdiExtra) {
   if(!unidadeAtual || !perfilColabAtual) return { ok: false, erro: 'contexto inválido' };
   const ref = ciclosRef(unidadeAtual.id, perfilColabAtual.id).doc(cicloId);
+  // pdiExtra contém os campos do PDI Protagonista (opcional — retrocompatível)
+  const ex = pdiExtra || {};
   const payload = {
     pdiConfirmado:      true,
     pdiPrioridades:     prioridades,
     pdiItens:           itens,
     dataConfirmacaoPDI: new Date().toISOString(),
     confirmadoPor:      usuarioLogado ? usuarioLogado.email : 'desconhecido',
+    // ── PDI PROTAGONISTA ─────────────────────────────────────────────────────
+    pdiFocoPrincipal:   ex.pdiFocoPrincipal    || null,
+    pdiFocoAcaoColab:   ex.pdiFocoAcaoColab    || null,
+    pdiFocoAcaoRt:      ex.pdiFocoAcaoRt       || null,
+    pdiSecundaria1:     ex.pdiSecundaria1      || null,
+    pdiSecundaria1Acao: ex.pdiSecundaria1Acao  || null,
+    pdiSecundaria2:     ex.pdiSecundaria2      || null,
+    pdiSecundaria2Acao: ex.pdiSecundaria2Acao  || null,
+    pdiCheckInData:     ex.pdiCheckInData      || null,
+    pdiCheckInRtNome:   ex.pdiCheckInRtNome    || (usuarioLogado ? (usuarioLogado.displayName || usuarioLogado.email) : null),
+    pdiFocoSugerido:    ex.pdiFocoSugerido     || null,
   };
   try {
     await ref.update(payload);
