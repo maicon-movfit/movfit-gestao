@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOV FIT — Impacto Esperado (Wireframe Visual)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   #111114;
+    --surface2:  #18181d;
+    --border:    rgba(255,255,255,.07);
+    --border2:   rgba(255,255,255,.12);
+    --muted:     #76768a;
+    --muted2:    #4a4a5a;
+    --text:      #f0f0f2;
+    --sub:       #b0b0c0;
+    --red:       #e01f2d;
+    --blue:      #4f8ef7;
+    --green:     #2ecc71;
+    --amber:     #f5a623;
+    --purple:    #a78bfa;
+    --teal:      #2dd4bf;
+    --font-head: 'Barlow Condensed', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Layout wrapper ── */
+  .demo-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 375px;
+    gap: 0;
+    min-height: 100vh;
+  }
+
+  /* ── Desktop panel ── */
+  .desktop-panel {
+    padding: 48px;
+    border-right: 1px solid var(--border);
+  }
+
+  .desktop-panel .panel-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .desktop-panel .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Mobile panel ── */
+  .mobile-panel {
+    padding: 24px 16px;
+    background: #0d0d10;
+    border-left: 1px solid var(--border);
+  }
+  .mobile-panel .panel-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-panel .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ════════════════════════════════
+     COMPONENTES DA SEÇÃO
+  ════════════════════════════════ */
+
+  /* Header da seção */
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(45,212,191,.1);
+    border: 1px solid rgba(45,212,191,.2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -.01em;
+    line-height: 1.1;
+    margin-bottom: 3px;
+  }
+  .section-sub {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* ── BLOCO 1: A PONTE ── */
+  .ponte-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ponte-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--teal);
+    border-radius: 2px 0 0 2px;
+  }
+  .ponte-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--teal);
+    margin-bottom: 8px;
+  }
+  .ponte-competencia {
+    font-family: var(--font-head);
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -.01em;
+    margin-bottom: 14px;
+    line-height: 1.15;
+  }
+  .ponte-comportamento-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .ponte-comportamento-text {
+    font-size: 13px;
+    color: var(--sub);
+    line-height: 1.65;
+    font-style: italic;
+    border-left: 2px solid rgba(45,212,191,.25);
+    padding-left: 12px;
+    margin-bottom: 16px;
+  }
+  .ponte-separator {
+    height: 1px;
+    background: var(--border);
+    margin: 14px 0;
+  }
+  .ponte-indicadores-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .ponte-indicadores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ind-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .ind-pill.down {
+    background: rgba(224,31,45,.1);
+    color: #f05c5c;
+    border: 1px solid rgba(224,31,45,.2);
+  }
+  .ind-pill.up {
+    background: rgba(46,204,113,.1);
+    color: var(--green);
+    border: 1px solid rgba(46,204,113,.2);
+  }
+  .ind-pill .arrow {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ── BLOCO 2: NÚMEROS DE HOJE ── */
+  .numeros-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 12px;
+  }
+  .numeros-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .numeros-disclaimer {
+    font-size: 11px;
+    color: var(--muted2);
+    margin-bottom: 16px;
+    line-height: 1.4;
+  }
+  .numeros-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .numero-item {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+  }
+  .numero-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+  .numero-value {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+  }
+  .numero-value.alert {
+    color: #f05c5c;
+  }
+  .numero-value.ok {
+    color: var(--green);
+  }
+  .numeros-context {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.03);
+    border-radius: 8px;
+    border-left: 2px solid var(--border2);
+  }
+
+  /* ── BLOCO 3: O QUE OBSERVAR ── */
+  .observar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 12px;
+  }
+  .observar-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--amber);
+    margin-bottom: 4px;
+  }
+  .observar-disclaimer {
+    font-size: 11px;
+    color: var(--muted2);
+    margin-bottom: 14px;
+  }
+  .observar-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .observar-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--sub);
+    line-height: 1.55;
+  }
+  .observar-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--amber);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .observar-nota {
+    font-size: 11px;
+    color: var(--muted2);
+    font-style: italic;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    line-height: 1.55;
+  }
+  .observar-nota strong {
+    color: var(--muted);
+    font-style: normal;
+  }
+
+  /* ── BLOCO 4: NO CHECK-IN ── */
+  .checkin-card {
+    background: rgba(79,142,247,.06);
+    border: 1px solid rgba(79,142,247,.15);
+    border-radius: 14px;
+    padding: 18px 22px;
+  }
+  .checkin-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--blue);
+    margin-bottom: 10px;
+  }
+  .checkin-pergunta {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.65;
+    font-style: italic;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: rgba(79,142,247,.07);
+    border-radius: 8px;
+    border-left: 3px solid rgba(79,142,247,.4);
+  }
+  .checkin-explicacao {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .checkin-explicacao strong {
+    color: var(--sub);
+  }
+
+  /* ── Dimensão sem impacto ── */
+  .sem-impacto-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .sem-impacto-icon {
+    font-size: 20px;
+    opacity: .6;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .sem-impacto-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sub);
+    margin-bottom: 5px;
+  }
+  .sem-impacto-text {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── Tab switcher (demo) ── */
+  .demo-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 28px;
+    background: var(--surface2);
+    padding: 4px;
+    border-radius: 10px;
+  }
+  .demo-tab {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    text-align: center;
+  }
+  .demo-tab.active {
+    background: #2a2a35;
+    color: var(--text);
+  }
+
+  /* ── Mobile specific ── */
+  .mobile-panel .numeros-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mobile-panel .numeros-grid .numero-item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .mobile-panel .ponte-indicadores {
+    gap: 6px;
+  }
+
+  /* ── Componentes guide (sidebar annotation) ── */
+  .annotation {
+    font-size: 10px;
+    color: var(--muted2);
+    letter-spacing: .04em;
+    margin-top: 4px;
+    padding: 3px 8px;
+    background: rgba(255,255,255,.03);
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  /* ── Scroll hint ── */
+  .scroll-hint {
+    text-align: center;
+    padding: 12px;
+    font-size: 10px;
+    color: var(--muted2);
+    letter-spacing: .05em;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .demo-wrapper { grid-template-columns: 1fr; }
+    .mobile-panel { border-left: none; border-top: 1px solid var(--border); }
+    .desktop-panel { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-wrapper">
+
+  <!-- ════════════ DESKTOP ════════════ -->
+  <div class="desktop-panel">
+    <div class="panel-label">Desktop — max-width 720px centrado</div>
+
+    <!-- Demo tab switcher para mostrar variações -->
+    <div class="demo-tabs">
+      <button class="demo-tab active">D6 Execução e Processos</button>
+      <button class="demo-tab">D3 Condução e Retenção</button>
+      <button class="demo-tab">D5 Autoconhecimento</button>
+    </div>
+
+    <!-- ── HEADER DA SEÇÃO ── -->
+    <div class="section-header">
+      <div class="section-icon">📈</div>
+      <div>
+        <div class="section-title">Impacto Esperado</div>
+        <div class="section-sub">Como esse desenvolvimento aparece nos seus resultados</div>
+      </div>
+    </div>
+
+    <!-- ── BLOCO 1: A PONTE ── -->
+    <div class="ponte-card">
+      <div class="ponte-eyebrow">A conexão</div>
+      <div class="ponte-competencia">Execução dos Processos<br>e Organização</div>
+
+      <div class="ponte-comportamento-label">O comportamento que muda</div>
+      <div class="ponte-comportamento-text">
+        "Você revisa a carteira antes de ser cobrado. Renova treinos antes do vencimento. Atende novos alunos dentro de 72h — por hábito, não por instrução."
+      </div>
+
+      <div class="ponte-separator"></div>
+
+      <div class="ponte-indicadores-label">Indicadores que tendem a responder</div>
+      <div class="ponte-indicadores">
+        <span class="ind-pill down"><span class="arrow">↓</span> Treinos vencidos</span>
+        <span class="ind-pill down"><span class="arrow">↓</span> Alunos sem treino</span>
+        <span class="ind-pill up"><span class="arrow">↑</span> % em dia</span>
+      </div>
+    </div>
+
+    <!-- ── BLOCO 2: NÚMEROS DE HOJE ── -->
+    <div class="numeros-card">
+      <div class="numeros-eyebrow">Seus números hoje</div>
+      <div class="numeros-disclaimer">Referência de onde você está — não é avaliação</div>
+
+      <div class="numeros-grid">
+        <div class="numero-item">
+          <div class="numero-label">Treinos vencidos</div>
+          <div class="numero-value alert">233</div>
+        </div>
+        <div class="numero-item">
+          <div class="numero-label">Alunos sem treino</div>
+          <div class="numero-value alert">12</div>
+        </div>
+        <div class="numero-item">
+          <div class="numero-label">% em dia</div>
+          <div class="numero-value">24%</div>
+        </div>
+      </div>
+
+      <div class="numeros-context">
+        Esses são os indicadores que tendem a se mover quando o comportamento que estamos desenvolvendo começa a aparecer na sua rotina.
+      </div>
+    </div>
+
+    <!-- ── BLOCO 3: O QUE OBSERVAR ── -->
+    <div class="observar-card">
+      <div class="observar-eyebrow">O que observar nos próximos 45 dias</div>
+      <div class="observar-disclaimer">Sinais de comportamento — não metas numéricas</div>
+
+      <ul class="observar-list">
+        <li class="observar-item">
+          <div class="observar-dot"></div>
+          <span>Quantos treinos você renova <strong style="color:var(--sub)">antes de vencerem</strong> — por iniciativa própria</span>
+        </li>
+        <li class="observar-item">
+          <div class="observar-dot"></div>
+          <span>Quanto tempo um aluno novo fica sem treino até você entregar o plano dele</span>
+        </li>
+        <li class="observar-item">
+          <div class="observar-dot"></div>
+          <span>Se o seu <strong style="color:var(--sub)">% em dia</strong> se move — e quando você percebe que isso aconteceu</span>
+        </li>
+      </ul>
+
+      <div class="observar-nota">
+        <strong>Não são alvos.</strong> São evidências de que um comportamento novo está aparecendo. Os números são a consequência — não o objetivo.
+      </div>
+    </div>
+
+    <!-- ── BLOCO 4: NO CHECK-IN ── -->
+    <div class="checkin-card">
+      <div class="checkin-eyebrow">No check-in, você poderá responder</div>
+
+      <div class="checkin-pergunta">
+        "Me conta uma situação em que você renovou um treino antes de vencer — porque percebeu que estava chegando a hora."
+      </div>
+
+      <div class="checkin-explicacao">
+        Essa situação é a <strong>evidência do desenvolvimento</strong>. Os números são a consequência. O check-in existe para ouvir a situação — não para conferir o número.
+      </div>
+    </div>
+
+  </div><!-- /desktop -->
+
+
+  <!-- ════════════ MOBILE ════════════ -->
+  <div class="mobile-panel">
+    <div class="panel-label">Mobile 375px</div>
+
+    <!-- Header -->
+    <div class="section-header" style="margin-bottom:16px;">
+      <div class="section-icon" style="width:32px;height:32px;font-size:14px;border-radius:8px;">📈</div>
+      <div>
+        <div class="section-title" style="font-size:18px;">Impacto Esperado</div>
+        <div class="section-sub" style="font-size:11px;">Como esse desenvolvimento aparece</div>
+      </div>
+    </div>
+
+    <!-- A Ponte (mobile) -->
+    <div class="ponte-card" style="padding:16px 16px 16px 19px;margin-bottom:10px;">
+      <div class="ponte-eyebrow">A conexão</div>
+      <div class="ponte-competencia" style="font-size:17px;margin-bottom:12px;">Execução dos Processos e Organização</div>
+
+      <div class="ponte-comportamento-label">O comportamento que muda</div>
+      <div class="ponte-comportamento-text" style="font-size:12px;">
+        "Você revisa a carteira antes de ser cobrado. Renova treinos antes do vencimento."
+      </div>
+
+      <div class="ponte-separator"></div>
+
+      <div class="ponte-indicadores-label">Indicadores relacionados</div>
+      <div class="ponte-indicadores">
+        <span class="ind-pill down" style="font-size:10px;padding:4px 9px;"><span class="arrow">↓</span> Vencidos</span>
+        <span class="ind-pill down" style="font-size:10px;padding:4px 9px;"><span class="arrow">↓</span> Sem treino</span>
+        <span class="ind-pill up" style="font-size:10px;padding:4px 9px;"><span class="arrow">↑</span> % em dia</span>
+      </div>
+    </div>
+
+    <!-- Números (mobile) -->
+    <div class="numeros-card" style="padding:14px 16px;margin-bottom:10px;">
+      <div class="numeros-eyebrow">Seus números hoje</div>
+      <div class="numeros-disclaimer" style="font-size:10px;">Referência — não avaliação</div>
+      <div class="numeros-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div class="numero-item" style="padding:10px 12px;">
+          <div class="numero-label" style="font-size:9px;">Treinos vencidos</div>
+          <div class="numero-value alert" style="font-size:20px;">233</div>
+        </div>
+        <div class="numero-item" style="padding:10px 12px;">
+          <div class="numero-label" style="font-size:9px;">Sem treino</div>
+          <div class="numero-value alert" style="font-size:20px;">12</div>
+        </div>
+        <div class="numero-item" style="padding:10px 12px;grid-column:1/-1;">
+          <div class="numero-label" style="font-size:9px;">% em dia</div>
+          <div class="numero-value" style="font-size:20px;">24%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Observar (mobile) -->
+    <div class="observar-card" style="padding:14px 16px;margin-bottom:10px;">
+      <div class="observar-eyebrow">O que observar</div>
+      <div class="observar-disclaimer" style="font-size:10px;margin-bottom:10px;">Sinais de comportamento — não metas</div>
+      <ul class="observar-list" style="gap:7px;margin-bottom:10px;">
+        <li class="observar-item" style="font-size:11px;">
+          <div class="observar-dot"></div>
+          <span>Quantos treinos você renova antes de vencerem</span>
+        </li>
+        <li class="observar-item" style="font-size:11px;">
+          <div class="observar-dot"></div>
+          <span>Quanto tempo um aluno novo fica sem treino</span>
+        </li>
+        <li class="observar-item" style="font-size:11px;">
+          <div class="observar-dot"></div>
+          <span>Se o % em dia se move durante o ciclo</span>
+        </li>
+      </ul>
+      <div class="observar-nota" style="font-size:10px;">
+        <strong>Não são alvos.</strong> São evidências de comportamento novo.
+      </div>
+    </div>
+
+    <!-- Check-in (mobile) -->
+    <div class="checkin-card" style="padding:14px 16px;">
+      <div class="checkin-eyebrow">No check-in</div>
+      <div class="checkin-pergunta" style="font-size:12px;padding:10px 12px;">
+        "Me conta uma situação em que você renovou um treino antes de vencer."
+      </div>
+      <div class="checkin-explicacao" style="font-size:10px;">
+        Essa situação é a <strong>evidência</strong>. Os números são a consequência.
+      </div>
+    </div>
+
+    <div class="scroll-hint">↑ Visualização em 375px</div>
+
+  </div><!-- /mobile -->
+
+</div><!-- /demo-wrapper -->
+
+
+<!-- ── SEÇÃO 2: VARIAÇÃO D5 (sem impacto operacional) ── -->
+<div style="background:#0d0d10;border-top:1px solid rgba(255,255,255,.05);padding:48px;">
+  <div style="max-width:720px;margin:0 auto;">
+
+    <div style="font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#4a4a5a;margin-bottom:32px;">
+      Variação — Dimensão sem impacto operacional de curto prazo (D5 Autoconhecimento)
+    </div>
+
+    <div class="section-header">
+      <div class="section-icon">📈</div>
+      <div>
+        <div class="section-title">Impacto Esperado</div>
+        <div class="section-sub">Como esse desenvolvimento aparece nos seus resultados</div>
+      </div>
+    </div>
+
+    <!-- A Ponte -->
+    <div class="ponte-card" style="margin-bottom:12px;">
+      <div class="ponte-eyebrow">A conexão</div>
+      <div class="ponte-competencia">Autoconhecimento e<br>Mentalidade de Crescimento</div>
+
+      <div class="ponte-comportamento-label">O comportamento que muda</div>
+      <div class="ponte-comportamento-text">
+        "Você pede feedback antes de receber avaliação. Experimenta abordagens novas quando algo não está funcionando. Não se defende quando recebe observação difícil."
+      </div>
+
+      <div class="ponte-separator"></div>
+
+      <div class="ponte-indicadores-label">Indicadores relacionados</div>
+      <div style="font-size:12px;color:var(--muted);font-style:italic;padding:8px 0;">
+        Essa competência não impacta indicadores operacionais de curto prazo.
+      </div>
+    </div>
+
+    <!-- Mensagem específica para dimensões multiplicadoras -->
+    <div class="sem-impacto-card">
+      <div class="sem-impacto-icon">🔁</div>
+      <div>
+        <div class="sem-impacto-title">Uma dimensão diferente</div>
+        <div class="sem-impacto-text">
+          Autoconhecimento não move um indicador específico — ele move a velocidade com que você desenvolve todas as outras competências. O impacto aparece ao longo de múltiplos ciclos, na consistência do seu comportamento e na rapidez com que você responde a feedbacks.<br><br>
+          No check-in, a evidência mais importante não será um número. Será uma situação em que você agiu diferente depois de perceber algo sobre si mesmo.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── GUIA DE COMPONENTES ── -->
+<div style="background:#08080a;border-top:1px solid rgba(255,255,255,.05);padding:48px;">
+  <div style="max-width:960px;margin:0 auto;">
+
+    <div style="font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#4a4a5a;margin-bottom:32px;">
+      Guia de componentes e tokens
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:32px;">
+
+      <!-- Cor Teal — seção -->
+      <div style="background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;">
+        <div style="width:32px;height:32px;background:#2dd4bf;border-radius:6px;margin-bottom:8px;"></div>
+        <div style="font-size:11px;font-weight:600;color:#f0f0f2;margin-bottom:2px;">#2dd4bf</div>
+        <div style="font-size:10px;color:#76768a;">Teal — identidade da seção</div>
+        <div class="annotation">Único no portal — ancora Impacto Esperado</div>
+      </div>
+
+      <!-- Amber — observar -->
+      <div style="background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;">
+        <div style="width:32px;height:32px;background:#f5a623;border-radius:6px;margin-bottom:8px;"></div>
+        <div style="font-size:11px;font-weight:600;color:#f0f0f2;margin-bottom:2px;">#f5a623</div>
+        <div style="font-size:10px;color:#76768a;">Amber — "O que observar"</div>
+        <div class="annotation">Tensão positiva — atenção sem alarme</div>
+      </div>
+
+      <!-- Blue — check-in -->
+      <div style="background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;">
+        <div style="width:32px;height:32px;background:#4f8ef7;border-radius:6px;margin-bottom:8px;"></div>
+        <div style="font-size:11px;font-weight:600;color:#f0f0f2;margin-bottom:2px;">#4f8ef7</div>
+        <div style="font-size:10px;color:#76768a;">Blue — check-in (já existente)</div>
+        <div class="annotation">Consistente com PDI e portal</div>
+      </div>
+
+      <!-- Pills -->
+      <div style="background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;">
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+          <span class="ind-pill down"><span class="arrow">↓</span> Vencidos</span>
+          <span class="ind-pill up"><span class="arrow">↑</span> % em dia</span>
+        </div>
+        <div style="font-size:10px;color:#76768a;">Pills de impacto</div>
+        <div class="annotation">Vermelho = reduzir · Verde = aumentar</div>
+      </div>
+
+    </div>
+
+    <!-- Hierarquia tipográfica -->
+    <div style="background:#111114;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:20px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#4a4a5a;margin-bottom:16px;">Hierarquia tipográfica</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:#f0f0f2;letter-spacing:-.01em;">Execução dos Processos</div>
+          <div style="font-size:10px;color:#4a4a5a;margin-top:3px;">Barlow Condensed 800 — nome da dimensão</div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:#b0b0c0;font-style:italic;">"Você renova antes de vencer..."</div>
+          <div style="font-size:10px;color:#4a4a5a;margin-top:3px;">Inter 400 italic — comportamento</div>
+        </div>
+        <div>
+          <div style="font-family:'DM Mono',monospace;font-size:22px;color:#f0f0f2;">233</div>
+          <div style="font-size:10px;color:#4a4a5a;margin-top:3px;">DM Mono 500 — número de hoje</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#2dd4bf;">A CONEXÃO</div>
+          <div style="font-size:10px;color:#4a4a5a;margin-top:3px;">Inter 700 caps — eyebrow dos blocos</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
