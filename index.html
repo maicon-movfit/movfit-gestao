@@ -39,6 +39,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .nav-tab{padding:12px 16px;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'Inter',sans-serif;white-space:nowrap;letter-spacing:.01em;}
 .nav-tab:hover{color:var(--text);}
 .nav-tab.active{color:#fff;border-bottom-color:var(--accent);font-weight:600;}
+
+.ctx-bar{display:none;align-items:center;justify-content:space-between;padding:7px 20px;background:rgba(224,31,45,.04);border-bottom:1px solid rgba(224,31,45,.12);flex-wrap:wrap;gap:8px;}
+.ctx-bar.visible{display:flex;}
+.ctx-bar-mes{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);}
+.ctx-bar-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+.ctx-bar-actions{display:flex;align-items:center;gap:10px;}
+.ctx-bar-link{font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none;font-weight:500;}
+.ctx-bar-link:hover{text-decoration:underline;}
+
 .rank-modo-btn{padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;}
 .rank-modo-on{background:#e01f2d;color:#fff;border-color:#e01f2d;}
 .rank-filtro-btn{padding:4px 10px;font-size:11px;border-radius:20px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;}
@@ -611,6 +620,19 @@ tbody tr:last-child td{border-bottom:none;}
   <div id="agendaRtContent"></div>
 </div>
 
+<!-- BARRA DE CONTEXTO PERSISTENTE -->
+<div id="ctxBar" class="ctx-bar">
+  <div class="ctx-bar-mes">
+    <div class="ctx-bar-dot"></div>
+    <span id="ctxBarMes">Nenhum mês selecionado</span>
+  </div>
+  <div class="ctx-bar-actions">
+    <span class="ctx-bar-link" onclick="goTab('historico')">← Voltar ao histórico</span>
+    <span style="color:var(--border2);">|</span>
+    <span class="ctx-bar-link" onclick="goTab('dados')">+ Novo mês</span>
+  </div>
+</div>
+
 <div id="tab-dados" class="page active">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
     <div>
@@ -681,7 +703,11 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <div id="tab-dash" class="page">
-  <div id="dash-empty" class="empty-state"><div class="es-icon">📊</div><p>Selecione um mês no Histórico.</p></div>
+  <div id="dash-empty" class="empty-state">
+  <div class="es-icon">📊</div>
+  <p>Nenhum mês selecionado.</p>
+  <button onclick="goTab('historico')" class="btn primary" style="margin-top:12px;">Ir ao Histórico →</button>
+</div>
   <div id="dash-content" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
       <div style="font-size:16px;font-weight:600;" id="dashTitle">Painel</div>
@@ -702,7 +728,11 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <div id="tab-ranking" class="page">
-  <div id="rank-empty" class="empty-state"><div class="es-icon">🏆</div><p>Selecione um mês no Histórico.</p></div>
+  <div id="rank-empty" class="empty-state">
+  <div class="es-icon">🏆</div>
+  <p>Nenhum mês selecionado.</p>
+  <button onclick="goTab('historico')" class="btn primary" style="margin-top:12px;">Ir ao Histórico →</button>
+</div><p>Selecione um mês no Histórico.</p></div>
   <div id="rank-content" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
       <div style="font-size:16px;font-weight:600;" id="rankTitle">Ranking</div>
@@ -778,7 +808,11 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <div id="tab-insights" class="page">
-  <div id="ins-empty" class="empty-state"><div class="es-icon">💡</div><p>Selecione um mês no Histórico.</p></div>
+  <div id="ins-empty" class="empty-state">
+  <div class="es-icon">💡</div>
+  <p>Nenhum mês selecionado.</p>
+  <button onclick="goTab('historico')" class="btn primary" style="margin-top:12px;">Ir ao Histórico →</button>
+</div><p>Selecione um mês no Histórico.</p></div>
   <div id="ins-content" style="display:none">
     <div style="font-size:16px;font-weight:600;margin-bottom:18px;" id="insTitle">Insights</div>
     <div class="sec">Destaques positivos</div><div class="hl-list" id="insFortes"></div>
@@ -1886,6 +1920,20 @@ async function _perfAdicionarEvidencia(colabId, mesNome) {
 
 
 // ── Mês automático ────────────────────────────────────────────────────────────
+
+// ── Barra de contexto persistente ────────────────────────────────────────────
+function atualizarCtxBar(mesNome){
+  const bar=document.getElementById('ctxBar');
+  const lbl=document.getElementById('ctxBarMes');
+  if(!bar||!lbl)return;
+  if(mesNome){
+    lbl.textContent=mesNome+' · '+( unidadeAtual?unidadeAtual.nome:'—');
+    bar.classList.add('visible');
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+
 function gerarNomeMesAtual() {
   const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                 'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1914,6 +1962,7 @@ function goTab(id) {
   if(_tabEl) { _tabEl.classList.add('active'); }
   else { console.warn('[goTab] elemento não encontrado: tab-'+id); }
   if(id==='timeline') renderTimeline();
+  if(id==='comparativo') atualizarSelects();
   if(id==='historico') renderHistorico();
   if(id==='radar'){renderColabGrid();}
 }
@@ -4430,7 +4479,7 @@ function verPainelSelecionado(){const sel=[...selecaoHistorico];if(!sel.length){
 function compararSelecionados(){const sel=[...selecaoHistorico];if(sel.length<2){alert('Selecione ao menos 2 meses para comparar.');return;}document.getElementById('compSelA').value=sel[sel.length-2];document.getElementById('compSelB').value=sel[sel.length-1];renderComparativo();goTab('comparativo');}
 
 // ======================== PAINEL ========================
-function renderDash(mesNome){
+function renderDash(mesNome){atualizarCtxBar(mesNome);
   const hist=getHistorico();
   const mes=hist.find(m=>m.nome===mesNome);
   if(!mes){
