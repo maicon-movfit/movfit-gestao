@@ -7130,6 +7130,154 @@ async function colabSalvarElevacao(unidId, colabId, perguntaId, colunaKey) {
   }
 }
 
+// ════ LEITURA DAS RESPOSTAS DE ELEVAÇÃO DO COLABORADOR PELO RT ════
+// Mostra a resposta que o colaborador escreveu E o protocolo de condução embutido:
+// detecta o tipo da resposta e sugere como conduzir a conversa (Conhecer→Acolher→
+// Direcionar→Acompanhar, por perguntas). Não é cobrança — é preparação para a conversa.
+
+// Classifica a resposta escrita em um dos 4 tipos do protocolo (fase Conhecer).
+function classificarRespostaElevacao(texto) {
+  const t = (texto||'').toLowerCase().trim();
+  const palavras = t.split(/\s+/).filter(Boolean).length;
+  const terceiriza = /\b(o aluno|os alunos|o sistema|o hor[áa]rio|a unidade|a empresa|a recep|por causa d|culpa d|n[ãa]o depende de mim|fora do meu controle)\b/.test(t);
+  const autocritica = /\b(eu falho|meu erro|minha falha|sei que n[ãa]o|preciso melhorar|n[ãa]o consigo|sou ruim|me cobro|minha culpa|deixo a desejar)\b/.test(t);
+  if(palavras > 0 && palavras <= 12) return 'curta';
+  if(terceiriza) return 'terceiriza';
+  if(autocritica) return 'autocritica';
+  if(palavras >= 25) return 'madura';
+  return 'media';
+}
+
+// O protocolo de condução para cada tipo (resumo acionável do documento).
+const PROTOCOLO_CONDUCAO = {
+  curta: {
+    rotulo: 'Resposta curta ou evasiva',
+    cor: '#BA7517',
+    leitura: 'Ele respondeu pouco — pode não ter refletido, ou não ter se sentido seguro.',
+    como: 'Invista no Acolher antes de aprofundar. Ele precisa de segurança, não de mais perguntas difíceis.',
+    perguntas: [
+      'Li o que você escreveu. Me conta um pouco mais — como você chegou nessa percepção?',
+      'Antes da gente entrar no assunto: como tem sido a sua semana, de verdade?',
+      'Tem algo nesse tema que é mais difícil de colocar no papel? Aqui a gente pode falar com calma.'
+    ]
+  },
+  autocritica: {
+    rotulo: 'Resposta autocrítica',
+    cor: '#D85A30',
+    leitura: 'Ele já enxergou o problema — e está se cobrando. O risco é a conversa virar autoflagelo.',
+    como: 'Não reforce o problema (ele já viu). Direcione rápido para a ação e para frente.',
+    perguntas: [
+      'Você já enxergou o ponto com clareza — isso é o mais difícil. Agora me diz: qual o primeiro passo?',
+      'Sem se punir por isso: se fosse resolver do seu jeito, por onde começaria?',
+      'O que precisaria ser verdade para você conseguir mudar isso essa semana?'
+    ]
+  },
+  terceiriza: {
+    rotulo: 'Resposta que terceiriza',
+    cor: '#A32D2D',
+    leitura: 'Ele aponta para fora (o aluno, o horário, o sistema). Confrontar isso de frente fecha a conversa.',
+    como: 'Concorde com a parte verdadeira e devolva o foco ao que está na mão dele — sem acusar.',
+    perguntas: [
+      'Faz sentido, esses fatores existem mesmo. Dentro desse cenário que você não controla, o que ainda está na sua mão?',
+      'Se esses fatores não mudarem tão cedo, o que você poderia fazer mesmo assim?',
+      'O que dependeria só de você para melhorar um pouco esse ponto?'
+    ]
+  },
+  madura: {
+    rotulo: 'Resposta concreta e madura',
+    cor: '#1D9E75',
+    leitura: 'Ele citou caso, ação ou aprendizado. Está pronto para ir fundo.',
+    como: 'Acelere o Acolher e invista no Direcionar — puxe para o próximo nível.',
+    perguntas: [
+      'Gostei do que você trouxe. Se você fosse levar isso um nível acima, o que faria diferente?',
+      'O que funcionou aqui que você poderia repetir com outros alunos, de propósito?',
+      'Qual o próximo desafio que você quer encarar nesse ponto?'
+    ]
+  },
+  media: {
+    rotulo: 'Resposta em desenvolvimento',
+    cor: '#7F77DD',
+    leitura: 'Ele refletiu, mas ainda dá para aprofundar a consciência e puxar a ação.',
+    como: 'Aprofunde a consciência e conduza à solução dele, por perguntas.',
+    perguntas: [
+      'O que acontece, na prática, quando isso que você descreveu se repete?',
+      'Se fosse resolver do seu jeito, por onde começaria?',
+      'Qual o menor passo que você consegue dar ainda essa semana?'
+    ]
+  }
+};
+
+async function renderElevacaoColabNoRT(el, unidId, colabId) {
+  if(!el) return;
+  if(!unidId || !colabId) { el.innerHTML=''; return; }
+  let respostas = [];
+  try {
+    const rSnap = await elevacaoColabRef(unidId, colabId).orderBy('criadoEm','desc').limit(6).get();
+    respostas = rSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+  } catch(e){}
+
+  if(!respostas.length) {
+    el.innerHTML = `<div style="font-size:12px;color:#555;padding:8px 0;font-style:italic;">O colaborador ainda não respondeu nenhuma pergunta de elevação. Quando responder, a resposta aparece aqui — com o caminho de como conduzir a conversa.</div>`;
+    return;
+  }
+
+  const ehAdmin = usuarioLogado && usuarioLogado.papel === 'admin';
+  const ultima = respostas[0];
+  const col = BIBLIOTECA_ELEVACAO_COLAB[ultima.colunaKey];
+  const corCol = (col && col.cor) || '#7F77DD';
+  const tipo = classificarRespostaElevacao(ultima.resposta);
+  const prot = PROTOCOLO_CONDUCAO[tipo];
+  const data = ultima.criadoEm ? new Date(ultima.criadoEm).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}) : '';
+
+  el.innerHTML = `
+    <div style="background:#0f0f13;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:16px 18px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${corCol};display:inline-block;"></span>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${corCol};">${col?esc(col.titulo):'Elevação'}</span>
+        ${data?`<span style="font-size:10px;color:#555;">· respondeu em ${data}</span>`:''}
+        ${ehAdmin?`<button onclick="apagarElevacaoColab('${unidId}','${esc(colabId)}','${ultima._id}')" title="Apagar esta resposta (admin)" style="margin-left:auto;background:rgba(163,45,45,.12);border:1px solid rgba(163,45,45,.3);border-radius:6px;color:#e07a7a;font-size:10px;padding:4px 9px;cursor:pointer;font-family:'Inter',sans-serif;">🗑 Apagar</button>`:''}
+      </div>
+      <div style="font-size:12px;color:#888;line-height:1.55;margin-bottom:8px;">${esc(ultima.pergunta)}</div>
+      <div style="background:#141418;border-left:3px solid ${corCol};border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:14px;">
+        <div style="font-size:13px;color:#f0f0f2;line-height:1.7;font-style:italic;">"${esc(ultima.resposta)}"</div>
+      </div>
+
+      <div style="background:${prot.cor}14;border:1px solid ${prot.cor}33;border-radius:10px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+          <span style="font-size:11px;font-weight:700;color:${prot.cor};text-transform:uppercase;letter-spacing:.04em;">Como conduzir a conversa</span>
+        </div>
+        <div style="font-size:11px;color:#b0b0c0;line-height:1.5;margin-bottom:4px;"><span style="color:${prot.cor};font-weight:600;">${prot.rotulo}.</span> ${prot.leitura}</div>
+        <div style="font-size:11px;color:#9a9aae;line-height:1.5;margin-bottom:10px;">${prot.como}</div>
+        <div style="font-size:10px;font-weight:700;color:#76768a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Perguntas para esta conversa</div>
+        ${prot.perguntas.map(p=>`<div style="display:flex;gap:7px;margin-bottom:6px;align-items:flex-start;">
+          <span style="color:${prot.cor};font-size:12px;flex-shrink:0;">•</span>
+          <span style="font-size:12px;color:#d0d0da;line-height:1.5;">${esc(p)}</span>
+        </div>`).join('')}
+        <div style="font-size:10px;color:#555;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);line-height:1.5;">Você é o dono das perguntas, não da resposta. Conduza por Acolher → Direcionar → Acompanhar. Feche com um passo que ele define, e retome na próxima.</div>
+      </div>
+
+      ${respostas.length>1?`<div style="font-size:10px;color:#555;margin-top:10px;">+ ${respostas.length-1} resposta(s) anterior(es) registrada(s).</div>`:''}
+    </div>`;
+}
+
+// Apagar uma resposta de elevação do colaborador — restrito ao admin.
+async function apagarElevacaoColab(unidId, colabId, respId) {
+  if(!(usuarioLogado && usuarioLogado.papel === 'admin')) {
+    alert('Apenas o administrador pode apagar respostas.');
+    return;
+  }
+  if(!unidId || !colabId || !respId) return;
+  if(!confirm('Apagar esta resposta de elevação? Esta ação não pode ser desfeita.')) return;
+  try {
+    await elevacaoColabRef(unidId, colabId).doc(respId).delete();
+    const host = document.getElementById('elevacaoColabRTHost');
+    if(host) renderElevacaoColabNoRT(host, unidId, colabId);
+  } catch(e){
+    console.warn('[APAGAR ELEVACAO] erro:', e);
+    alert('Erro ao apagar — tente novamente.');
+  }
+}
+
 async function renderIdentidadePortalRT(el, unidId) {
   if(!el) return;
   unidId = unidId || (unidadeAtual && unidadeAtual.id);
@@ -8696,6 +8844,10 @@ async function buscarRegistrosCompromisso(unidId, colabId) {
 async function renderAbaCompromisso(colabId, unidId) {
   const host = document.getElementById('compromissoContent');
   if(!host || !unidId) return;
+
+  // Renderizar elevação do colaborador (resposta da semana + protocolo de condução)
+  const elevHost = document.getElementById('elevacaoColabRTHost');
+  if(elevHost) renderElevacaoColabNoRT(elevHost, unidId, colabId);
 
   // Renderizar voz do colaborador
   const vozHost = document.getElementById('vozColabRTHost');
@@ -12281,6 +12433,9 @@ function renderPerfilConteudoDin() {
         Registros de execução do colaborador — o que ele fez, com quem, e o que combinou.<br>
         Use isso como base para o check-in.
       </div>
+
+      <div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Elevação — como ele pensa</div>
+      <div id="elevacaoColabRTHost" style="margin-bottom:20px;"><div style="font-size:12px;color:#555;padding:8px 0;">Carregando...</div></div>
 
       <div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">O que o colaborador precisa de você</div>
       <div id="vozColabRTHost" style="margin-bottom:20px;"><div style="font-size:12px;color:#555;padding:8px 0;">Carregando...</div></div>
