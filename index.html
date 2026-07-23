@@ -589,7 +589,7 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
     <div>
       <div style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Registrar mês</div>
-      <div style="font-size:12px;color:var(--muted);">Preencha a carteira de cada professor — salvo automaticamente.</div>
+      <div style="font-size:12px;color:var(--muted);">Treino (Total, Ativos, Com treino, Vencidos, Em dia, Sem treino) importa da Pacto ao abrir. Revise e clique em Registrar mês.</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <div id="mesChip" onclick="abrirSeletorMesGrade()" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-dim);border:1px solid var(--accent-glow);border-radius:16px;padding:5px 14px;cursor:pointer;" title="Clique para escolher o mês deste fechamento">
@@ -597,6 +597,7 @@
         <span id="mesChipLabel" style="font-size:13px;font-weight:600;color:var(--accent);">—</span>
         <span style="font-size:10px;color:var(--accent);opacity:.7;">✎</span>
       </div>
+      <button type="button" id="btnPreencherPacto" onclick="preencherGradeComPacto()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid rgba(224,31,45,.25);background:rgba(224,31,45,.08);color:#e01f2d;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;" title="Atualiza via proxy n8n (key Pacto só no n8n). Bio/Trancados/Cancelados não são alterados.">Atualizar da Pacto</button>
       <button onclick="limparGrade()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;">Limpar</button>
     </div>
   </div>
@@ -978,6 +979,8 @@
         <div id="modalProfSub" style="font-size:11px;color:var(--muted);margin-top:2px;"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" id="btnVincularPactoProfs" onclick="vincularCodigosPactoDaUnidade()" style="background:rgba(224,31,45,.08);border:1px solid rgba(224,31,45,.25);border-radius:10px;color:#e01f2d;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Casa cada professor com codigoPessoa da Pacto e grava no Firestore">Vincular Pacto</button>
+        <button type="button" id="btnDedupProfs" onclick="limparDuplicatasProfessores()" style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:10px;color:#c47d0e;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Remove cadastros duplicados (ex.: ALEX DE vs ALEX DE SOUSA), mantendo o que tem cód. Pacto ou nome mais completo">Limpar duplicatas</button>
         <button onclick="abrirFormProfessor()" style="background:rgba(224,31,45,.12);border:1px solid rgba(224,31,45,.3);border-radius:10px;color:#e01f2d;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:Inter,sans-serif;">+ Adicionar</button>
         <button onclick="fecharModalEquipe('prof')" style="background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:#888;padding:6px 12px;cursor:pointer;font-size:12px;font-family:Inter,sans-serif;">✕ Fechar</button>
       </div>
@@ -986,11 +989,16 @@
     <!-- Formulário de cadastro (oculto por padrão) -->
     <div id="formProfessor" style="display:none;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg);">
       <div style="font-size:12px;font-weight:600;color:#e01f2d;margin-bottom:12px;">Novo professor</div>
-      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;">
+      <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:end;">
         <div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Nome completo</div>
           <input id="profNomeInput" type="text" placeholder="Nome do professor..."
             style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);font-family:Inter,sans-serif;outline:none;" />
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Cód. Pacto</div>
+          <input id="profCodigoPactoInput" type="number" inputmode="numeric" placeholder="opcional"
+            style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);font-family:Inter,sans-serif;outline:none;" title="codigoPessoa da Pacto. Se vazio, tenta casar pelo nome ao salvar." />
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;">
@@ -1016,6 +1024,8 @@
         <button class="btn sm" onclick="setModalProfFiltro(this,'destaque')" style="color:var(--green);border-color:rgba(52,196,124,.3);">🟢 Destaque</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'atencao')" style="color:var(--red);border-color:rgba(240,92,92,.3);">🔴 Atenção</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_pendente')" style="color:#f5a623;border-color:rgba(245,166,35,.3);">⚠ Radar pendente</button>
+        <button class="btn sm" onclick="setModalProfFiltro(this,'sem_pacto')" style="color:#e01f2d;border-color:rgba(224,31,45,.3);">Sem cód. Pacto</button>
+        <button class="btn sm" onclick="setModalProfFiltro(this,'fora_treino')" style="color:#c47d0e;border-color:rgba(245,166,35,.35);">Fora do Treino Web</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_ok')" style="color:var(--c-purple);border-color:rgba(167,139,250,.3);">✓ Radar OK</button>
       </div>
       <div id="modalProfGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
@@ -1172,6 +1182,19 @@
 .rth-eq-delta-up{background:var(--c-green-bg);color:var(--c-green);}
 .rth-eq-delta-dn{background:var(--c-red-bg);color:var(--c-red);}
 .rth-eq-delta-eq{background:var(--surface2);color:var(--muted);}
+.rth-eq-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px;}
+.rth-eq-m{background:var(--surface2);border-radius:6px;padding:5px 4px;text-align:center;border:1px solid var(--border);}
+.rth-eq-m-v{font-size:13px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.15;color:var(--text);}
+.rth-eq-m-l{font-size:8px;color:var(--muted);margin-top:2px;line-height:1.2;}
+.rth-eq-fonte{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-top:6px;}
+.rth-eq-fonte-pacto{color:#c47d0e;}
+@media(max-width:900px){
+  .rth-eq-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:560px){
+  .rth-eq-grid{grid-template-columns:1fr;}
+  .rth-eq-metrics{grid-template-columns:repeat(4,1fr);}
+}
 /* Ações com grupos */
 .rth-acoes{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);padding:14px;box-shadow:var(--sh1);}
 .rth-grupo-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:8px;margin-top:12px;}
@@ -1593,6 +1616,7 @@ async function salvarMetasFirestore() {
 
 </script>
 <script src="js/auth-config.js"></script>
+<script src="js/n8n-config.js"></script>
 <script src="js/pacto.js"></script>
 <script>
 
@@ -3177,10 +3201,16 @@ function buildGradeRow(data, idx, readonly) {
   const nome=data?data[0]:''; const v=data?data.slice(1):Array(12).fill('');
   const av=ac(idx); const ini=nome?initials(nome):'?';
   const nomeAttrs = readonly ? 'readonly style="cursor:default;background:rgba(255,255,255,.02);"' : '';
-  return `<div class="prof-row${nome?' filled':''}" id="gr-${idx}">
+  const foraBadge = data && data._foraTreinoWeb
+    ? `<span class="badge-fora-treino" title="Não retornado pelo BI da Pacto">Fora do Treino Web</span>`
+    : '';
+  return `<div class="prof-row${nome?' filled':''}" id="gr-${idx}"${data && data._foraTreinoWeb ? ' data-fora-treino-web="1"' : ''}>
     <div class="pname-cell">
       <div class="pavatar" style="background:${av}" id="av-${idx}">${ini}</div>
-      <input class="pfield-name" type="text" placeholder="Nome do professor" value="${nome}" oninput="updateAv(${idx},this.value);feedbackGrade();_marcarGradeModificada();" data-gr="${idx}" data-f="0" ${nomeAttrs}>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+        <input class="pfield-name" type="text" placeholder="Nome do professor" value="${nome}" oninput="updateAv(${idx},this.value);feedbackGrade();_marcarGradeModificada();" data-gr="${idx}" data-f="0" ${nomeAttrs}>
+        ${foraBadge}
+      </div>
     </div>
     ${[0,1,2,3,4,5,6,7,8].map((fi,ci)=>{
       const cls=ci===4?'fg':ci===5?'fr':ci===6?'fg':ci===7?'fa':'';
@@ -3190,6 +3220,43 @@ function buildGradeRow(data, idx, readonly) {
     <input class="pfield" type="number" min="0" placeholder="0" title="Bio vencida (>60d)" value="${v[10]!==undefined&&v[10]!==''?v[10]:''}" data-gr="${idx}" data-f="11" style="color:var(--c-purple);" oninput="feedbackGrade();_marcarGradeModificada();">
     <input class="pfield" type="number" min="0" placeholder="0" title="Sem avaliação (nunca fez)" value="${v[11]!==undefined&&v[11]!==''?v[11]:''}" data-gr="${idx}" data-f="12" style="color:var(--c-purple);" oninput="feedbackGrade();_marcarGradeModificada();">
   </div>`;
+}
+
+/** Badge visual na linha da grade: fora do Treino Web (BI Pacto). */
+function marcarLinhaForaTreinoWeb(row, fora) {
+  if (!row) return;
+  const wrap = row.querySelector('.pname-cell > div');
+  let badge = row.querySelector('.badge-fora-treino');
+  if (fora) {
+    row.style.outline = '1px solid rgba(245,166,35,.45)';
+    row.dataset.foraTreinoWeb = '1';
+    if (!badge && wrap) {
+      badge = document.createElement('span');
+      badge.className = 'badge-fora-treino';
+      badge.title = 'Não retornado pelo BI da Pacto (sem vínculo no Treino Web)';
+      badge.textContent = 'Fora do Treino Web';
+      wrap.appendChild(badge);
+    } else if (badge) {
+      badge.style.display = '';
+    }
+  } else {
+    row.style.outline = '1px solid rgba(46,204,113,.35)';
+    delete row.dataset.foraTreinoWeb;
+    if (badge) badge.remove();
+  }
+}
+
+async function marcarForaTreinoWebFirestore(unidId, profId, fora) {
+  if (!unidId || !profId) return;
+  const payload = {
+    foraTreinoWeb: !!fora,
+    foraTreinoWebAtualizadoEm: new Date().toISOString(),
+  };
+  try {
+    await professoresRef(unidId).doc(profId).set(payload, { merge: true });
+  } catch (e) {
+    console.warn('[foraTreinoWeb]', e);
+  }
 }
 
 function updateAv(idx,nome){
@@ -3234,9 +3301,19 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
       </div>`;
       return;
     }
-    const profs = snap.docs.map(d=>d.data());
-    const dados = profs.map(p => [p.nome, ...Array(12).fill('')]);
+    const profs = snap.docs.map(d=>({profId:d.id,...d.data()}));
+    const dados = profs.map(p => {
+      const row = [p.nome, ...Array(12).fill('')];
+      if (p.foraTreinoWeb) row._foraTreinoWeb = true;
+      return row;
+    });
     rows.innerHTML = dados.map((r,i)=>buildGradeRow(r,i,true)).join('');feedbackGrade();
+    // Sempre importa números de treino da Pacto (via proxy n8n) ao abrir a grade.
+    // Não grava no Firestore — o RT ainda precisa clicar em "Registrar mês".
+    if (typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId)) {
+      const seq = ++_gradePactoSeq;
+      await preencherGradeComPacto({ auto: true, unidId, seq });
+    }
   } catch(e) {
     console.warn('[inicializarGradeComProfessoresDaUnidade] erro:', e);
     if(unidadeAtual && unidadeAtual.id === unidId) {
@@ -3255,7 +3332,242 @@ async function limparGrade(){
   document.querySelectorAll('#gradeRows .pfield').forEach(el => { el.value=''; });
   _limparFlagGrade(); // grade zerada = sem modificações pendentes
   feedbackGrade(); // atualizar painel após limpar
-}// ══════════════════════════════════════════════════════════════════════════════
+}
+
+// Preenche a grade com indicadores ao vivo da Pacto (BI).
+// Não grava no Firestore — o RT ainda precisa clicar em "Registrar mês".
+// Não altera: Trancados, Cancelados, Duração, Bio*.
+// opts.auto: true → chamado ao abrir a grade (sem confirmação; toast mais discreto).
+let _gradePactoSeq = 0;
+async function preencherGradeComPacto(opts) {
+  const auto = !!(opts && opts.auto);
+  const seq = opts && opts.seq != null ? opts.seq : null;
+  const btn = document.getElementById('btnPreencherPacto');
+  const rowsEl = document.getElementById('gradeRows');
+  if (!rowsEl) return;
+
+  if (!unidadeAtual) {
+    if (!auto) mostrarToast('Nenhuma unidade selecionada.');
+    return;
+  }
+  const unidId = (opts && opts.unidId) || unidadeAtual.id;
+  if (unidadeAtual.id !== unidId) return;
+
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    if (!auto) mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    return;
+  }
+
+  const rows = Array.from(rowsEl.querySelectorAll('.prof-row'));
+  if (!rows.length) {
+    if (!auto) mostrarToast('A grade está vazia. Cadastre professores na Equipe primeiro.');
+    return;
+  }
+
+  if (!auto) {
+    const temNumeros = rows.some(row =>
+      [1, 2, 5, 6, 7, 8].some(f => {
+        const el = row.querySelector(`[data-f="${f}"]`);
+        return el && String(el.value).trim() !== '' && Number(el.value) !== 0;
+      })
+    );
+    if (temNumeros) {
+      const ok = await confirmDialog(
+        'Alguns campos já têm números. A importação da Pacto vai sobrescrever Total, Ativos, Com treino, Vencidos, Em dia e Sem treino.\n\nTrancados, Cancelados, Duração e Bio não serão alterados.\n\nContinuar?',
+        'Atualizar da Pacto',
+        'warn'
+      );
+      if (!ok) return;
+    } else {
+      const ok = await confirmDialog(
+        'Importar da Pacto os indicadores de treino (ao vivo) para cada professor desta grade?\n\nDepois revise e clique em "Registrar mês" para salvar o snapshot.',
+        'Atualizar da Pacto',
+        'info'
+      );
+      if (!ok) return;
+    }
+  }
+
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Buscando Pacto…';
+  }
+  if (auto && typeof setSaveStatus === 'function') {
+    setSaveStatus('Importando da Pacto…', 'w');
+  }
+
+  try {
+    // Manual: força BI fresco. Auto: reusa cache (evita 429 ao abrir várias telas).
+    if (!auto && typeof pactoLimparCacheDados === 'function') pactoLimparCacheDados();
+    if (typeof n8nPactoConfigOk === 'function' && !n8nPactoConfigOk()) {
+      const msgCfg = 'Configure js/n8n-config.js (N8N_PACTO_BASE + N8N_PROXY_TOKEN). Veja n8n/SETUP.txt.';
+      if (auto) setSaveStatus(msgCfg, 'e');
+      else mostrarToast(msgCfg);
+      return;
+    }
+    const lista = await pactoBuscarProfessoresBI(empresaId);
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+    if (seq != null && seq !== _gradePactoSeq) return;
+    if (!lista || !lista.length) {
+      if (auto) setSaveStatus('Pacto não retornou professores. Verifique o proxy n8n e Credentials.', 'e');
+      else mostrarToast('Pacto não retornou professores. Verifique o n8n (Credentials + webhook).');
+      return;
+    }
+    let normalizados = lista.map(pactoNormalizarProfessor).filter(Boolean);
+
+    // ADM só no refresh manual (1 hit a mais) — no auto o BI + codigoPacto bastam
+    let admNorm = [];
+    if (!auto) {
+      try {
+        const adm = await pactoBuscarProfessores(empresaId);
+        admNorm = (adm || []).map(raw => ({
+          codigo: (raw.pessoa && (raw.pessoa.codigoPessoa || raw.pessoa.id)) || raw.codigoPessoa || raw.id || null,
+          nome: pactoNomeProfessor(raw),
+          comTreino: null, emDia: null, vencidos: null, aRenovar: null, semTreino: null,
+        })).filter(p => p.nome && p.nome !== '?');
+      } catch (e) {
+        console.warn('[PACTO GRADE] ADM fallback:', e);
+      }
+    }
+
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+    if (seq != null && seq !== _gradePactoSeq) return;
+
+    console.group('[PACTO GRADE] Diagnóstico de match');
+    console.log('empresaId:', empresaId, '| BI:', normalizados.length, '| ADM:', admNorm.length);
+    console.table(normalizados.slice(0, 20).map(p => ({
+      codigo: p.codigo, nome: p.nome, comTreino: p.comTreino, emDia: p.emDia, vencidos: p.vencidos, semTreino: p.semTreino
+    })));
+    console.log('Nomes na grade:', rows.map(r => {
+      const el = r.querySelector('[data-f="0"]');
+      return el ? el.value.trim() : '';
+    }).filter(Boolean));
+    console.groupEnd();
+
+    const codigoPorNome = new Map();
+    const profIdPorNome = new Map();
+    try {
+      const snapP = await professoresRef(unidId).get();
+      snapP.forEach(doc => {
+        const d = doc.data() || {};
+        if (d.nome) {
+          const k = nomeParaId(d.nome);
+          profIdPorNome.set(k, doc.id);
+          if (d.codigoPacto != null) codigoPorNome.set(k, d.codigoPacto);
+        }
+      });
+    } catch (e) {}
+    try {
+      const snapC = await colabRef(unidId).get();
+      snapC.forEach(doc => {
+        const d = doc.data() || {};
+        if (d.codigoPacto != null && d.nome) codigoPorNome.set(nomeParaId(d.nome), d.codigoPacto);
+      });
+    } catch (e) {}
+
+    const setField = (row, f, val) => {
+      const el = row.querySelector(`[data-f="${f}"]`);
+      if (!el) return;
+      if (val == null || val === '' || Number.isNaN(Number(val))) return;
+      el.value = String(Math.max(0, Math.round(Number(val))));
+    };
+
+    let okCount = 0, falha = 0;
+    const naoEncontrados = [];
+    const persistFora = [];
+
+    rows.forEach(row => {
+      const nomeEl = row.querySelector('[data-f="0"]');
+      const nome = nomeEl ? nomeEl.value.trim() : '';
+      if (!nome) return;
+
+      const chave = nomeParaId(nome);
+      const codCadastro = codigoPorNome.get(chave);
+      const profId = profIdPorNome.get(chave);
+      let bi = pactoEncontrarProfessor(normalizados, { codigoPacto: codCadastro, nome });
+
+      // Se achou só no ADM, tenta pegar indicadores no BI pelo codigo
+      if (!bi || (bi.comTreino == null && bi.emDia == null && bi.vencidos == null && bi.semTreino == null)) {
+        const admHit = pactoEncontrarProfessor(admNorm, { codigoPacto: codCadastro, nome });
+        if (admHit && admHit.codigo != null) {
+          const biByCod = normalizados.find(p => String(p.codigo) === String(admHit.codigo));
+          bi = biByCod || admHit;
+        } else if (!bi) {
+          bi = admHit || null;
+        }
+      }
+
+      if (!bi || (bi.comTreino == null && bi.emDia == null && bi.vencidos == null && bi.semTreino == null && bi.codigo == null)) {
+        falha++;
+        naoEncontrados.push(nome.split(' ')[0]);
+        marcarLinhaForaTreinoWeb(row, true);
+        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        console.warn('[PACTO GRADE] fora do Treino Web:', nome);
+        return;
+      }
+
+      const comTreino = bi.comTreino;
+      const semTreino = bi.semTreino;
+      const emDia = bi.emDia;
+      const vencidos = bi.vencidos;
+
+      if (comTreino == null && emDia == null && vencidos == null && semTreino == null) {
+        falha++;
+        naoEncontrados.push(nome.split(' ')[0]);
+        marcarLinhaForaTreinoWeb(row, true);
+        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        console.warn('[PACTO GRADE] no BI sem indicadores:', nome, bi);
+        return;
+      }
+
+      const totalEst =
+        comTreino != null && semTreino != null
+          ? Number(comTreino) + Number(semTreino)
+          : comTreino;
+
+      setField(row, 1, totalEst);
+      setField(row, 2, totalEst);
+      setField(row, 5, comTreino);
+      setField(row, 6, vencidos);
+      setField(row, 7, emDia);
+      setField(row, 8, semTreino);
+
+      marcarLinhaForaTreinoWeb(row, false);
+      if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, false));
+      okCount++;
+    });
+
+    if (persistFora.length) {
+      try { await Promise.all(persistFora); } catch (e) {}
+    }
+
+    feedbackGrade();
+    _marcarGradeModificada();
+
+    let msg = `Pacto: ${okCount} professor(es) preenchido(s)`;
+    if (falha) msg += ` · ${falha} fora do Treino Web (${naoEncontrados.slice(0, 3).join(', ')}${naoEncontrados.length > 3 ? '…' : ''})`;
+    msg += '. Revise e clique em Registrar mês.';
+    if (!auto) mostrarToast(msg);
+    setSaveStatus(
+      okCount
+        ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
+        : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
+      okCount ? 'ok' : 'w'
+    );
+  } catch (e) {
+    console.error('[PACTO GRADE]', e);
+    if (!auto) mostrarToast('Erro ao buscar Pacto: ' + (e.message || 'falha'));
+    setSaveStatus('Erro ao importar da Pacto.', 'e');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Atualizar da Pacto';
+    }
+  }
+}
+// ══════════════════════════════════════════════════════════════════════════════
 // FERRAMENTAS DE TESTE — flag ambiente + limpeza de ciclos de homologação
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -10527,46 +10839,8 @@ async function renderRTHome() {
   const nomeCompleto = usuarioLogado && usuarioLogado.nome ? usuarioLogado.nome : 'Coordenador';
   const nome = nomeCompleto.split(' ')[0];
 
-  // ── TESTE Pacto BI — só Premium, só console, sem impacto na tela ─────────
-  // Remove este bloco após validação. Substitua empresaId pelo valor real.
-  if(unidadeAtual.id === 'premium24') {
-    console.group('[PACTO] 🚀 Teste automático ao abrir home RT — Premium 24h');
-    try {
-      // PASSO 1: descobre professores e estrutura do JSON
-      // Troque o empresaId abaixo pelo código real após ver /grupo-colaborador/by-empresa-logada
-      const EMPRESA_ID_TESTE = '1'; // ← AJUSTE AQUI se necessário
-      // Usa endpoint BI — retorna só professores do Treino Web com indicadores prontos
-      const profs = await pactoBuscarProfessoresBI(EMPRESA_ID_TESTE);
-      if(profs.length > 0) {
-        console.log('✅ Professores Treino Web encontrados:', profs.length);
-        console.log('🔎 Objeto RAW completo do primeiro professor:', profs[0]);
-        console.log('Campos disponíveis:', Object.keys(profs[0]));
-        const normalizados = profs.map(pactoNormalizarProfessor);
-        console.table(normalizados.map(p => ({
-          nome:      p.nome,
-          codigo:    p.codigo,
-          comTreino: p.comTreino,
-          emDia:     p.emDia,
-          semTreino: p.semTreino,
-          vencidos:  p.vencidos,
-          aRenovar:  p.aRenovar,
-        })));
-        console.log('✅ Dados normalizados prontos para exibição na tela:', normalizados);
-      } else {
-        console.warn('⚠ Nenhum professor do Treino Web retornado.');
-        console.log('empresaId usado:', EMPRESA_ID_TESTE);
-        console.log('Tentando com chave ADM como fallback...');
-        const profsAdm = await pactoBuscarProfessores(EMPRESA_ID_TESTE);
-        console.log('Fallback ADM retornou:', profsAdm.length, 'colaboradores');
-      }
-    } catch(e) {
-      console.error('[PACTO] Erro no teste:', e);
-    }
-    console.groupEnd();
-  }
-  // ── FIM TESTE Pacto ───────────────────────────────────────────────────────
-
   // ── Contexto temporal ────────────────────────────────────────────────────
+  // (teste automático Pacto na home removido — estourava rate limit 50/min)
   const agora = new Date();
   const diasSemana = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
   const diaSemana  = diasSemana[agora.getDay()];
@@ -10796,111 +11070,143 @@ async function renderRTHome() {
       </div>`;
   }
 
-  // ── Equipe por professor com delta + dados Pacto em tempo real ──────────
+  // ── Equipe por professor — métricas Pacto ao vivo (fallback: mês salvo) ──
   if(elEqGrid) {
     const hist = getHistorico(unidadeAtual.id);
     const ultimo  = hist && hist.length ? hist[hist.length-1] : null;
     const anterior= hist && hist.length >= 2 ? hist[hist.length-2] : null;
 
-    // Busca dados Pacto + mapa de codigoPacto do Firestore
-    let pactoMap = {}; // chave: codigoPacto (number) → dados BI normalizados
-    let codigoPactoMap = {}; // chave: colabId Firestore → codigoPacto
-    if(unidadeAtual.id === 'premium24') {
+    let pactoMap = {}; // codigo → BI normalizado
+    let codigoPactoMap = {}; // profId | nomeParaId → codigo
+    if(unidadeAtual.id === 'premium24' && typeof pactoBuscarProfessoresBI === 'function') {
       try {
-        const EMPRESA_ID = '1'; // ← trocar pelo empresaId real em Produção
-        // 1) Busca dados BI do Pacto — indexado por codigoPessoa
+        const EMPRESA_ID = pactoEmpresaId(unidadeAtual.id) || '1';
         const pactoProfs = await pactoBuscarProfessoresBI(EMPRESA_ID);
-        pactoProfs.forEach(raw => {
+        (pactoProfs || []).forEach(raw => {
           const n = pactoNormalizarProfessor(raw);
           if(n && n.codigo != null) pactoMap[n.codigo] = n;
         });
-        // 2) Lê codigoPacto de cada colaborador no Firestore
-        const colabsSnap = await colabRef(unidadeAtual.id).get();
+        const [colabsSnap, profsSnap] = await Promise.all([
+          colabRef(unidadeAtual.id).get(),
+          professoresRef(unidadeAtual.id).get(),
+        ]);
         colabsSnap.forEach(doc => {
-          const d = doc.data();
-          if(d.codigoPacto != null) codigoPactoMap[doc.id] = d.codigoPacto;
+          const d = doc.data() || {};
+          if(d.codigoPacto != null) {
+            codigoPactoMap[doc.id] = d.codigoPacto;
+            if(d.nome) codigoPactoMap[nomeParaId(d.nome)] = d.codigoPacto;
+          }
         });
-        console.log('[PACTO] Mapa Pacto:', Object.keys(pactoMap).length, 'professores | Firestore com codigoPacto:', Object.keys(codigoPactoMap).length);
+        profsSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if(d.codigoPacto != null) {
+            codigoPactoMap[doc.id] = d.codigoPacto;
+            if(d.nome) codigoPactoMap[nomeParaId(d.nome)] = d.codigoPacto;
+          }
+        });
       } catch(e) { console.warn('[PACTO] Erro ao buscar equipe:', e); }
     }
 
+    const pactoLista = Object.values(pactoMap);
+
     if(ultimo && ultimo.professores && ultimo.professores.length) {
       if(elEqCount) elEqCount.textContent = ultimo.professores.length;
-      const profs = [...ultimo.professores].sort((a,b)=>{
-        const pa = a.comTreino>0?Math.round(a.emDia/a.comTreino*100):0;
-        const pb = b.comTreino>0?Math.round(b.emDia/b.comTreino*100):0;
-        return pa - pb;
-      });
-      elEqGrid.innerHTML = profs.map(p => {
-        const pct    = p.comTreino>0 ? Math.round(p.emDia/p.comTreino*100) : 0;
-        const venc   = p.semTreino || 0;
+
+      const profsEnriquecidos = ultimo.professores.map(p => {
+        const colabId = p.profId || nomeParaId(p.nome);
+        const codigoHint = codigoPactoMap[colabId] ?? codigoPactoMap[nomeParaId(p.nome)] ?? p.codigoPacto ?? null;
+        let bi = null;
+        if (codigoHint != null && pactoMap[codigoHint]) bi = pactoMap[codigoHint];
+        else if (pactoLista.length && typeof pactoEncontrarProfessor === 'function') {
+          bi = pactoEncontrarProfessor(pactoLista, { codigoPacto: codigoHint, nome: p.nome });
+        }
+        const comTreino = bi && bi.comTreino != null ? Number(bi.comTreino) : Number(p.comTreino || 0);
+        const emDia     = bi && bi.emDia != null ? Number(bi.emDia) : Number(p.emDia || 0);
+        const vencidos  = bi && bi.vencidos != null ? Number(bi.vencidos) : Number(p.vencido || 0);
+        const semTreino = bi && bi.semTreino != null ? Number(bi.semTreino) : Number(p.semTreino || 0);
+        const total = (comTreino || 0) + (semTreino || 0) || Number(p.total || p.ativo || 0) || comTreino;
+        const pct = comTreino > 0 ? Math.round(emDia / comTreino * 100) : 0;
+        const duracao = p.duracao != null && p.duracao !== '' ? Number(p.duracao) : null;
+        return {
+          ...p,
+          _bi: bi,
+          _fonte: bi ? 'pacto' : 'mes',
+          _comTreino: comTreino,
+          _emDia: emDia,
+          _vencidos: vencidos,
+          _semTreino: semTreino,
+          _total: total,
+          _pct: pct,
+          _duracao: duracao,
+        };
+      }).sort((a,b) => a._pct - b._pct);
+
+      elEqGrid.innerHTML = profsEnriquecidos.map(p => {
+        const pct = p._pct;
         const status = pct >= 70 ? 'ok' : pct >= 50 ? 'at' : 'cr';
         const statusLabel = status==='ok'?'Em dia':status==='at'?'Atenção':'Crítico';
-        const cor    = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
-        const bg     = status==='cr'?'background:rgba(185,28,28,.03);border-color:rgba(185,28,28,.2);':
-                       status==='at'?'background:rgba(146,64,14,.03);border-color:rgba(146,64,14,.15);':'';
-        const iniciais = p.nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase();
-        const avBg   = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
-        // Delta vs mês anterior
+        const cor = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
+        const bg = status==='cr'?'background:rgba(185,28,28,.03);border-color:rgba(185,28,28,.2);':
+                   status==='at'?'background:rgba(146,64,14,.03);border-color:rgba(146,64,14,.15);':'';
+        const iniciais = p.nome.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('').toUpperCase();
+        const avBg = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
+        const nomeCurto = (() => {
+          const parts = p.nome.split(/\s+/).filter(Boolean);
+          if (parts.length <= 2) return p.nome;
+          return parts[0] + ' ' + parts[parts.length - 1];
+        })();
+
         let deltaHtml = '';
         if(anterior && anterior.professores) {
-          const pAnt = anterior.professores.find(x=>x.nome===p.nome);
+          const pAnt = anterior.professores.find(x =>
+            x.nome===p.nome
+            || (x.profId && p.profId && x.profId===p.profId)
+            || (typeof nomesProvavelmenteMesmoProfessor === 'function' && nomesProvavelmenteMesmoProfessor(x.nome, p.nome))
+          );
           if(pAnt && pAnt.comTreino > 0) {
             const pctAnt = Math.round(pAnt.emDia/pAnt.comTreino*100);
-            const diff   = pct - pctAnt;
-            if(diff > 0)      deltaHtml = `<span class="rth-eq-delta rth-eq-delta-up">▲ +${diff}pts vs mês ant.</span>`;
-            else if(diff < 0) deltaHtml = `<span class="rth-eq-delta rth-eq-delta-dn">▼ ${diff}pts vs mês ant.</span>`;
-            else              deltaHtml = `<span class="rth-eq-delta rth-eq-delta-eq">→ estável vs mês ant.</span>`;
+            const diff = pct - pctAnt;
+            if(diff > 0)      deltaHtml = `<span class="rth-eq-delta rth-eq-delta-up">▲ +${diff}pts vs mês</span>`;
+            else if(diff < 0) deltaHtml = `<span class="rth-eq-delta rth-eq-delta-dn">▼ ${diff}pts vs mês</span>`;
+            else              deltaHtml = `<span class="rth-eq-delta rth-eq-delta-eq">→ estável</span>`;
           }
         }
-        // Dados Pacto em tempo real — match por codigoPacto (Firestore)
-        const colabId = p.profId || nomeParaId(p.nome);
-        const codigoPacto = codigoPactoMap[colabId] ?? null;
-        const bi = codigoPacto != null ? (pactoMap[codigoPacto] || null) : null;
-        const pactoHtml = bi ? `
-          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:5px;">🔴 Ao vivo · Pacto</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:var(--text);">${bi.comTreino ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Com treino</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:${(bi.semTreino||0)>0?'var(--c-amber)':'var(--c-green)'};">${bi.semTreino ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Sem treino</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:${(bi.vencidos||0)>0?'var(--c-red)':'var(--c-green)'};">${bi.vencidos ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Vencidos</div>
-              </div>
-            </div>
-          </div>` : '';
+
+        const m = (v, l, c) =>
+          `<div class="rth-eq-m"><div class="rth-eq-m-v"${c?` style="color:${c}"`:''}>${v}</div><div class="rth-eq-m-l">${l}</div></div>`;
+
+        const fonteCls = p._fonte === 'pacto' ? 'rth-eq-fonte rth-eq-fonte-pacto' : 'rth-eq-fonte';
+        const fonteTxt = p._fonte === 'pacto' ? 'Ao vivo · Pacto' : 'Mês salvo';
+        const profIdAttr = p.profId ? String(p.profId).replace(/'/g, '') : '';
+
         return `
-          <div class="rth-eq-item" style="${bg}" onclick="goTab('radar')">
+          <div class="rth-eq-item" style="${bg}" onclick="abrirPerfilProfessor('${esc(p.nome)}','${profIdAttr}')">
             <span class="rth-eq-badge rth-eq-${status}">${statusLabel}</span>
             <div class="rth-eq-top">
               <div class="rth-eq-av" style="background:${avBg};">${iniciais}</div>
-              <div>
-                <div class="rth-eq-nome">${p.nome.split(' ')[0]} ${p.nome.split(' ').slice(-1)[0]}</div>
-                <div class="rth-eq-tipo">${p.modalidade||'Professor'}</div>
+              <div style="min-width:0;padding-right:48px;">
+                <div class="rth-eq-nome">${esc(nomeCurto)}</div>
+                <div class="rth-eq-tipo">${p._fonte === 'pacto' ? 'Pacto ao vivo' : (p.modalidade||'Professor')}</div>
               </div>
             </div>
-            <div class="rth-eq-row">
-              <span class="rth-eq-lbl">Em dia</span>
-              <div class="rth-eq-bar-bg"><div class="rth-eq-bar-fill" style="width:${pct}%;background:${cor};"></div></div>
-              <span class="rth-eq-val" style="color:${cor};">${pct}%</span>
+            <div class="rth-eq-metrics">
+              ${m(p._total, 'Total')}
+              ${m(p._total, 'Ativos')}
+              ${m(p._emDia, 'Em dia', 'var(--c-green)')}
+              ${m(pct + '%', '% em dia', cor)}
+              ${m(p._vencidos, 'Vencidos', p._vencidos > 0 ? 'var(--c-red)' : undefined)}
+              ${m(p._semTreino, 'Sem treino', p._semTreino > 0 ? 'var(--c-amber)' : undefined)}
+              ${m(p._comTreino, 'Com treino')}
+              ${m(p._duracao != null && !Number.isNaN(p._duracao) ? p._duracao + 'd' : '—', 'Duração')}
             </div>
-            <div class="rth-eq-row">
-              <span class="rth-eq-lbl">Vencidos</span>
-              <div class="rth-eq-bar-bg"><div class="rth-eq-bar-fill" style="width:${Math.min(100,venc*3)}%;background:${cor};opacity:.3;"></div></div>
-              <span class="rth-eq-val" style="color:${cor};">${venc}</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:2px;">
+              <span class="${fonteCls}">${fonteTxt}</span>
+              ${deltaHtml}
             </div>
-            ${deltaHtml}
-            ${pactoHtml}
           </div>`;
       }).join('');
     } else {
-      elEqGrid.innerHTML = '<div style="font-size:11px;color:var(--muted);grid-column:1/-1;">Salve ao menos um mês para ver a equipe.</div>';
+      elEqGrid.innerHTML = '<div style="font-size:11px;color:var(--muted);grid-column:1/-1;">Salve ao menos um mês para ver a equipe. Os números ao vivo vêm da Pacto após o registro.</div>';
     }
   }
 
@@ -13440,8 +13746,12 @@ async function buscarProfPorNome(unidId, nome){
   try {
     const snap = await professoresRef(unidId).get();
     const alvo = nomeParaId(nome);
-    const match = snap.docs.find(d => nomeParaId(d.data().nome) === alvo);
-    return match ? { profId: match.id, ...match.data() } : null;
+    const exact = snap.docs.find(d => nomeParaId(d.data().nome) === alvo);
+    if (exact) return { profId: exact.id, ...exact.data() };
+    // Nome parecido (ALMADA ALMADA vs ALMADA) — não cria segundo cadastro
+    const fuzzy = snap.docs.find(d => typeof nomesProvavelmenteMesmoProfessor === 'function'
+      && nomesProvavelmenteMesmoProfessor(d.data().nome, nome));
+    return fuzzy ? { profId: fuzzy.id, ...fuzzy.data() } : null;
   } catch(e) { console.warn('[buscarProfPorNome] erro:', e); return null; }
 }
 
@@ -13483,7 +13793,10 @@ async function vincularProfessoresAoCadastro(unidId, profs){
   for(const p of profs){
     if(!p.nome) continue;
     const chave = nomeParaId(p.nome);
-    const existente = cadastradosPorChave.get(chave);
+    let existente = cadastradosPorChave.get(chave);
+    if(!existente && typeof nomesProvavelmenteMesmoProfessor === 'function') {
+      existente = cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome)) || null;
+    }
     if(existente) { p.profId = existente.profId; continue; }
     try {
       const novoDoc = professoresRef(unidId).doc();
@@ -13494,7 +13807,9 @@ async function vincularProfessoresAoCadastro(unidId, profs){
         criadoPor: usuarioLogado?.nome || 'RT'
       });
       p.profId = novoDoc.id;
-      cadastradosPorChave.set(chave, { profId: novoDoc.id, nome: p.nome }); // evita duplicar se o nome repetir na mesma grade
+      const novo = { profId: novoDoc.id, nome: p.nome };
+      cadastrados.push(novo);
+      cadastradosPorChave.set(chave, novo);
     } catch(e3){ console.warn('[vincularProfessoresAoCadastro] erro ao cadastrar', p.nome, e3); }
   }
 }
@@ -13531,7 +13846,15 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
       const chave = nomeParaId(p.nome);
       if(nomesVistos.has(chave)) continue;
       nomesVistos.add(chave);
-      if(cadastradosPorChave.has(chave)) continue; // já cadastrado, nada a fazer
+      if(cadastradosPorChave.has(chave)) continue;
+      // Já existe com nome parecido (ex.: histórico "ALMADA ALMADA" vs cadastro "ALMADA")
+      const parecido = typeof nomesProvavelmenteMesmoProfessor === 'function'
+        ? cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome))
+        : null;
+      if(parecido) {
+        cadastradosPorChave.set(chave, parecido); // mapeia a grafia do histórico ao cadastro existente
+        continue;
+      }
       try {
         const novoDoc = professoresRef(unidId).doc();
         await novoDoc.set({
@@ -13540,7 +13863,9 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
           criadoEm: new Date().toISOString(),
           criadoPor: usuarioLogado?.nome || 'RT'
         });
-        cadastradosPorChave.set(chave, { profId: novoDoc.id, nome: p.nome }); // evita recriar se o nome repetir
+        const novo = { profId: novoDoc.id, nome: p.nome };
+        cadastrados.push(novo);
+        cadastradosPorChave.set(chave, novo);
       } catch(e){ console.warn('[sincronizarCadastroProfessoresComHistorico] erro ao cadastrar', p.nome, e); }
     }
   }
@@ -13575,8 +13900,9 @@ function fecharModalEquipe(tipo) {
   const id = tipo==='prof' ? 'modalEquipeProf' : 'modalEquipeEst';
   document.getElementById(id).style.display = 'none';
 }
-async function renderModalProf() {
+async function renderModalProf(opts) {
   if(!unidadeAtual) return;
+  const skipDedup = !!(opts && opts.skipDedup);
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante o carregamento
   const grid = document.getElementById('modalProfGrid');
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px 0;"><div style="font-size:11px;color:var(--muted);">Carregando...</div></div>';
@@ -13585,6 +13911,19 @@ async function renderModalProf() {
   // salvo ganha um cadastro fixo automaticamente, antes de listar.
   await sincronizarCadastroProfessoresComHistorico(unidId);
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — descarta o resultado
+
+  // Remove duplicatas (ALMADA ALMADA vs cadastro Pacto) automaticamente
+  if (!skipDedup && typeof _aplicarDeduplicataProfessores === 'function') {
+    try {
+      const n = await _aplicarDeduplicataProfessores(unidId, { auto: true });
+      if (n > 0) {
+        mostrarToast(`Removido(s) ${n} cadastro(s) duplicado(s). Mantido o da Pacto.`);
+        return renderModalProf({ skipDedup: true });
+      }
+    } catch (e) {
+      console.warn('[renderModalProf] dedup:', e);
+    }
+  }
 
   const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
@@ -13607,10 +13946,14 @@ async function renderModalProf() {
   const profs = profsBase.map(prof => {
     const meses = [];
     hist.forEach(mes => {
-      const m = (mes.professores||[]).find(p => p.profId===prof.profId || nomeParaId(p.nome)===nomeParaId(prof.nome));
+      const m = (mes.professores||[]).find(p =>
+        p.profId===prof.profId
+        || nomeParaId(p.nome)===nomeParaId(prof.nome)
+        || (typeof nomesProvavelmenteMesmoProfessor === 'function' && nomesProvavelmenteMesmoProfessor(p.nome, prof.nome))
+      );
       if(m) meses.push({mesNome:mes.nome, ...m});
     });
-    return {nome: prof.nome, profId: prof.profId, meses};
+    return {nome: prof.nome, profId: prof.profId, codigoPacto: prof.codigoPacto != null ? prof.codigoPacto : null, foraTreinoWeb: !!prof.foraTreinoWeb, meses};
   });
 
   const colabs = await Promise.all(profs.map(async prof => {
@@ -13620,7 +13963,8 @@ async function renderModalProf() {
   }));
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checagem final antes de atualizar a tela
   _modalProfCards = colabs;
-  document.getElementById('modalProfSub').textContent = `${colabs.length} professores · ${unidadeAtual.nome}`;
+  const comPacto = colabs.filter(p => p.codigoPacto != null).length;
+  document.getElementById('modalProfSub').textContent = `${colabs.length} professores · ${comPacto} com cód. Pacto · ${unidadeAtual.nome}`;
   document.getElementById('equipeCardProfCount').textContent = colabs.length;
   filtrarModalProf();
 }
@@ -13633,6 +13977,8 @@ function abrirFormProfessor() {
 function fecharFormProfessor() {
   document.getElementById('formProfessor').style.display = 'none';
   document.getElementById('profNomeInput').value = '';
+  const codEl = document.getElementById('profCodigoPactoInput');
+  if (codEl) codEl.value = '';
 }
 
 async function salvarProfessor() {
@@ -13640,6 +13986,12 @@ async function salvarProfessor() {
   if(!nome) { mostrarToast('Informe o nome do professor.'); return; }
   if(!unidadeAtual) return;
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se o usuário trocar de unidade durante o await
+  const codManualRaw = (document.getElementById('profCodigoPactoInput')?.value || '').trim();
+  const codManual = codManualRaw !== '' ? Number(codManualRaw) : null;
+  if (codManualRaw !== '' && Number.isNaN(codManual)) {
+    mostrarToast('Código Pacto inválido.');
+    return;
+  }
 
   // Evita cadastro duplicado mesmo com grafia diferente
   const existente = await buscarProfPorNome(unidId, nome);
@@ -13648,8 +14000,31 @@ async function salvarProfessor() {
     return;
   }
 
-  await garantirCadastroProfessor(unidId, nome);
-  mostrarToast(`✓ ${nome} cadastrado.`);
+  const profId = await garantirCadastroProfessor(unidId, nome);
+
+  let codigoFinal = (codManual != null && !Number.isNaN(codManual)) ? codManual : null;
+  if (codigoFinal == null) {
+    try {
+      const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+      if (empresaId) {
+        const lista = await pactoBuscarProfessoresBI(empresaId);
+        const normalizados = (lista || []).map(pactoNormalizarProfessor).filter(Boolean);
+        const hit = pactoEncontrarProfessor(normalizados, { nome });
+        if (hit && hit.codigo != null) codigoFinal = Number(hit.codigo);
+      }
+    } catch (e) {
+      console.warn('[salvarProfessor] auto-match Pacto:', e);
+    }
+  }
+  if (codigoFinal != null && !Number.isNaN(codigoFinal)) {
+    await gravarCodigoPactoProfessor(unidId, profId, codigoFinal);
+  }
+
+  mostrarToast(
+    codigoFinal != null
+      ? `✓ ${nome} cadastrado · Pacto #${codigoFinal}`
+      : `✓ ${nome} cadastrado (sem cód. Pacto — use Vincular Pacto)`
+  );
   fecharFormProfessor();
   // Se o usuário ainda está na mesma unidade, atualiza a tela; se trocou de
   // unidade enquanto salvava, não mexe na tela da unidade nova por engano.
@@ -13687,6 +14062,8 @@ function filtrarModalProf() {
     if(_modalProfFiltro === 'atencao') return ul ? pe < 70 : true; // sem mês ainda conta como "atenção"
     if(_modalProfFiltro === 'radar_pendente') return !radarOk;
     if(_modalProfFiltro === 'radar_ok') return radarOk;
+    if(_modalProfFiltro === 'sem_pacto') return prof.codigoPacto == null;
+    if(_modalProfFiltro === 'fora_treino') return !!prof.foraTreinoWeb;
     return true;
   });
 
@@ -13713,7 +14090,7 @@ function filtrarModalProf() {
     const diasDesde = ciclo ? Math.floor((Date.now()-new Date(ciclo.criadoEm).getTime())/(1000*60*60*24)) : null;
     const precisaNovoCiclo = !ciclo || diasDesde >= 76;
     const mediaRt = temRt ? (Object.values(ciclo.notasRt).reduce((s,v)=>s+(v.nota||0),0)/12).toFixed(1) : null;
-    const nomeExibir = prof.nome.split(' ').slice(0,3).join(' ');
+    const nomeExibir = (prof.nome || '').trim();
     const badgeRadar = precisaNovoCiclo
       ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(224,31,45,.1);color:#e01f2d;border:1px solid rgba(224,31,45,.25)">Radar pendente</span>`
       : diasDesde>=61
@@ -13723,13 +14100,21 @@ function filtrarModalProf() {
     const badgeColab = temColab ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.2)">✓ Prof</span>` : '';
     const badgeMedia = mediaRt ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(167,139,250,.1);color:var(--c-purple);border:1px solid rgba(167,139,250,.2)">⭐ ${mediaRt}</span>` : '';
     const badgeSemMes = !ul ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--border);color:var(--muted);">Sem mês registrado ainda</span>` : '';
+    const badgePacto = prof.codigoPacto != null
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.25);">Pacto #${prof.codigoPacto}</span>`
+      : prof.foraTreinoWeb
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(245,166,35,.12);color:#c47d0e;border:1px solid rgba(245,166,35,.35);" title="Não retornado pelo BI da Pacto">Fora do Treino Web</span>`
+      : `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(224,31,45,.1);color:#e01f2d;border:1px solid rgba(224,31,45,.25);">Sem cód. Pacto</span>`;
+    const badgeForaExtra = (prof.foraTreinoWeb && prof.codigoPacto != null)
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(245,166,35,.12);color:#c47d0e;border:1px solid rgba(245,166,35,.35);">Fora do Treino Web</span>`
+      : '';
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">
       <div style="height:3px;background:${cor};width:100%;"></div>
       <div style="padding:12px 14px;flex:1;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;background:${cor};flex-shrink:0;">${ini}</div>
           <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.4;">${nomeExibir}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.4;word-break:break-word;">${esc(nomeExibir)}</div>
             <div style="font-size:10px;color:var(--muted);">${ul ? ul.total+' alunos' : 'Aguardando primeiro mês'}</div>
           </div>
         </div>
@@ -13743,10 +14128,11 @@ function filtrarModalProf() {
             <div style="font-size:9px;color:var(--muted);margin-top:1px;">vencidos</div>
           </div>
         </div>` : ''}
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgePacto}${badgeForaExtra}${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
       </div>
       <div style="padding:7px 14px;border-top:1px solid rgba(255,255,255,.06);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);" onclick="event.stopPropagation()">
         <button onclick="excluirProfessorCadastro('${prof.profId}','${esc(prof.nome)}')" style="background:none;border:none;color:#e01f2d;cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✕ Remover</button>
+        <button type="button" onclick="editarCodigoPactoUI('${prof.profId}','${esc(prof.nome)}',${prof.codigoPacto != null ? String(prof.codigoPacto) : 'null'})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✎ Cód. Pacto</button>
         <span style="cursor:pointer;color:${cor};" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">Ver perfil →</span>
       </div>
     </div>`;
@@ -13771,6 +14157,338 @@ async function excluirProfessorCadastro(profId, nome) {
       if(linha) linha.remove();
     }
   } catch(e) { mostrarToast('Erro ao remover: '+e.message); }
+}
+
+/** Nomes que provavelmente são a mesma pessoa (ex.: ALEX DE vs ALEX DE SOUSA ALMADA). */
+function nomesProvavelmenteMesmoProfessor(a, b) {
+  if (!a || !b) return false;
+  if (nomeParaId(a) === nomeParaId(b)) return true;
+  // "ALMADA ALMADA" e "ALMADA" viram a mesma chave após limpar repetição
+  if (nomeParaId(nomeLimpoProfessor(a)) === nomeParaId(nomeLimpoProfessor(b))) return true;
+  if (typeof pactoNomesCompativeis === 'function' && pactoNomesCompativeis(a, b)) return true;
+  if (typeof pactoTokensNome !== 'function') return false;
+  const ta = pactoTokensNome(a);
+  const tb = pactoTokensNome(b);
+  if (!ta.length || !tb.length) return false;
+  if (ta[0] !== tb[0]) return false;
+  if (ta[ta.length - 1] === tb[tb.length - 1] && ta.length >= 2 && tb.length >= 2) return true;
+  const short = ta.length <= tb.length ? ta : tb;
+  const long = ta.length <= tb.length ? tb : ta;
+  return short.every(t => long.includes(t));
+}
+
+/** Remove sobrenome repetido no fim: "ALMADA ALMADA" → "ALMADA". */
+function nomeLimpoProfessor(nome) {
+  const parts = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  const out = [];
+  for (const p of parts) {
+    if (!out.length || nomeParaId(out[out.length - 1]) !== nomeParaId(p)) out.push(p);
+  }
+  return out.join(' ');
+}
+
+function _scoreCadastroProfessor(p) {
+  let s = 0;
+  if (p.codigoPacto != null) s += 1000; // Pacto vence sempre
+  if (!p.foraTreinoWeb) s += 50;
+  const limpo = nomeLimpoProfessor(p.nome);
+  if (limpo === String(p.nome || '').trim()) s += 30;
+  s += limpo.split(/\s+/).length * 5;
+  s += limpo.length;
+  s += (p.meses && p.meses.length) ? p.meses.length * 20 : 0;
+  return s;
+}
+
+/** Aplica deduplicata. auto=true: sem confirmação (ao abrir Equipe). Retorna qtd removida. */
+async function _aplicarDeduplicataProfessores(unidId, opts) {
+  const auto = !!(opts && opts.auto);
+  const snap = await professoresRef(unidId).get();
+  const lista = snap.docs.map(d => {
+    const card = (_modalProfCards || []).find(c => c.profId === d.id);
+    return { profId: d.id, ...d.data(), meses: card ? card.meses : [] };
+  });
+
+  const parent = {};
+  lista.forEach(p => { parent[p.profId] = p.profId; });
+  function find(id) {
+    while (parent[id] !== id) id = parent[id] = parent[parent[id]];
+    return id;
+  }
+  function unite(a, b) {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  }
+
+  for (let i = 0; i < lista.length; i++) {
+    for (let j = i + 1; j < lista.length; j++) {
+      const a = lista[i], b = lista[j];
+      const mesmoCodigo = a.codigoPacto != null && b.codigoPacto != null
+        && String(a.codigoPacto) === String(b.codigoPacto);
+      if (mesmoCodigo || nomesProvavelmenteMesmoProfessor(a.nome, b.nome)) {
+        unite(a.profId, b.profId);
+      }
+    }
+  }
+
+  const porRaiz = new Map();
+  lista.forEach(p => {
+    const r = find(p.profId);
+    if (!porRaiz.has(r)) porRaiz.set(r, []);
+    porRaiz.get(r).push(p);
+  });
+  const grupos = Array.from(porRaiz.values()).filter(g => g.length > 1);
+  if (!grupos.length) return 0;
+
+  const plano = grupos.map(g => {
+    const ordenado = [...g].sort((a, b) => _scoreCadastroProfessor(b) - _scoreCadastroProfessor(a));
+    const manter = ordenado[0];
+    const remover = ordenado.slice(1);
+    const melhorNome = nomeLimpoProfessor(
+      [...g].sort((a, b) => nomeLimpoProfessor(b.nome).split(/\s+/).length - nomeLimpoProfessor(a.nome).split(/\s+/).length
+        || nomeLimpoProfessor(b.nome).length - nomeLimpoProfessor(a.nome).length)[0].nome
+    );
+    const melhorCod = g.map(x => x.codigoPacto).find(c => c != null);
+    return { manter, remover, melhorNome, melhorCod };
+  });
+
+  if (!auto) {
+    const resumo = plano.map(p =>
+      `Manter "${p.melhorNome || p.manter.nome}"${p.melhorCod != null ? ' (Pacto #' + p.melhorCod + ')' : ''}\n  Remover: ${p.remover.map(r => r.nome).join(', ')}`
+    ).join('\n\n');
+    const ok = await confirmDialog(
+      `Encontradas ${plano.length} duplicata(s) do mesmo professor:\n\n${resumo}\n\nMantém o que tem código Pacto. O histórico de meses permanece.`,
+      'Limpar duplicatas',
+      'warn'
+    );
+    if (!ok) return -1;
+  }
+
+  let removidos = 0;
+  for (const p of plano) {
+    const patch = {};
+    if (p.melhorNome && p.melhorNome !== p.manter.nome) patch.nome = p.melhorNome;
+    if (p.melhorCod != null && (p.manter.codigoPacto == null || String(p.manter.codigoPacto) !== String(p.melhorCod))) {
+      patch.codigoPacto = Number(p.melhorCod);
+      patch.foraTreinoWeb = false;
+    }
+    if (Object.keys(patch).length) {
+      await professoresRef(unidId).doc(p.manter.profId).set(patch, { merge: true });
+    }
+    for (const r of p.remover) {
+      await professoresRef(unidId).doc(r.profId).delete();
+      removidos++;
+      const tabDados = document.getElementById('tab-dados');
+      if (tabDados && tabDados.classList.contains('active')) {
+        const linha = Array.from(document.querySelectorAll('#gradeRows .prof-row')).find(row => {
+          const input = row.querySelector('[data-f="0"]');
+          return input && nomeParaId(input.value) === nomeParaId(r.nome);
+        });
+        if (linha) linha.remove();
+      }
+    }
+  }
+  return removidos;
+}
+
+async function limparDuplicatasProfessores() {
+  if (!unidadeAtual) { mostrarToast('Nenhuma unidade selecionada.'); return; }
+  const unidId = unidadeAtual.id;
+  const btn = document.getElementById('btnDedupProfs');
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Limpando…'; }
+  try {
+    const n = await _aplicarDeduplicataProfessores(unidId, { auto: false });
+    if (n === 0) mostrarToast('Nenhuma duplicata encontrada (nome ou cód. Pacto).');
+    else if (n > 0) {
+      mostrarToast(`✓ ${n} duplicata(s) removida(s). Vale o cadastro com Pacto.`);
+      if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf({ skipDedup: true });
+    }
+  } catch (e) {
+    console.error('[DEDUP PROFS]', e);
+    mostrarToast('Erro ao limpar duplicatas: ' + (e.message || e));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Limpar duplicatas';
+    }
+  }
+}
+
+/** Grava codigoPacto em professores e espelha em colaboradores (mesmo id). */
+async function gravarCodigoPactoProfessor(unidId, profId, codigo) {
+  if (!unidId || !profId || codigo == null || codigo === '') return false;
+  const cod = Number(codigo);
+  if (Number.isNaN(cod)) return false;
+  const payload = {
+    codigoPacto: cod,
+    foraTreinoWeb: false,
+    codigoPactoAtualizadoEm: new Date().toISOString(),
+    codigoPactoAtualizadoPor: (usuarioLogado && usuarioLogado.nome) || 'RT',
+  };
+  await professoresRef(unidId).doc(profId).set(payload, { merge: true });
+  try {
+    await colabRef(unidId).doc(profId).set(payload, { merge: true });
+  } catch (e) {
+    console.warn('[gravarCodigoPactoProfessor] espelho colaboradores:', e);
+  }
+  return true;
+}
+
+async function editarCodigoPactoUI(profId, nome, codigoAtual) {
+  if (!unidadeAtual || !profId) return;
+  const unidId = unidadeAtual.id;
+  const atual = codigoAtual != null && codigoAtual !== 'null' ? String(codigoAtual) : '';
+  const raw = window.prompt(
+    `Código Pacto (codigoPessoa) de ${nome}\n\nDeixe vazio para remover o vínculo.`,
+    atual
+  );
+  if (raw === null) return; // cancelou
+  const trimmed = String(raw).trim();
+  try {
+    if (!trimmed) {
+      await professoresRef(unidId).doc(profId).set({
+        codigoPacto: firebase.firestore.FieldValue.delete(),
+        codigoPactoAtualizadoEm: new Date().toISOString(),
+      }, { merge: true });
+      try {
+        await colabRef(unidId).doc(profId).set({
+          codigoPacto: firebase.firestore.FieldValue.delete(),
+        }, { merge: true });
+      } catch (e) {}
+      mostrarToast(`Vínculo Pacto removido de ${nome}.`);
+    } else {
+      const cod = Number(trimmed);
+      if (Number.isNaN(cod)) { mostrarToast('Código inválido.'); return; }
+      await gravarCodigoPactoProfessor(unidId, profId, cod);
+      mostrarToast(`✓ ${nome} → Pacto #${cod}`);
+    }
+    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf();
+  } catch (e) {
+    mostrarToast('Erro ao salvar código: ' + (e.message || e));
+  }
+}
+
+/**
+ * Casa professores da unidade com codigoPessoa da Pacto (BI) e grava no Firestore.
+ * Não sobrescreve quem já tem codigoPacto. Ambíguos (mesmo código para 2+) ficam de fora.
+ * Usa só o BI (mesmo webhook) — evita 2ª chamada ADM / rate limit.
+ */
+async function vincularCodigosPactoDaUnidade() {
+  if (!unidadeAtual) { mostrarToast('Nenhuma unidade selecionada.'); return; }
+  const unidId = unidadeAtual.id;
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    return;
+  }
+
+  const ok = await confirmDialog(
+    'Vincular automaticamente o código Pacto (codigoPessoa) de cada professor sem vínculo?\n\nQuem já tem código não é alterado. Casos ambíguos (dois nomes no mesmo código) ficam para ajuste manual.',
+    'Vincular Pacto',
+    'info'
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById('btnVincularPactoProfs');
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Vinculando…'; }
+
+  try {
+    // Reusa cache BI da sessão (não limpa) — 1 hit se o cache expirou
+    const [listaBi, snapP] = await Promise.all([
+      pactoBuscarProfessoresBI(empresaId),
+      professoresRef(unidId).get(),
+    ]);
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+
+    const biNorm = (listaBi || []).map(pactoNormalizarProfessor).filter(Boolean);
+    const pool = biNorm.filter(p => p.codigo != null);
+
+    if (!pool.length) {
+      mostrarToast('Pacto BI não retornou professores. Verifique o n8n e tente de novo.');
+      return;
+    }
+
+    const profs = snapP.docs.map(d => ({ profId: d.id, ...d.data() }));
+    const usados = new Set(
+      profs.filter(p => p.codigoPacto != null).map(p => String(p.codigoPacto))
+    );
+
+    let jaTinham = 0;
+    const propostas = []; // { profId, nome, codigo }
+    const semMatch = [];
+
+    for (const p of profs) {
+      if (p.codigoPacto != null) { jaTinham++; continue; }
+      const hit = pactoEncontrarProfessor(pool, { nome: p.nome });
+      if (!hit || hit.codigo == null) {
+        semMatch.push(p.nome);
+        continue;
+      }
+      propostas.push({ profId: p.profId, nome: p.nome, codigo: hit.codigo });
+    }
+
+    // Ambíguos: mesmo codigo proposto para mais de um professor
+    const porCod = new Map();
+    propostas.forEach(pr => {
+      const k = String(pr.codigo);
+      if (!porCod.has(k)) porCod.set(k, []);
+      porCod.get(k).push(pr);
+    });
+
+    let vinculados = 0;
+    const ambiguos = [];
+    const conflitoUsado = [];
+    const persistFora = [];
+
+    for (const [cod, grupo] of porCod.entries()) {
+      if (grupo.length > 1) {
+        grupo.forEach(g => ambiguos.push(g.nome));
+        continue;
+      }
+      const pr = grupo[0];
+      if (usados.has(cod)) {
+        conflitoUsado.push(pr.nome);
+        continue;
+      }
+      await gravarCodigoPactoProfessor(unidId, pr.profId, pr.codigo);
+      usados.add(cod);
+      vinculados++;
+    }
+
+    // Quem não bateu no BI → marca Fora do Treino Web
+    for (const nome of semMatch) {
+      const p = profs.find(x => x.nome === nome);
+      if (p && p.profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, p.profId, true));
+    }
+
+    if (persistFora.length) {
+      try { await Promise.all(persistFora); } catch (e) {}
+    }
+
+    console.group('[PACTO VÍNCULO]');
+    console.log({ vinculados, jaTinham, foraTreinoWeb: semMatch.length, ambiguos: ambiguos.length, conflitoUsado: conflitoUsado.length });
+    if (semMatch.length) console.warn('Fora do Treino Web:', semMatch);
+    if (ambiguos.length) console.warn('Ambíguos:', ambiguos);
+    console.groupEnd();
+
+    let msg = `Pacto: ${vinculados} vinculado(s)`;
+    if (jaTinham) msg += ` · ${jaTinham} já tinham`;
+    if (semMatch.length) msg += ` · ${semMatch.length} fora do Treino Web`;
+    if (ambiguos.length) msg += ` · ${ambiguos.length} ambíguo(s)`;
+    if (conflitoUsado.length) msg += ` · ${conflitoUsado.length} código já em uso`;
+    mostrarToast(msg);
+
+    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf();
+  } catch (e) {
+    console.error('[PACTO VÍNCULO]', e);
+    mostrarToast('Erro ao vincular Pacto: ' + (e.message || 'falha'));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Vincular Pacto';
+    }
+  }
 }
 
 // ── Estagiários ──────────────────────────────────────────────────────────────
@@ -19885,6 +20603,131 @@ function pdiItensArr(val) {
   return [];
 }
 
+// Resolve codigoPacto no Firestore (colaboradores ou professores)
+async function resolverCodigoPactoProfessor(unidId, colabId, nome) {
+  if (!unidId) return null;
+  try {
+    if (colabId) {
+      const d = await colabRef(unidId).doc(colabId).get();
+      if (d.exists && d.data().codigoPacto != null) return d.data().codigoPacto;
+    }
+  } catch (e) {}
+  try {
+    if (colabId) {
+      const p = await professoresRef(unidId).doc(colabId).get();
+      if (p.exists && p.data().codigoPacto != null) return p.data().codigoPacto;
+    }
+  } catch (e) {}
+  try {
+    if (nome) {
+      const byName = await buscarProfPorNome(unidId, nome);
+      if (byName && byName.codigoPacto != null) return byName.codigoPacto;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function _htmlMetricasCarteiraCards(metrics) {
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
+    ${metrics.map(m => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;text-align:center;">
+        <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:${m.c};line-height:1.2;">${m.v == null || m.v === '' ? '—' : m.v}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">${m.l}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function _metricasDeFirestore(ult) {
+  if (!ult) return null;
+  const pe = pct(ult.emDia, ult.comTreino);
+  const dur = ult.duracao != null && ult.duracao !== '' ? ult.duracao + 'd' : '—';
+  return [
+    { l: 'Total', v: ult.total != null ? ult.total : '—', c: 'var(--text)' },
+    { l: 'Ativos', v: ult.ativo != null ? ult.ativo : '—', c: 'var(--text)' },
+    { l: 'Em dia', v: ult.emDia != null ? ult.emDia : '—', c: '#2ecc71' },
+    { l: '% em dia', v: pe + '%', c: corPct(pe) },
+    { l: 'Vencidos', v: ult.vencido != null ? ult.vencido : '—', c: (ult.vencido || 0) > 0 ? '#e01f2d' : '#2ecc71' },
+    { l: 'Sem treino', v: ult.semTreino != null ? ult.semTreino : '—', c: (ult.semTreino || 0) > 0 ? '#f5a623' : '#2ecc71' },
+    { l: 'Duração', v: dur, c: (ult.duracao || 0) > 50 ? '#f5a623' : 'var(--text)' },
+  ];
+}
+
+function _metricasDePacto(bi, ultFs) {
+  const pe = pct(bi.emDia, bi.comTreino);
+  const durFs = ultFs && ultFs.duracao != null && ultFs.duracao !== '' ? ultFs.duracao + 'd' : '—';
+  return [
+    { l: 'Total', v: bi.total != null ? bi.total : '—', c: 'var(--text)' },
+    { l: 'Ativos', v: bi.ativos != null ? bi.ativos : '—', c: 'var(--text)' },
+    { l: 'Em dia', v: bi.emDia != null ? bi.emDia : '—', c: '#2ecc71' },
+    { l: '% em dia', v: (bi.emDia != null && bi.comTreino != null) ? pe + '%' : '—', c: corPct(pe) },
+    { l: 'Vencidos', v: bi.vencidos != null ? bi.vencidos : '—', c: (bi.vencidos || 0) > 0 ? '#e01f2d' : '#2ecc71' },
+    { l: 'Sem treino', v: bi.semTreino != null ? bi.semTreino : '—', c: (bi.semTreino || 0) > 0 ? '#f5a623' : '#2ecc71' },
+    { l: 'Com treino', v: bi.comTreino != null ? bi.comTreino : '—', c: 'var(--text)' },
+    { l: 'Duração', v: durFs, c: (ultFs && ultFs.duracao > 50) ? '#f5a623' : 'var(--text)' },
+  ];
+}
+
+// Preenche o bloco CARTEIRA do Resumo com dados ao vivo da Pacto (fallback Firestore)
+async function preencherCarteiraPerfilAoVivo(opts) {
+  const host = document.getElementById(opts.hostId || 'perfilCarteiraAoVivo');
+  if (!host) return;
+  const unidId = opts.unidId;
+  const colabId = opts.colabId;
+  const nome = opts.nome;
+  const ult = opts.ult || null;
+  const rank = opts.rank || 0;
+  const delta = opts.delta;
+  const prevMes = opts.prevMes || null;
+
+  const badgesFs = `
+    ${delta !== null && delta !== undefined && prevMes ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${delta >= 0 ? 'rgba(46,204,113,.1)' : 'rgba(224,31,45,.1)'};color:${delta >= 0 ? '#2ecc71' : '#e01f2d'};">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} pts vs ${esc(prevMes.mesNome || '')}</span>` : ''}
+    ${rank > 0 ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(245,166,35,.1);color:var(--c-amber);">🏆 #${rank} no ranking</span>` : ''}
+  `;
+
+  const renderShell = (tituloExtra, badges, bodyHtml) => {
+    host.innerHTML = `
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        📊 Carteira${tituloExtra || ''}
+        ${badges || ''}
+      </div>
+      ${bodyHtml}`;
+  };
+
+  renderShell(' · carregando…', badgesFs, `
+    <div style="font-size:12px;color:var(--muted);padding:12px 0;">Buscando dados na Pacto…</div>`);
+
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    const m = _metricasDeFirestore(ult);
+    renderShell(ult ? ` · ${esc(ult.mesNome)}` : '', badgesFs,
+      m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — unidade sem empresaId Pacto configurado.</div>`
+        : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>');
+    return;
+  }
+
+  try {
+    const codigoPacto = await resolverCodigoPactoProfessor(unidId, colabId, nome);
+    const bi = await pactoBuscarIndicadoresProfessor(unidId, { codigoPacto, nome });
+    if (bi) {
+      const pe = pct(bi.emDia, bi.comTreino);
+      renderShell(
+        ` · <span style="color:#e01f2d;">Ao vivo · Pacto</span>`,
+        `${badgesFs}<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(224,31,45,.08);color:#e01f2d;border:1px solid rgba(224,31,45,.2);">${pe}% em dia</span>`,
+        _htmlMetricasCarteiraCards(_metricasDePacto(bi, ult)) +
+        `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: API Pacto (BI)${bi.codigo != null ? ' · codigoPessoa ' + bi.codigo : ''}${ult && ult.mesNome ? ' · duração do mês ' + esc(ult.mesNome) : ''}.</div>`
+      );
+      return;
+    }
+  } catch (e) {
+    console.warn('[PACTO] Carteira perfil:', e);
+  }
+
+  const m = _metricasDeFirestore(ult);
+  renderShell(ult ? ` · ${esc(ult.mesNome)}` : '', badgesFs,
+    m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — Pacto sem match para este professor.</div>`
+      : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>');
+}
+
 function renderPerfilConteudoDin() {
     const el = document.getElementById('perfilConteudoDin');
   if(!el || !perfilColabAtual) return;
@@ -20317,24 +21160,10 @@ function renderPerfilConteudoDin() {
           </div>
         `}
       </div>
-      <!-- SEÇÃO: CARTEIRA -->
-      <div style="margin-bottom:20px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-          📊 Carteira${ult?` · ${ult.mesNome}`:''}
-          ${delta!==null?`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${delta>=0?'rgba(46,204,113,.1)':'rgba(224,31,45,.1)'};color:${delta>=0?'#2ecc71':'#e01f2d'};">${delta>=0?'▲':'▼'} ${Math.abs(delta)} pts vs ${prevMes.mesNome}</span>`:''}
-          ${rank>0?`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(245,166,35,.1);color:var(--c-amber);">🏆 #${rank} no ranking</span>`:''}
-        </div>
-        ${ult ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
-          ${[
-            {l:'Total',v:ult.total,c:'#f0f0f2'},
-            {l:'Ativos',v:ult.ativo,c:'#f0f0f2'},
-            {l:'Em dia',v:ult.emDia,c:'#2ecc71'},
-            {l:'% em dia',v:pe+'%',c:corPct(pe)},
-            {l:'Vencidos',v:ult.vencido,c:ult.vencido>0?'#e01f2d':'#2ecc71'},
-            {l:'Sem treino',v:ult.semTreino,c:ult.semTreino>0?'#f5a623':'#2ecc71'},
-            {l:'Duração',v:ult.duracao+'d',c:ult.duracao>50?'#f5a623':'#f0f0f2'},
-          ].map(m=>'<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+m.c+';line-height:1.2;">'+m.v+'</div><div style="font-size:10px;color:var(--muted);margin-top:3px;">'+m.l+'</div></div>').join('')}
-        </div>` : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>'}
+      <!-- SEÇÃO: CARTEIRA (Pacto ao vivo, fallback Firestore) -->
+      <div id="perfilCarteiraAoVivo" style="margin-bottom:20px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;">📊 Carteira · carregando…</div>
+        <div style="font-size:12px;color:var(--muted);padding:8px 0;">Buscando dados na Pacto…</div>
       </div>
 
       <!-- SEÇÃO: RADAR STATUS -->
@@ -20415,6 +21244,17 @@ function renderPerfilConteudoDin() {
           ${(isAdmin||isRt)&&ultimoCiclo?`<button onclick="gerarLinkColab('${colabId}','${ultimoCiclo.id}')" style="background:rgba(167,139,250,.1);color:var(--c-purple);border:1px solid rgba(167,139,250,.25);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">🔗 Link autoavaliação</button>`:''}
         </div>
       </div>`;
+    // Carteira ao vivo (Pacto) — async, não bloqueia o restante do Resumo
+    preencherCarteiraPerfilAoVivo({
+      hostId: 'perfilCarteiraAoVivo',
+      unidId: unidadeAtual && unidadeAtual.id,
+      colabId,
+      nome: perfilColabAtual.nome,
+      ult,
+      rank,
+      delta,
+      prevMes
+    });
     return;
       } catch(e) { console.error('[ERRO ABA RESUMO]', e.message, '\nStack:', e.stack ? e.stack.split("\\n").slice(0,4).join("\\n") : ''); }
   }

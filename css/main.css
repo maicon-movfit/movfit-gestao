@@ -495,6 +495,20 @@ tbody tr:last-child td{border-bottom:none;}
 .prof-row:hover{border-color:var(--border2);box-shadow:var(--sh2);}
 .prof-row.filled{border-color:rgba(206,0,46,0.14);}
 .pname-cell{display:flex;align-items:center;gap:8px;padding:0 var(--s2);}
+.badge-fora-treino{
+  display:inline-block;
+  font-size:9px;
+  font-weight:600;
+  font-family:Inter,sans-serif;
+  color:#c47d0e;
+  background:rgba(245,166,35,.12);
+  border:1px solid rgba(245,166,35,.35);
+  border-radius:4px;
+  padding:1px 6px;
+  line-height:1.4;
+  width:fit-content;
+  max-width:100%;
+}
 .pavatar{
   width:28px;height:28px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -1031,6 +1045,20 @@ tbody tr:last-child td{border-bottom:none;}
 .prof-row:hover{border-color:var(--border2);box-shadow:var(--sh2);}
 .prof-row.filled{border-color:rgba(206,0,46,0.18);}
 .pname-cell{display:flex;align-items:center;gap:7px;padding:0 4px;}
+.badge-fora-treino{
+  display:inline-block;
+  font-size:9px;
+  font-weight:600;
+  font-family:Inter,sans-serif;
+  color:#c47d0e;
+  background:rgba(245,166,35,.12);
+  border:1px solid rgba(245,166,35,.35);
+  border-radius:4px;
+  padding:1px 6px;
+  line-height:1.4;
+  width:fit-content;
+  max-width:100%;
+}
 .pavatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;color:#fff;}
 .pfield{
   background:var(--bg);

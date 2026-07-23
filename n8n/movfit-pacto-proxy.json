@@ -1,0 +1,411 @@
+{
+  "name": "MOVFIT Pacto Proxy",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "description": "Proxy Pacto: key só nas Credentials. Front POST action=bi|professores|carteira + header X-Movfit-Proxy."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "movfit/pacto",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "wh-in",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "movfit-pacto-proxy"
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $input.first().json.headers || {};\nconst h = Object.fromEntries(\n  Object.entries(headers).map(([k, v]) => [String(k).toLowerCase(), v])\n);\nconst expected = $env.N8N_MOVFIT_PROXY_TOKEN || 'SUBSTITUA_TOKEN_AQUI';\nconst got = h['x-movfit-proxy'] || '';\nif (!expected || expected === 'SUBSTITUA_TOKEN_AQUI') {\n  return [{ json: { ok: false, status: 500, error: 'Configure N8N_MOVFIT_PROXY_TOKEN no n8n (ou edite este nó).' } }];\n}\nif (got !== expected) {\n  return [{ json: { ok: false, status: 401, error: 'Unauthorized' } }];\n}\nconst body = $input.first().json.body || $input.first().json;\nconst action = String(body.action || '').toLowerCase();\nconst empresaId = String(body.empresaId || '1');\nconst codigoPessoa = body.codigoPessoa != null ? String(body.codigoPessoa) : '';\nif (!['bi', 'professores', 'carteira'].includes(action)) {\n  return [{ json: { ok: false, status: 400, error: 'action deve ser bi | professores | carteira' } }];\n}\nif (action === 'carteira' && !codigoPessoa) {\n  return [{ json: { ok: false, status: 400, error: 'codigoPessoa obrigatório para carteira' } }];\n}\nreturn [{ json: { ok: true, action, empresaId, codigoPessoa } }];"
+      },
+      "id": "check-token",
+      "name": "Check proxy token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ok }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-auth",
+      "name": "Auth OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: $json.error || 'Unauthorized' } }}",
+        "options": {
+          "responseCode": "={{ $json.status || 401 }}"
+        }
+      },
+      "id": "resp-err",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 480]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputKey": "bi",
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.action }}",
+                    "value2": "bi"
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "professores",
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.action }}",
+                    "value2": "professores"
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "carteira",
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.action }}",
+                    "value2": "carteira"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-action",
+      "name": "Switch action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-bi",
+      "name": "Pacto BI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "Pacto API Treino"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "resp-bi",
+      "name": "Respond BI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1240, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/colaboradores/professores-ativos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-adm",
+      "name": "Pacto Professores ADM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME_ADM",
+          "name": "Pacto API Adm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "resp-adm",
+      "name": "Respond Professores",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1240, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://apigw.pactosolucoes.com.br/psec/treino-bi/alunos-ativos/{{ $json.codigoPessoa }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-ativos",
+      "name": "Carteira Ativos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "Pacto API Treino"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://apigw.pactosolucoes.com.br/psec/treino-bi/alunos-ativo-sem-treino/{{ $('Check proxy token').item.json.codigoPessoa }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $('Check proxy token').item.json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-sem",
+      "name": "Carteira Sem Treino",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "Pacto API Treino"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://apigw.pactosolucoes.com.br/psec/treino-bi/alunos-treino-vencido/{{ $('Check proxy token').item.json.codigoPessoa }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $('Check proxy token').item.json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-venc",
+      "name": "Carteira Vencidos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1480, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "Pacto API Treino"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://apigw.pactosolucoes.com.br/psec/treino-bi/alunos-ativos-treino/{{ $('Check proxy token').item.json.codigoPessoa }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "={{ $('Check proxy token').item.json.empresaId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-com",
+      "name": "Carteira Com Treino",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "Pacto API Treino"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function contar(d) {\n  if (!d) return 0;\n  if (Array.isArray(d)) return d.length;\n  if (typeof d === 'object') {\n    if (d.quantidadeTotalElementos !== undefined) return d.quantidadeTotalElementos;\n    const k = Object.keys(d).find(x => Array.isArray(d[x]));\n    if (k) return d[k].length;\n    return d.total || d.quantidade || d.count || 0;\n  }\n  return 0;\n}\nconst ativos = $('Carteira Ativos').first().json;\nconst semTreino = $('Carteira Sem Treino').first().json;\nconst vencidos = $('Carteira Vencidos').first().json;\nconst comTreino = $('Carteira Com Treino').first().json;\nreturn [{\n  json: {\n    ativos: contar(ativos),\n    semTreino: contar(semTreino),\n    vencidos: contar(vencidos),\n    comTreino: contar(comTreino)\n  }\n}];"
+      },
+      "id": "agg-cart",
+      "name": "Agregar Carteira",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "resp-cart",
+      "name": "Respond Carteira",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2200, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Check proxy token", "type": "main", "index": 0 }]]
+    },
+    "Check proxy token": {
+      "main": [[{ "node": "Auth OK?", "type": "main", "index": 0 }]]
+    },
+    "Auth OK?": {
+      "main": [
+        [{ "node": "Switch action", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Switch action": {
+      "main": [
+        [{ "node": "Pacto BI", "type": "main", "index": 0 }],
+        [{ "node": "Pacto Professores ADM", "type": "main", "index": 0 }],
+        [{ "node": "Carteira Ativos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Pacto BI": {
+      "main": [[{ "node": "Respond BI", "type": "main", "index": 0 }]]
+    },
+    "Pacto Professores ADM": {
+      "main": [[{ "node": "Respond Professores", "type": "main", "index": 0 }]]
+    },
+    "Carteira Ativos": {
+      "main": [[{ "node": "Carteira Sem Treino", "type": "main", "index": 0 }]]
+    },
+    "Carteira Sem Treino": {
+      "main": [[{ "node": "Carteira Vencidos", "type": "main", "index": 0 }]]
+    },
+    "Carteira Vencidos": {
+      "main": [[{ "node": "Carteira Com Treino", "type": "main", "index": 0 }]]
+    },
+    "Carteira Com Treino": {
+      "main": [[{ "node": "Agregar Carteira", "type": "main", "index": 0 }]]
+    },
+    "Agregar Carteira": {
+      "main": [[{ "node": "Respond Carteira", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "movfit"
+    },
+    {
+      "name": "pacto"
+    }
+  ]
+}
