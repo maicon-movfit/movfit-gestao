@@ -9,1629 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-/* ═══════════════════════════════════════════════════════════════
-   MOV FIT — Design System v4.0
-   Princípios: Conforto visual · Leitura rápida · Densidade controlada
-   Escala tipográfica: 5 tamanhos. Espaçamento: 8px base.
-   ═══════════════════════════════════════════════════════════════ */
-
-:root{
-  color-scheme:light;
-  /* ── Superfícies ── */
-  --bg:       #F5F6F8;
-  --surface:  #FFFFFF;
-  --surface2: #EEF0F4;
-  --surface3: #E4E7ED;
-
-  /* ── Bordas ── */
-  --border:   rgba(0,0,0,0.07);
-  --border2:  rgba(0,0,0,0.13);
-  --border3:  rgba(0,0,0,0.22);
-
-  /* ── Texto ── */
-  --text:     #111827;
-  --text2:    #374151;
-  --muted:    #6B7280;
-  --muted2:   #9CA3AF;
-
-  /* ── Marca ── */
-  --accent:      #CE002E;
-  --accent2:     #E8192C;
-  --accent-dim:  rgba(206,0,46,0.06);
-  --accent-glow: rgba(206,0,46,0.14);
-
-  /* ── Semântica (bg + border + text) ── */
-  --c-green:  #15803D; --c-green-bg: rgba(21,128,61,0.07);  --c-green-bd: rgba(21,128,61,0.18);
-  --c-red:    #B91C1C; --c-red-bg:   rgba(185,28,28,0.07);  --c-red-bd:   rgba(185,28,28,0.16);
-  --c-amber:  #92400E; --c-amber-bg: rgba(146,64,14,0.07);  --c-amber-bd: rgba(146,64,14,0.18);
-  --c-blue:   #1E40AF; --c-blue-bg:  rgba(30,64,175,0.07);  --c-blue-bd:  rgba(30,64,175,0.16);
-  --c-purple: #5B21B6; --c-purple-bg:rgba(91,33,182,0.07);  --c-purple-bd:rgba(91,33,182,0.16);
-
-  /* compatibilidade com código existente */
-  --green:var(--c-green); --green-bg:var(--c-green-bg); --green-border:var(--c-green-bd);
-  --red:var(--c-red);     --red-bg:var(--c-red-bg);     --red-border:var(--c-red-bd);
-  --amber:var(--c-amber); --amber-bg:var(--c-amber-bg); --amber-border:var(--c-amber-bd);
-  --blue:var(--c-blue);   --blue-bg:var(--c-blue-bg);   --blue-border:var(--c-blue-bd);
-  --purple:var(--c-purple);--purple-bg:var(--c-purple-bg);--purple-border:var(--c-purple-bd);
-  --teal:#0D9488;
-
-  /* ── Sombras ── */
-  --sh1: 0 1px 2px rgba(0,0,0,0.05);
-  --sh2: 0 1px 4px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
-  --sh3: 0 4px 10px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
-  --sh4: 0 12px 28px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04);
-
-  /* ── Raios ── */
-  --r-sm:  6px;
-  --r-md:  10px;
-  --r-lg:  14px;
-  --r-xl:  18px;
-  --card-r: 12px;
-  /* compat */
-  --radius-sm:var(--r-sm); --radius-lg:var(--r-lg);
-
-  /* ── Escala tipográfica — 5 tamanhos ──
-     caption: metadados, legendas
-     sm:      labels, badges, tabs
-     base:    corpo de texto padrão
-     md:      subtítulos de card, ações
-     lg:      títulos de seção
-     xl:      títulos de página
-  ── */
-  --t-caption: 11px;
-  --t-sm:      12px;
-  --t-base:    13px;
-  --t-md:      14px;
-  --t-lg:      16px;
-  --t-xl:      20px;
-  --t-2xl:     24px;
-  --t-hero:    48px;
-
-  /* compatibilidade */
-  --t-xs:var(--t-caption); --t-2xl:24px; --t-3xl:28px;
-
-  /* ── Espaçamento base 8px ── */
-  --s1:4px;  --s2:8px;  --s3:12px;  --s4:16px;
-  --s5:20px; --s6:24px; --s7:28px;  --s8:32px;
-  --s10:40px;--s12:48px;
-  /* compat */
-  --sp-1:var(--s1);--sp-2:var(--s2);--sp-3:var(--s3);--sp-4:var(--s4);
-  --sp-5:var(--s5);--sp-6:var(--s6);--sp-8:var(--s8);--sp-10:var(--s10);--sp-12:var(--s12);
-}
-
-/* ── Reset ── */
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{min-height:100vh;}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:'Inter',sans-serif;
-  font-size:var(--t-base);
-  line-height:1.6;
-  -webkit-font-smoothing:antialiased;
-}
-
-/* ── Animações ── */
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-
-/* ══════════════════════════════════════════════
-   HEADER
-══════════════════════════════════════════════ */
-.header{
-  padding:0 var(--s8);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;
-  justify-content:space-between;
-  flex-wrap:wrap;gap:8px;
-  background:var(--surface);
-  min-height:56px;
-  box-shadow:var(--sh1);
-  position:sticky;top:0;z-index:200;
-}
-.header-left{display:flex;align-items:center;gap:var(--s4);}
-.logo-mov{
-  font-family:'Barlow Condensed',sans-serif;
-  font-weight:800;font-size:22px;
-  letter-spacing:-.5px;color:var(--text);line-height:1;
-}
-.logo-fit{
-  font-family:'Barlow Condensed',sans-serif;
-  font-weight:800;font-size:22px;
-  letter-spacing:-.5px;background:var(--accent);
-  color:#fff;padding:0 5px 1px 3px;margin-left:2px;
-  line-height:1;clip-path:polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%);
-}
-.logo-divider{width:1px;height:22px;background:var(--border2);margin:0 var(--s3);}
-.header-right{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;}
-.hbadge{
-  font-size:var(--t-caption);font-weight:500;
-  padding:3px 10px;border-radius:99px;
-}
-.hbadge-blue{background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd);}
-.hbadge-green{background:var(--c-green-bg);color:var(--c-green);border:1px solid var(--c-green-bd);}
-
-/* ══════════════════════════════════════════════
-   NAVEGAÇÃO — tabs mais largas, mais cómodas
-══════════════════════════════════════════════ */
-.nav-tabs{
-  display:flex;gap:0;
-  padding:0 var(--s8);
-  border-bottom:1px solid var(--border);
-  overflow-x:auto;background:var(--surface);
-  scrollbar-width:none;
-}
-.nav-tabs::-webkit-scrollbar{display:none;}
-.nav-tab-rel{
-  padding:15px 18px;font-size:var(--t-sm);font-weight:500;
-  cursor:pointer;color:var(--muted);
-  border-bottom:2px solid transparent;
-  transition:color .15s,border-color .15s;
-  background:none;border-top:none;border-left:none;border-right:none;
-  font-family:inherit;white-space:nowrap;
-}
-.nav-tab-rel:hover{color:var(--text);}
-.nav-tab{
-  padding:15px 18px;                /* Pacto-level: área de clique confortável */
-  font-size:var(--t-sm);
-  font-weight:500;
-  cursor:pointer;color:var(--muted);
-  border-bottom:2px solid transparent;
-  transition:color .15s,border-color .15s;
-  background:none;
-  border-top:none;border-left:none;border-right:none;
-  font-family:'Inter',sans-serif;
-  white-space:nowrap;
-  letter-spacing:.01em;
-}
-.nav-tab:hover{color:var(--text2);}
-.nav-tab.active{
-  color:var(--accent);
-  border-bottom-color:var(--accent);
-  font-weight:600;
-}
-
-/* Ctx bar */
-.ctx-bar{
-  display:none;align-items:center;
-  justify-content:space-between;
-  padding:8px var(--s8);
-  background:rgba(206,0,46,0.03);
-  border-bottom:1px solid rgba(206,0,46,0.09);
-  flex-wrap:wrap;gap:8px;
-}
-.ctx-bar.visible{display:flex;}
-.ctx-bar-mes{display:flex;align-items:center;gap:6px;font-size:var(--t-sm);font-weight:600;color:var(--text);}
-.ctx-bar-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
-.ctx-bar-actions{display:flex;align-items:center;gap:12px;}
-.ctx-bar-link{font-size:var(--t-sm);color:var(--accent);cursor:pointer;text-decoration:none;font-weight:500;}
-.ctx-bar-link:hover{text-decoration:underline;}
-
-/* Filtros ranking */
-.rank-modo-btn{
-  padding:6px 14px;font-size:var(--t-caption);border-radius:var(--r-sm);
-  border:1px solid var(--border2);background:transparent;
-  color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;
-  transition:all .15s;font-weight:500;
-}
-.rank-modo-on{background:var(--accent);color:#fff;border-color:var(--accent);}
-.rank-filtro-btn{
-  padding:5px 12px;font-size:var(--t-caption);border-radius:99px;
-  border:1px solid var(--border2);background:transparent;
-  color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;
-  transition:all .15s;font-weight:500;
-}
-.rank-filtro-on{background:var(--accent);color:#fff;border-color:var(--accent);}
-
-/* ══════════════════════════════════════════════
-   LAYOUT
-══════════════════════════════════════════════ */
-.page{
-  display:none;
-  padding:var(--s8) var(--s8);   /* Pacto usa padding generoso */
-  max-width:1400px;
-  animation:fadeUp .18s ease;
-}
-.page.active{display:block;}
-
-/* Rótulo de seção */
-.sec{
-  font-size:var(--t-caption);font-weight:600;
-  letter-spacing:.05em;text-transform:uppercase;
-  color:var(--muted2);margin-bottom:var(--s3);
-}
-/* Separador horizontal estilo Pacto */
-.section-divider{
-  display:flex;align-items:center;gap:var(--s3);
-  margin-bottom:var(--s5);margin-top:var(--s2);
-}
-.section-divider-label{
-  font-size:var(--t-caption);font-weight:600;
-  color:var(--muted);text-transform:uppercase;
-  letter-spacing:.06em;white-space:nowrap;
-}
-.section-divider-line{flex:1;height:1px;background:var(--border);}
-
-/* ══════════════════════════════════════════════
-   CARDS — componente base
-   Padding mínimo 20px (Pacto nunca usa menos)
-══════════════════════════════════════════════ */
-.card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--card-r);
-  box-shadow:var(--sh2);
-}
-
-/* KPI cards */
-.metrics-row{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:var(--s3);margin-bottom:var(--s7);
-}
-.mcard{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);
-  padding:var(--s5) var(--s6);    /* 20px 24px */
-  box-shadow:var(--sh2);
-  transition:box-shadow .15s,transform .15s;
-}
-.mcard:hover{box-shadow:var(--sh3);transform:translateY(-1px);}
-.mcard .ml{
-  font-size:var(--t-caption);color:var(--muted);
-  margin-bottom:var(--s2);font-weight:500;
-  text-transform:uppercase;letter-spacing:.04em;
-}
-.mcard .mv{
-  font-size:28px;font-weight:700;
-  font-family:'DM Mono',monospace;
-  line-height:1.2;color:var(--text);
-  letter-spacing:-.01em;
-}
-.mcard .md{font-size:var(--t-caption);margin-top:var(--s1);font-weight:600;}
-.md.up{color:var(--c-green);}.md.dn{color:var(--c-red);}
-
-/* Chart cards */
-.chart-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s6);
-  margin-bottom:var(--s5);box-shadow:var(--sh2);
-}
-.chart-title{
-  font-size:var(--t-base);font-weight:600;
-  color:var(--text);margin-bottom:var(--s5);
-}
-.chart-wrap{position:relative;width:100%;}
-.two-cols{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);}
-.three-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s5);}
-
-/* ══════════════════════════════════════════════
-   TABELAS
-══════════════════════════════════════════════ */
-thead th{
-  padding:11px var(--s4);
-  background:var(--bg);
-  font-size:var(--t-caption);font-weight:600;
-  text-transform:uppercase;letter-spacing:.05em;
-  color:var(--muted);
-  border-bottom:1px solid var(--border2);
-  white-space:nowrap;
-  user-select:none;
-}
-tbody td{
-  padding:12px var(--s4);
-  border-bottom:1px solid var(--border);
-  color:var(--text);font-size:var(--t-base);
-  vertical-align:middle;
-  line-height:1.5;
-}
-tbody tr:hover td{background:rgba(0,0,0,.015);}
-tbody tr:last-child td{border-bottom:none;}
-.tw{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);overflow:hidden;
-  margin-bottom:var(--s5);overflow-x:auto;box-shadow:var(--sh2);
-}
-.tw table{min-width:860px;border-collapse:collapse;width:100%;}
-.tw th,.tw td{white-space:nowrap;padding:12px var(--s4);}
-.tw th:first-child,.tw td:first-child{width:36px;text-align:center;padding:12px var(--s2);}
-.tw th:nth-child(2),.tw td:nth-child(2){min-width:160px;}
-
-/* ══════════════════════════════════════════════
-   BADGES / PILLS
-══════════════════════════════════════════════ */
-.pill{
-  display:inline-block;
-  font-size:var(--t-caption);font-weight:600;
-  padding:3px 9px;border-radius:99px;line-height:1.4;
-}
-.pg{background:var(--c-green-bg);color:var(--c-green);border:1px solid var(--c-green-bd);}
-.pr{background:var(--c-red-bg);color:var(--c-red);border:1px solid var(--c-red-bd);}
-.pa{background:var(--c-amber-bg);color:var(--c-amber);border:1px solid var(--c-amber-bd);}
-.pb{background:var(--c-blue-bg);color:var(--c-blue);border:1px solid var(--c-blue-bd);}
-.pp{background:var(--c-purple-bg);color:var(--c-purple);border:1px solid var(--c-purple-bd);}
-
-/* ── Highlight list ── */
-.hl-list{display:flex;flex-direction:column;gap:var(--s2);margin-bottom:var(--s6);}
-.hl-item{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);  /* 16px 20px */
-  display:flex;gap:var(--s4);align-items:flex-start;
-  box-shadow:var(--sh1);
-}
-.hl-icon{
-  width:34px;height:34px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;font-size:16px;
-}
-.hl-icon.g{background:var(--c-green-bg);}
-.hl-icon.r{background:var(--c-red-bg);}
-.hl-icon.a{background:var(--c-amber-bg);}
-.hl-name{font-weight:600;font-size:var(--t-base);margin-bottom:3px;color:var(--text);}
-.hl-desc{font-size:var(--t-sm);color:var(--muted);line-height:1.55;}
-
-/* Action cards */
-.ac-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s4);}
-.ac-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s6);box-shadow:var(--sh2);
-}
-.ac-head{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3);}
-.ac-num{
-  width:24px;height:24px;border-radius:6px;
-  background:var(--accent-dim);border:1px solid var(--accent-glow);
-  color:var(--accent);font-size:var(--t-caption);font-weight:700;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-}
-.ac-title{font-size:var(--t-base);font-weight:600;color:var(--text);}
-.ac-tgt{font-size:var(--t-caption);color:var(--muted);margin-bottom:var(--s2);font-family:'DM Mono',monospace;}
-.ac-body{font-size:var(--t-sm);color:var(--muted);line-height:1.65;}
-.ac-body li{margin-left:14px;margin-bottom:3px;list-style:disc;}
-
-/* Empty state */
-.empty-state{text-align:center;padding:72px var(--s6);color:var(--muted);}
-.es-icon{font-size:28px;margin-bottom:var(--s3);opacity:.18;}
-
-/* ══════════════════════════════════════════════
-   BOTÕES — 3 níveis, área de clique Pacto-level
-══════════════════════════════════════════════ */
-.btn{
-  background:transparent;
-  border:1px solid var(--border2);
-  border-radius:var(--r-md);
-  color:var(--muted);
-  font-size:var(--t-sm);font-weight:500;
-  padding:8px var(--s4);           /* área de toque confortável */
-  cursor:pointer;font-family:'Inter',sans-serif;
-  transition:all .15s;
-  display:inline-flex;align-items:center;gap:6px;
-  line-height:1.4;white-space:nowrap;
-}
-.btn:hover{color:var(--text);border-color:var(--border3);background:var(--bg);}
-.btn:active{transform:translateY(1px);}
-.btn.primary{
-  background:var(--accent);color:#fff;
-  border-color:transparent;font-weight:600;
-  box-shadow:0 1px 3px rgba(206,0,46,0.22);
-}
-.btn.primary:hover{background:var(--accent2);box-shadow:0 2px 8px rgba(206,0,46,0.28);}
-.btn.danger{color:var(--c-red);border-color:var(--c-red-bd);}
-.btn.danger:hover{background:var(--c-red-bg);}
-.btn.ghost{border-color:transparent;color:var(--muted);}
-.btn.ghost:hover{background:var(--surface2);color:var(--text);border-color:var(--border);}
-.btn.sm{font-size:var(--t-caption);padding:5px 12px;border-radius:var(--r-sm);}
-.btn.lg{font-size:var(--t-md);font-weight:600;padding:12px var(--s8);border-radius:var(--r-md);}
-
-/* ══════════════════════════════════════════════
-   FORMULÁRIOS
-══════════════════════════════════════════════ */
-.import-zone{
-  border:1.5px dashed var(--border2);border-radius:var(--card-r);
-  padding:var(--s8) var(--s6);text-align:center;
-  cursor:pointer;transition:all .2s;
-  margin-bottom:var(--s5);background:var(--bg);
-}
-.import-zone:hover,.import-zone.drag{border-color:var(--accent);background:var(--accent-dim);}
-.import-zone .iz-icon{font-size:28px;margin-bottom:var(--s3);opacity:.35;}
-.import-zone .iz-title{font-size:var(--t-md);font-weight:600;margin-bottom:4px;color:var(--text);}
-.import-zone .iz-sub{font-size:var(--t-sm);color:var(--muted);}
-.import-formats{display:flex;gap:var(--s2);justify-content:center;margin-top:var(--s3);flex-wrap:wrap;}
-.fmt-badge{
-  font-size:var(--t-caption);font-weight:600;padding:3px 10px;
-  border-radius:var(--r-sm);border:1px solid var(--border2);
-  color:var(--muted);background:var(--surface);
-}
-.month-config{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-bottom:var(--s6);}
-.mb{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5) var(--s6);box-shadow:var(--sh1);
-}
-.mb-lbl{
-  font-size:var(--t-caption);font-weight:600;text-transform:uppercase;
-  letter-spacing:.06em;color:var(--muted);
-  margin-bottom:var(--s3);display:flex;align-items:center;gap:6px;
-}
-.mb-dot{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;}
-.mb-dot.a{background:var(--muted2);}
-.mb-dot.b{background:var(--accent);}
-.mb input,.mb select{
-  width:100%;background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);color:var(--text);
-  font-family:'Inter',sans-serif;font-size:var(--t-base);
-  padding:10px 14px;outline:none;transition:all .15s;
-}
-.mb input:focus,.mb select:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-dim);
-}
-
-/* ══════════════════════════════════════════════
-   GRADE DE PROFESSORES
-   Grupos visuais: Treino / Bio separados
-══════════════════════════════════════════════ */
-.grade-wrap{margin-bottom:var(--s6);}
-.grade-header{
-  display:flex;align-items:center;justify-content:space-between;
-  margin-bottom:var(--s4);flex-wrap:wrap;gap:8px;
-}
-.grade-title{display:flex;align-items:center;gap:8px;}
-.gbadge{padding:4px 12px;border-radius:99px;font-size:var(--t-caption);font-weight:600;}
-.gbadge.atu{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-glow);}
-.grade-actions{display:flex;gap:var(--s2);flex-wrap:wrap;}
-
-.col-hdr-row{
-  display:grid;grid-template-columns:190px repeat(12,1fr);
-  gap:2px;margin-bottom:4px;padding:0 3px;
-}
-.chdr{
-  font-size:var(--t-caption);font-weight:600;text-transform:uppercase;
-  letter-spacing:.04em;color:var(--muted);
-  padding:6px 5px;text-align:center;
-  background:var(--surface2);border-radius:4px;
-}
-.chdr:first-child{text-align:left;background:transparent;}
-.chdr.cg{color:var(--c-green);}
-.chdr.cr{color:var(--c-red);}
-.chdr.ca{color:var(--c-amber);}
-
-.prof-rows{display:flex;flex-direction:column;gap:4px;}
-.prof-row{
-  display:grid;grid-template-columns:190px repeat(12,1fr);
-  gap:2px;align-items:center;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-md);padding:7px 3px;
-  transition:all .15s;box-shadow:var(--sh1);
-}
-.prof-row:hover{border-color:var(--border2);box-shadow:var(--sh2);}
-.prof-row.filled{border-color:rgba(206,0,46,0.14);}
-.pname-cell{display:flex;align-items:center;gap:8px;padding:0 var(--s2);}
-.pavatar{
-  width:28px;height:28px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:var(--t-caption);font-weight:700;flex-shrink:0;color:#fff;
-}
-.pfield{
-  background:transparent;border:1px solid transparent;
-  border-radius:4px;color:var(--text);
-  font-family:'DM Mono',monospace;font-size:var(--t-sm);
-  padding:5px 4px;text-align:center;outline:none;
-  width:100%;transition:all .12s;
-}
-.pfield:focus{border-color:rgba(206,0,46,0.28);background:rgba(206,0,46,0.03);}
-.pfield.fg:focus{border-color:rgba(21,128,61,0.32);background:rgba(21,128,61,0.03);}
-.pfield.fr:focus{border-color:rgba(185,28,28,0.28);background:rgba(185,28,28,0.03);}
-.pfield.fa:focus{border-color:rgba(146,64,14,0.32);background:rgba(146,64,14,0.03);}
-.pfield-name{
-  background:transparent;border:none;
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:var(--t-sm);font-weight:500;
-  padding:4px 4px;outline:none;width:100%;min-width:0;
-}
-.add-row{
-  display:flex;align-items:center;gap:8px;
-  padding:10px 12px;margin-top:6px;cursor:pointer;
-  border:1.5px dashed var(--border2);
-  border-radius:var(--r-md);transition:all .15s;
-  color:var(--muted);font-size:var(--t-sm);
-}
-.add-row:hover{border-color:var(--c-blue);background:var(--c-blue-bg);color:var(--c-blue);}
-
-/* Status bar */
-.status-bar{
-  display:flex;align-items:center;gap:10px;
-  padding:12px var(--s5);
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-md);margin-bottom:var(--s5);box-shadow:var(--sh1);
-}
-.sdot{width:7px;height:7px;border-radius:50%;background:var(--c-green);flex-shrink:0;}
-.sdot.w{background:var(--c-amber);}
-.sdot.e{background:var(--c-red);}
-.smsg{font-size:var(--t-sm);color:var(--muted);}
-
-/* ══════════════════════════════════════════════
-   HISTÓRICO
-══════════════════════════════════════════════ */
-.hist-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
-  gap:var(--s3);margin-bottom:var(--s6);
-}
-.hcard{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5);
-  cursor:pointer;transition:all .15s;position:relative;
-  box-shadow:var(--sh1);
-}
-.hcard:hover{border-color:var(--border2);box-shadow:var(--sh3);transform:translateY(-1px);}
-.hcard.selected{
-  border-color:var(--accent);
-  background:var(--accent-dim);
-  box-shadow:0 0 0 2px var(--accent-glow),var(--sh2);
-}
-.hcard-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--s3);}
-.hcard-month{font-size:var(--t-lg);font-weight:700;color:var(--text);}
-.hcard-check{
-  width:18px;height:18px;border-radius:50%;
-  border:1.5px solid var(--border2);
-  display:flex;align-items:center;justify-content:center;
-  font-size:10px;transition:all .15s;flex-shrink:0;
-}
-.hcard.selected .hcard-check{background:var(--accent);border-color:var(--accent);color:#fff;}
-.hcard-stats{display:flex;flex-direction:column;gap:4px;}
-.hstat{display:flex;align-items:center;justify-content:space-between;font-size:var(--t-sm);}
-.hstat-lbl{color:var(--muted);}
-.hstat-val{font-family:'DM Mono',monospace;font-weight:600;color:var(--text);}
-.hcard-del{position:absolute;top:10px;right:34px;opacity:0;transition:opacity .15s;font-size:var(--t-caption);color:var(--c-red);cursor:pointer;padding:2px 5px;border-radius:4px;}
-.hcard:hover .hcard-del{opacity:1;}
-.hist-sig-box{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-md);padding:var(--s4) var(--s5);box-shadow:var(--sh1);
-}
-.hist-sig-lbl{font-size:var(--t-caption);color:var(--muted);margin-bottom:3px;font-weight:500;}
-.hist-sig-val{font-size:var(--t-xl);font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
-
-/* ══════════════════════════════════════════════
-   COMPARATIVO
-══════════════════════════════════════════════ */
-.comp-selectors{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-bottom:var(--s5);}
-.comp-sel-box{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5) var(--s6);box-shadow:var(--sh1);
-}
-.comp-sel-lbl{
-  font-size:var(--t-caption);font-weight:600;text-transform:uppercase;
-  letter-spacing:.06em;color:var(--muted);
-  margin-bottom:var(--s3);display:flex;align-items:center;gap:6px;
-}
-.comp-sel-box select{
-  width:100%;background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);color:var(--text);
-  font-family:'Inter',sans-serif;font-size:var(--t-base);
-  padding:10px 12px;outline:none;cursor:pointer;
-}
-.comp-sel-box select:focus{border-color:var(--accent);}
-
-/* ══════════════════════════════════════════════
-   MODAIS
-══════════════════════════════════════════════ */
-.modal-bg{
-  display:none;position:fixed;inset:0;
-  background:rgba(15,23,42,0.38);
-  backdrop-filter:blur(4px);
-  z-index:9999;align-items:center;justify-content:center;
-}
-.modal-bg.open{display:flex;}
-.modal{
-  background:var(--surface);
-  border:1px solid var(--border2);
-  border-radius:var(--r-xl);
-  padding:var(--s8);
-  width:540px;max-width:95vw;max-height:90vh;overflow-y:auto;
-  box-shadow:var(--sh4);animation:fadeUp .2s ease;
-}
-.modal h3{font-size:var(--t-lg);font-weight:700;margin-bottom:6px;color:var(--text);}
-.modal p{font-size:var(--t-sm);color:var(--muted);margin-bottom:var(--s4);line-height:1.65;}
-.modal textarea{
-  width:100%;height:150px;
-  background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);color:var(--text);
-  font-family:'DM Mono',monospace;font-size:var(--t-caption);
-  padding:12px 14px;outline:none;resize:none;line-height:1.7;
-  transition:border-color .15s;
-}
-.modal textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
-.modal-actions{display:flex;gap:var(--s2);margin-top:var(--s4);justify-content:flex-end;}
-.modal-field{margin-bottom:var(--s5);}
-.modal-field label{
-  display:block;font-size:var(--t-caption);color:var(--muted);
-  font-weight:600;margin-bottom:7px;
-  text-transform:uppercase;letter-spacing:.05em;
-}
-.modal-field input,.modal-field select{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:var(--r-sm);
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:var(--t-base);padding:11px 14px;outline:none;transition:all .15s;
-}
-.modal-field input:focus,.modal-field select:focus{
-  border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);
-}
-.code-hint{
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--r-sm);padding:12px 14px;
-  font-size:var(--t-caption);font-family:'DM Mono',monospace;
-  color:var(--muted);margin-bottom:var(--s3);line-height:1.8;
-}
-
-/* Progress */
-.prog-wrap{background:var(--surface2);border-radius:99px;height:4px;margin-top:12px;overflow:hidden;}
-.prog-bar{height:100%;background:var(--accent);border-radius:99px;transition:width .4s ease;}
-.bar-cell{display:flex;align-items:center;gap:10px;}
-.bar-bg{flex:1;height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;min-width:40px;}
-.bar-fill{height:100%;border-radius:99px;transition:width .3s;}
-.bar-val{font-family:'DM Mono',monospace;font-size:var(--t-sm);min-width:30px;text-align:right;color:var(--text);}
-
-.prof-avatar-sm{
-  width:26px;height:26px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:700;color:#fff;
-  flex-shrink:0;vertical-align:middle;margin-right:7px;
-}
-
-/* ══════════════════════════════════════════════
-   LOGIN
-══════════════════════════════════════════════ */
-#screen-login{
-  position:fixed;inset:0;background:var(--bg);
-  display:flex;align-items:center;justify-content:center;
-  z-index:99999;
-}
-.login-box{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--r-xl);
-  padding:var(--s12) var(--s10);
-  width:400px;max-width:95vw;
-  box-shadow:var(--sh4);
-}
-.login-logo{display:flex;align-items:center;margin-bottom:var(--s8);}
-.login-title{font-size:var(--t-xl);font-weight:700;margin-bottom:5px;color:var(--text);}
-.login-sub{font-size:var(--t-base);color:var(--muted);margin-bottom:var(--s6);line-height:1.5;}
-.login-field{margin-bottom:var(--s4);}
-.login-field label{
-  display:block;font-size:var(--t-caption);color:var(--muted);
-  font-weight:600;margin-bottom:7px;
-  text-transform:uppercase;letter-spacing:.05em;
-}
-.login-field input{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:var(--r-sm);
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:var(--t-md);padding:13px var(--s4);outline:none;transition:all .15s;
-}
-.login-field input:focus{
-  border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-dim);
-  background:var(--surface);
-}
-.login-btn{
-  width:100%;background:var(--accent);color:#fff;
-  border:none;border-radius:var(--r-sm);
-  padding:14px;font-size:var(--t-base);font-weight:700;
-  cursor:pointer;font-family:'Inter',sans-serif;
-  margin-top:var(--s3);transition:all .2s;
-  box-shadow:0 1px 3px rgba(206,0,46,0.2);
-}
-.login-btn:hover{background:var(--accent2);box-shadow:0 4px 14px rgba(206,0,46,0.28);transform:translateY(-1px);}
-.login-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;}
-.login-error{font-size:var(--t-sm);color:var(--c-red);margin-top:10px;text-align:center;min-height:18px;}
-
-/* ══════════════════════════════════════════════
-   HOME
-══════════════════════════════════════════════ */
-#screen-home{padding:0;background:var(--bg);min-height:calc(100vh - 56px);}
-.home-hero{
-  padding:var(--s10) var(--s8) var(--s7);
-  border-bottom:1px solid var(--border);
-  background:var(--surface);
-}
-.home-hero-title{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:28px;font-weight:800;
-  letter-spacing:-.5px;margin-bottom:5px;color:var(--text);
-}
-.home-hero-sub{font-size:var(--t-base);color:var(--muted);}
-.home-section{padding:var(--s7) var(--s8);}
-.home-section-label{
-  font-size:var(--t-caption);font-weight:600;
-  text-transform:uppercase;letter-spacing:.07em;
-  color:var(--muted);margin-bottom:var(--s4);
-}
-.unid-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(270px,1fr));
-  gap:var(--s4);margin-bottom:var(--s7);
-}
-.unid-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--r-xl);
-  padding:var(--s6);
-  cursor:pointer;transition:all .2s;
-  position:relative;overflow:hidden;
-  box-shadow:var(--sh2);
-}
-.unid-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;transition:opacity .2s;}
-.unid-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:var(--sh3);}
-.unid-av{
-  width:42px;height:42px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#fff;flex-shrink:0;
-}
-.unid-nome{font-size:var(--t-lg);font-weight:700;margin-bottom:4px;color:var(--text);}
-.unid-stats{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:var(--s4);}
-.unid-stat{background:var(--bg);border-radius:var(--r-sm);padding:10px 14px;border:1px solid var(--border);}
-.unid-stat-val{font-size:18px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;color:var(--text);}
-.unid-stat-lbl{font-size:var(--t-caption);color:var(--muted);margin-top:2px;}
-
-.consol-grid{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-  gap:var(--s3);margin-bottom:var(--s6);
-}
-.consol-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5) var(--s6);box-shadow:var(--sh2);
-}
-.consol-val{font-size:var(--t-2xl);font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
-.consol-lbl{font-size:var(--t-sm);color:var(--muted);margin-top:3px;font-weight:500;}
-.consol-sub{font-size:var(--t-caption);color:var(--muted2);margin-top:2px;}
-.unid-comp-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
-.unid-comp-row:last-child{border-bottom:none;}
-.unid-comp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.unid-comp-nome{font-size:var(--t-base);font-weight:500;flex:1;color:var(--text);}
-.unid-comp-bar{flex:2;height:4px;background:var(--surface2);border-radius:99px;overflow:hidden;}
-.unid-comp-fill{height:100%;border-radius:99px;}
-.unid-comp-val{font-size:var(--t-sm);font-weight:600;font-family:'DM Mono',monospace;min-width:36px;text-align:right;color:var(--text);}
-
-/* ══════════════════════════════════════════════
-   APRESENTAÇÃO / PERFIL
-══════════════════════════════════════════════ */
-.apres-controls{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin-bottom:var(--s6);padding:var(--s4) var(--s5);
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);box-shadow:var(--sh1);
-}
-.apres-controls label{font-size:var(--t-sm);color:var(--muted);font-weight:500;white-space:nowrap;}
-.apres-controls select{
-  background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);color:var(--text);
-  font-family:'Inter',sans-serif;font-size:var(--t-base);
-  font-weight:500;padding:8px 12px;outline:none;cursor:pointer;
-}
-.apres-prof-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-xl);
-  padding:var(--s7) var(--s8);margin-bottom:var(--s6);
-  display:flex;align-items:center;gap:var(--s6);flex-wrap:wrap;
-  box-shadow:var(--sh3);
-}
-.apres-av{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0;}
-.apres-prof-nome{font-size:var(--t-2xl);font-weight:700;margin-bottom:3px;color:var(--text);}
-.apres-prof-sub{font-size:var(--t-base);color:var(--muted);}
-.apres-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--s2);}
-.apres-section{margin-bottom:var(--s8);}
-.apres-section-title{
-  font-size:var(--t-caption);font-weight:700;text-transform:uppercase;
-  letter-spacing:.07em;color:var(--muted);
-  margin-bottom:var(--s5);display:flex;align-items:center;gap:12px;
-}
-.apres-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.apres-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--s3);margin-bottom:var(--s5);}
-.apres-metric{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5) var(--s5);
-  text-align:center;box-shadow:var(--sh2);
-}
-.apres-metric .am-val{font-size:28px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;color:var(--text);}
-.apres-metric .am-lbl{font-size:var(--t-caption);color:var(--muted);margin-top:4px;}
-.apres-metric .am-delta{font-size:var(--t-caption);margin-top:3px;font-weight:600;}
-.am-delta.up{color:var(--c-green);}.am-delta.dn{color:var(--c-red);}
-.apres-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);margin-bottom:var(--s5);}
-.apres-chart-box{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s6);box-shadow:var(--sh2);
-}
-.apres-chart-title{font-size:var(--t-sm);color:var(--muted);font-weight:600;margin-bottom:var(--s3);}
-.apres-hl-list{display:flex;flex-direction:column;gap:var(--s2);}
-.apres-hl{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);
-  display:flex;gap:var(--s3);align-items:flex-start;box-shadow:var(--sh1);
-}
-.apres-hl-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
-.apres-hl-icon.g{background:var(--c-green-bg);}.apres-hl-icon.r{background:var(--c-red-bg);}.apres-hl-icon.a{background:var(--c-amber-bg);}
-.apres-hl-name{font-weight:600;font-size:var(--t-base);margin-bottom:3px;color:var(--text);}
-.apres-hl-desc{font-size:var(--t-sm);color:var(--muted);line-height:1.55;}
-.apres-plano-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--s4);}
-.apres-ac{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);padding:var(--s6);box-shadow:var(--sh2);}
-.apres-ac-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s3);}
-.apres-ac-num{width:22px;height:22px;border-radius:5px;background:var(--accent-dim);border:1px solid var(--accent-glow);color:var(--accent);font-size:var(--t-caption);font-weight:700;display:flex;align-items:center;justify-content:center;}
-.apres-ac-title{font-size:var(--t-base);font-weight:600;color:var(--text);}
-.apres-ac-body{font-size:var(--t-sm);color:var(--muted);line-height:1.65;}
-.apres-ac-body li{margin-left:14px;margin-bottom:3px;list-style:disc;}
-
-/* ══════════════════════════════════════════════
-   RADAR MODAL
-══════════════════════════════════════════════ */
-.radar-modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-xl);max-width:900px;margin:30px auto;overflow:hidden;box-shadow:var(--sh4);}
-.radar-modal-header{background:var(--bg);border-bottom:1px solid var(--border);padding:var(--s5) var(--s7);display:flex;align-items:center;justify-content:space-between;}
-.radar-modal-title{font-size:var(--t-xl);font-weight:700;color:var(--text);}
-.radar-resultado{padding:var(--s6);}
-.radar-section-title{font-size:var(--t-caption);font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:var(--s4);display:flex;align-items:center;gap:8px;}
-.radar-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.dim-comp-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);}
-.dim-comp-nome{font-size:var(--t-sm);color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dim-comp-bars{display:flex;flex-direction:column;gap:3px;width:160px;}
-.dim-comp-bar-wrap{display:flex;align-items:center;gap:4px;}
-.dim-comp-label{font-size:var(--t-caption);width:60px;flex-shrink:0;color:var(--muted);}
-.dim-comp-bar{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;}
-.dim-comp-fill{height:100%;border-radius:2px;}
-.dim-comp-nota{font-size:var(--t-caption);font-weight:700;font-family:'DM Mono',monospace;min-width:18px;text-align:right;color:var(--text);}
-.divergencia-card{background:var(--c-amber-bg);border:1px solid var(--c-amber-bd);border-radius:var(--r-md);padding:var(--s3) var(--s4);margin-bottom:8px;}
-.divergencia-titulo{font-size:var(--t-sm);font-weight:600;color:var(--c-amber);margin-bottom:4px;}
-.divergencia-desc{font-size:var(--t-caption);color:var(--c-amber);line-height:1.55;opacity:.9;}
-.hist-ciclo{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s4) var(--s5);margin-bottom:10px;}
-.hist-ciclo-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.hist-ciclo-data{font-size:var(--t-base);font-weight:600;color:var(--text);}
-.radar-badge{font-size:var(--t-caption);font-weight:600;padding:3px 9px;border-radius:99px;}
-.rb-ok{background:var(--c-green-bg);color:var(--c-green);border:1px solid var(--c-green-bd);}
-.rb-pend{background:var(--c-amber-bg);color:var(--c-amber);border:1px solid var(--c-amber-bd);}
-.pdi-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s5);margin-bottom:12px;}
-.pdi-dim{font-size:var(--t-sm);color:var(--accent);font-weight:600;margin-bottom:6px;}
-
-/* ══════════════════════════════════════════════
-   RESPONSIVO
-══════════════════════════════════════════════ */
-@media(max-width:900px){
-  .header,.nav-tabs,.home-hero,.home-section,.page,.cockpit-header,.cockpit-section{
-    padding-left:var(--s4);padding-right:var(--s4);
-  }
-  .apres-two{grid-template-columns:1fr;}
-  .two-cols,.three-cols{grid-template-columns:1fr;}
-  .month-config{grid-template-columns:1fr;}
-}
-
-/* ══════════════════════════════════════════════
-   MODAL PERFIL
-══════════════════════════════════════════════ */
-#modalPerfil{display:none!important;position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(15,23,42,0.48)!important;backdrop-filter:blur(6px)!important;z-index:2147483647!important;overflow-y:auto!important;}
-#modalPerfil.open{display:block!important;}
-
-/* ══════════════════════════════════════════════
-   TIMELINE
-══════════════════════════════════════════════ */
-.tl-wrap{position:relative;padding-left:28px;}
-.tl-wrap::before{content:'';position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:linear-gradient(to bottom,var(--accent),rgba(206,0,46,0.07));border-radius:2px;}
-.tl-item{position:relative;margin-bottom:0;}
-.tl-dot{position:absolute;left:-23px;top:12px;width:14px;height:14px;border-radius:50%;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;transition:all .2s;}
-.tl-dot.done{background:var(--c-green);border-color:var(--c-green);color:#fff;}
-.tl-dot.late{background:var(--c-red-bg);border-color:var(--c-red);color:var(--c-red);}
-.tl-dot.today{background:var(--c-amber-bg);border-color:var(--c-amber);color:var(--c-amber);}
-.tl-dot.pending{background:var(--surface2);border-color:var(--border2);color:var(--muted);}
-.tl-dot.milestone-next-rt{background:var(--c-blue-bg);border-color:var(--c-blue);color:var(--c-blue);}
-.tl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:12px var(--s4);margin-bottom:8px;transition:all .15s;cursor:default;display:flex;flex-direction:column;gap:4px;box-shadow:var(--sh1);}
-.tl-card:hover{border-color:var(--border2);box-shadow:var(--sh2);}
-.tl-card.done-card{border-color:var(--c-green-bd);background:var(--c-green-bg);}
-.tl-card.late-card{border-color:var(--c-red-bd);background:var(--c-red-bg);}
-.tl-card.today-card{border-color:var(--c-amber-bd);background:var(--c-amber-bg);}
-.tl-card.rt-card{border-color:var(--c-blue-bd);background:var(--c-blue-bg);}
-.tl-card-top{display:flex;align-items:center;gap:8px;}
-.tl-type-badge{padding:3px 8px;border-radius:var(--r-sm);font-size:var(--t-caption);font-weight:600;white-space:nowrap;flex-shrink:0;}
-.tl-badge-leitura{background:var(--c-blue-bg);color:var(--c-blue);}
-.tl-badge-pratica{background:var(--c-purple-bg);color:var(--c-purple);}
-.tl-badge-check30{background:var(--c-amber-bg);color:var(--c-amber);}
-.tl-badge-check60{background:rgba(234,88,12,.08);color:#C2410C;}
-.tl-badge-rt{background:var(--c-blue-bg);color:var(--c-blue);}
-.tl-card-title{font-size:var(--t-sm);font-weight:500;color:var(--text);flex:1;}
-.tl-status-btn{margin-left:auto;padding:3px 9px;border-radius:var(--r-sm);font-size:var(--t-caption);font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--bg);color:var(--muted);transition:all .15s;white-space:nowrap;flex-shrink:0;}
-.tl-status-btn:hover{background:var(--surface2);color:var(--text);}
-.tl-status-btn.is-done{background:var(--c-green-bg);color:var(--c-green);border-color:var(--c-green-bd);}
-.tl-card-meta{display:flex;align-items:center;gap:10px;}
-.tl-date{font-size:var(--t-caption);color:var(--muted);display:flex;align-items:center;gap:4px;}
-.tl-date strong{color:var(--text);}
-.tl-days-badge{font-size:var(--t-caption);padding:2px 7px;border-radius:var(--r-sm);font-weight:600;}
-.tl-days-done{background:var(--c-green-bg);color:var(--c-green);}
-.tl-days-late{background:var(--c-red-bg);color:var(--c-red);}
-.tl-days-soon{background:var(--c-amber-bg);color:var(--c-amber);}
-.tl-days-future{background:var(--surface2);color:var(--muted);}
-.tl-dim-ref{font-size:var(--t-caption);color:var(--muted);}
-.tl-progress-bar{height:2px;background:var(--surface2);border-radius:1px;overflow:hidden;margin-top:2px;}
-.tl-progress-fill{height:100%;border-radius:1px;transition:width .6s;}
-
-.itl-wrap{position:relative;padding-left:22px;}
-.itl-wrap::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:linear-gradient(to bottom,var(--accent),rgba(206,0,46,0.06));border-radius:2px;}
-.itl-item{position:relative;margin-bottom:7px;}
-.itl-dot{position:absolute;left:-18px;top:10px;width:11px;height:11px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;}
-.itl-dot.done{background:var(--c-green);border-color:var(--c-green);color:#fff;}
-.itl-dot.late{background:var(--c-red-bg);border-color:var(--c-red);color:var(--c-red);}
-.itl-dot.today{background:var(--c-amber-bg);border-color:var(--c-amber);color:var(--c-amber);}
-.itl-dot.pending{background:var(--surface2);border-color:var(--border2);}
-.itl-dot.rt-dot{background:var(--c-blue-bg);border-color:var(--c-blue);color:var(--c-blue);}
-.itl-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;box-shadow:var(--sh1);}
-.itl-card.done-c{border-color:var(--c-green-bd);background:var(--c-green-bg);}
-.itl-card.late-c{border-color:var(--c-red-bd);background:var(--c-red-bg);}
-.itl-card.today-c{border-color:var(--c-amber-bd);background:var(--c-amber-bg);}
-.itl-card.rt-c{border-color:var(--c-blue-bd);background:var(--c-blue-bg);}
-.itl-title{font-size:var(--t-sm);font-weight:500;color:var(--text);margin-bottom:3px;}
-.itl-meta{display:flex;align-items:center;gap:8px;}
-.itl-date{font-size:var(--t-caption);color:var(--muted);}
-.itl-pill{font-size:var(--t-caption);padding:2px 7px;border-radius:4px;font-weight:600;}
-.itl-done{background:var(--c-green-bg);color:var(--c-green);}
-.itl-late{background:var(--c-red-bg);color:var(--c-red);}
-.itl-soon{background:var(--c-amber-bg);color:var(--c-amber);}
-.itl-future{background:var(--surface2);color:var(--muted);}
-
-.pdi-result-card{background:var(--accent-dim);border:1px solid var(--accent-glow);border-radius:var(--r-md);padding:var(--s5);margin-bottom:12px;}
-.pdi-result-dim{font-size:var(--t-caption);font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:5px;}
-.pdi-result-score{font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);}
-.pdi-result-title{font-size:var(--t-base);font-weight:600;color:var(--text);margin-bottom:12px;}
-.pdi-task-block{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px;}
-.pdi-task-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-sm);font-size:var(--t-caption);font-weight:600;margin-bottom:6px;}
-.pdi-task-leitura{background:var(--c-blue-bg);color:var(--c-blue);}
-.pdi-task-pratica{background:var(--c-purple-bg);color:var(--c-purple);}
-.pdi-task-text{font-size:var(--t-sm);color:var(--muted);line-height:1.6;}
-.pdi-obs-line{border-top:1px dashed var(--border2);margin:12px 0 4px;}
-.pdi-sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:var(--s5);}
-.pdi-sign-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--s4);text-align:center;}
-.pdi-sign-line{border-top:1px solid var(--border2);width:160px;margin:0 auto 7px;padding-top:9px;font-size:var(--t-caption);color:var(--muted);}
-.pdi-sign-role{font-size:var(--t-caption);color:var(--muted2);}
-
-@media print{
-  body>*{display:none!important;}
-  #screen-portal{display:block!important;}
-  #screen-portal *{display:revert!important;}
-  #screen-portal button,#screen-portal .portal-print-hide{display:none!important;}
-  #screen-portal{position:static!important;overflow:visible!important;}
-  #card-timeline{display:none!important;}
-}
-  background:var(--bg);
-  border:1px solid var(--border2);
-  border-radius:var(--r-sm);
-  color:var(--text);
-  font-family:'Inter',sans-serif;
-  font-size:13px;
-  padding:9px 12px;
-  outline:none;
-  transition:border-color .15s;
-}
-.mb input:focus,.mb select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
-
-/* ══════════════════════════════════
-   GRADE DE PROFESSORES
-══════════════════════════════════ */
-.grade-wrap{margin-bottom:var(--s6);}
-.grade-header{
-  display:flex;align-items:center;
-  justify-content:space-between;
-  margin-bottom:var(--s3);
-  flex-wrap:wrap;gap:8px;
-}
-.grade-title{display:flex;align-items:center;gap:8px;}
-.gbadge{padding:3px 11px;border-radius:99px;font-size:11px;font-weight:600;}
-.gbadge.atu{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-glow);}
-.grade-actions{display:flex;gap:6px;flex-wrap:wrap;}
-.col-hdr-row{display:grid;grid-template-columns:190px repeat(12,1fr);gap:2px;margin-bottom:4px;padding:0 3px;}
-.chdr{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 5px;text-align:center;background:var(--surface2);border-radius:4px;}
-.chdr:first-child{text-align:left;}
-.chdr.cg{color:var(--green);}
-.chdr.cr{color:var(--red);}
-.chdr.ca{color:var(--amber);}
-.prof-rows{display:flex;flex-direction:column;gap:3px;}
-.prof-row{
-  display:grid;grid-template-columns:190px repeat(12,1fr);
-  gap:2px;align-items:center;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:9px;
-  padding:5px 3px;
-  transition:all .15s;
-  box-shadow:var(--sh1);
-}
-.prof-row:hover{border-color:var(--border2);box-shadow:var(--sh2);}
-.prof-row.filled{border-color:rgba(206,0,46,0.18);}
-.pname-cell{display:flex;align-items:center;gap:7px;padding:0 4px;}
-.pavatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;color:#fff;}
-.pfield{
-  background:var(--bg);
-  border:1px solid transparent;
-  border-radius:5px;
-  color:var(--text);
-  font-family:'DM Mono',monospace;
-  font-size:11px;padding:4px 5px;
-  text-align:center;outline:none;width:100%;transition:all .15s;
-}
-.pfield:focus{border-color:rgba(206,0,46,0.35);background:rgba(206,0,46,0.04);}
-.pfield.fg:focus{border-color:rgba(22,163,74,0.4);}
-.pfield.fr:focus{border-color:rgba(220,38,38,0.35);}
-.pfield.fa:focus{border-color:rgba(217,119,6,0.4);}
-.pfield-name{
-  background:transparent;border:none;
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:11px;font-weight:500;
-  padding:3px 4px;outline:none;width:100%;min-width:0;
-}
-.add-row{
-  display:flex;align-items:center;gap:8px;
-  padding:8px 10px;margin-top:4px;
-  cursor:pointer;
-  border:1.5px dashed var(--border2);
-  border-radius:9px;transition:all .15s;
-  color:var(--muted);font-size:12px;
-}
-.add-row:hover{border-color:var(--blue);background:var(--blue-bg);color:var(--blue);}
-
-/* ── Status bar ── */
-.status-bar{
-  display:flex;align-items:center;gap:10px;
-  padding:10px var(--s4);
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:9px;
-  margin-bottom:var(--s5);
-  box-shadow:var(--sh1);
-}
-.sdot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
-.sdot.w{background:var(--amber);}
-.sdot.e{background:var(--red);}
-.smsg{font-size:11px;color:var(--muted);}
-
-/* ── Histórico cards ── */
-.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s3);margin-bottom:var(--s6);}
-.hcard{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--card-r);
-  padding:var(--s4) var(--s5);
-  cursor:pointer;transition:all .15s;position:relative;
-  box-shadow:var(--sh2);
-}
-.hcard:hover{border-color:var(--border2);box-shadow:var(--sh3);transform:translateY(-1px);}
-.hcard.selected{border-color:var(--accent);background:var(--accent-dim);}
-.hcard-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--s3);}
-.hcard-month{font-size:15px;font-weight:700;color:var(--text);}
-.hcard-check{
-  width:20px;height:20px;border-radius:50%;
-  border:1.5px solid var(--border2);
-  display:flex;align-items:center;justify-content:center;
-  font-size:10px;transition:all .15s;flex-shrink:0;
-}
-.hcard.selected .hcard-check{background:var(--accent);border-color:var(--accent);color:#fff;}
-.hcard-stats{display:flex;flex-direction:column;gap:4px;}
-.hstat{display:flex;align-items:center;justify-content:space-between;font-size:11px;}
-.hstat-lbl{color:var(--muted);}
-.hstat-val{font-family:'DM Mono',monospace;font-weight:600;color:var(--text);}
-.hcard-del{position:absolute;top:10px;right:36px;opacity:0;transition:opacity .15s;font-size:11px;color:var(--red);cursor:pointer;padding:3px 6px;border-radius:5px;}
-.hcard:hover .hcard-del{opacity:1;}
-
-/* ── Comparativo seletores ── */
-.comp-selectors{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-bottom:var(--s5);}
-.comp-sel-box{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);
-  box-shadow:var(--sh1);
-}
-.comp-sel-lbl{
-  font-size:10px;font-weight:600;text-transform:uppercase;
-  letter-spacing:.07em;color:var(--muted);
-  margin-bottom:var(--s2);display:flex;align-items:center;gap:6px;
-}
-.comp-sel-box select{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:var(--r-sm);
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:13px;padding:8px 10px;outline:none;cursor:pointer;
-}
-
-/* ══════════════════════════════════
-   MODAIS
-══════════════════════════════════ */
-.modal-bg{
-  display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,0.45);
-  backdrop-filter:blur(4px);
-  z-index:9999;align-items:center;justify-content:center;
-}
-.modal-bg.open{display:flex;}
-.modal{
-  background:var(--surface);
-  border:1px solid var(--border2);
-  border-radius:var(--r-lg);
-  padding:var(--s8);
-  width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;
-  box-shadow:var(--sh4);
-  animation:fadeUp .2s ease;
-}
-.modal h3{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text);}
-.modal p{font-size:13px;color:var(--muted);margin-bottom:var(--s4);line-height:1.6;}
-.modal textarea{
-  width:100%;height:160px;
-  background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);
-  color:var(--text);font-family:'DM Mono',monospace;
-  font-size:11px;padding:10px 12px;outline:none;resize:none;line-height:1.7;
-}
-.modal textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
-.modal-actions{display:flex;gap:8px;margin-top:var(--s4);justify-content:flex-end;}
-.modal-field{margin-bottom:var(--s4);}
-.modal-field label{
-  display:block;font-size:11px;color:var(--muted);
-  font-weight:600;margin-bottom:6px;
-  text-transform:uppercase;letter-spacing:.05em;
-}
-.modal-field input,.modal-field select{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:var(--r-sm);
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:13px;padding:10px 12px;outline:none;transition:border-color .15s;
-}
-.modal-field input:focus,.modal-field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
-
-/* ── Code / hint ── */
-.code-hint{
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--r-sm);
-  padding:10px 12px;font-size:11px;
-  font-family:'DM Mono',monospace;color:var(--muted);
-  margin-bottom:var(--s3);line-height:1.8;
-}
-
-/* ── Progress bars ── */
-.prog-wrap{background:var(--surface2);border-radius:99px;height:4px;margin-top:10px;overflow:hidden;}
-.prog-bar{height:100%;background:var(--accent);border-radius:99px;transition:width .3s;}
-.bar-cell{display:flex;align-items:center;gap:8px;}
-.bar-bg{flex:1;height:5px;background:var(--surface2);border-radius:99px;overflow:hidden;min-width:40px;}
-.bar-fill{height:100%;border-radius:99px;transition:width .3s;}
-.bar-val{font-family:'DM Mono',monospace;font-size:11px;min-width:30px;text-align:right;color:var(--text);}
-
-/* ── Avatar pequeno ── */
-.prof-avatar-sm{
-  width:24px;height:24px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:9px;font-weight:700;color:#fff;
-  flex-shrink:0;vertical-align:middle;margin-right:7px;
-}
-
-/* ══════════════════════════════════
-   TELA LOGIN
-══════════════════════════════════ */
-#screen-login{
-  position:fixed;inset:0;
-  background:var(--bg);
-  display:flex;align-items:center;justify-content:center;
-  z-index:99999;
-}
-.login-box{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--r-lg);
-  padding:var(--s12) var(--s10);
-  width:400px;max-width:95vw;
-  box-shadow:var(--sh4);
-}
-.login-logo{display:flex;align-items:center;gap:0;margin-bottom:var(--s8);}
-.login-title{font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text);}
-.login-sub{font-size:13px;color:var(--muted);margin-bottom:var(--s6);}
-.login-field{margin-bottom:var(--s4);}
-.login-field label{
-  display:block;font-size:11px;color:var(--muted);
-  font-weight:600;margin-bottom:6px;
-  text-transform:uppercase;letter-spacing:.05em;
-}
-.login-field input{
-  width:100%;background:var(--bg);
-  border:1px solid var(--border2);border-radius:var(--r-sm);
-  color:var(--text);font-family:'Inter',sans-serif;
-  font-size:14px;padding:11px var(--s4);outline:none;
-  transition:all .15s;
-}
-.login-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
-.login-btn{
-  width:100%;background:var(--accent);color:#fff;
-  border:none;border-radius:var(--r-sm);
-  padding:13px;font-size:14px;font-weight:700;
-  cursor:pointer;font-family:'Inter',sans-serif;
-  margin-top:var(--s2);transition:all .2s;
-  letter-spacing:.01em;
-}
-.login-btn:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(206,0,46,0.25);}
-.login-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;}
-.login-error{font-size:12px;color:var(--red);margin-top:10px;text-align:center;min-height:18px;}
-
-/* ══════════════════════════════════
-   TELA HOME / COCKPIT
-══════════════════════════════════ */
-#screen-home{padding:0;background:var(--bg);min-height:calc(100vh - 60px);}
-.home-hero{
-  padding:var(--s12) var(--s10) var(--s8);
-  border-bottom:1px solid var(--border);
-  background:var(--surface);
-}
-.home-hero-title{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:32px;font-weight:800;
-  letter-spacing:-.5px;margin-bottom:4px;
-  color:var(--text);
-}
-.home-hero-sub{font-size:13px;color:var(--muted);}
-.home-section{padding:var(--s8) var(--s10);}
-.home-section-label{
-  font-size:11px;font-weight:600;
-  text-transform:uppercase;letter-spacing:.08em;
-  color:var(--muted);margin-bottom:var(--s4);
-}
-.unid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--s4);margin-bottom:var(--s8);}
-.unid-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--r-lg);
-  padding:var(--s6);
-  cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
-  box-shadow:var(--sh2);
-}
-.unid-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:3px;
-  transition:height .2s;
-}
-.unid-card:hover{
-  border-color:var(--border2);
-  transform:translateY(-2px);
-  box-shadow:var(--sh3);
-}
-.unid-av{
-  width:40px;height:40px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:16px;font-weight:800;color:#fff;flex-shrink:0;
-}
-.unid-nome{font-size:16px;font-weight:700;margin-bottom:4px;color:var(--text);}
-.unid-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:var(--s4);}
-.unid-stat{background:var(--bg);border-radius:8px;padding:9px 12px;border:1px solid var(--border);}
-.unid-stat-val{font-size:18px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;color:var(--text);}
-.unid-stat-lbl{font-size:10px;color:var(--muted);margin-top:2px;}
-
-/* ── Consolidado ── */
-.consol-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s3);margin-bottom:var(--s6);}
-.consol-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);
-  box-shadow:var(--sh2);
-}
-.consol-val{font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text);}
-.consol-lbl{font-size:11px;color:var(--muted);margin-top:3px;font-weight:500;}
-.consol-sub{font-size:10px;color:var(--muted2);margin-top:2px;}
-.unid-comp-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
-.unid-comp-row:last-child{border-bottom:none;}
-.unid-comp-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.unid-comp-nome{font-size:13px;font-weight:500;flex:1;color:var(--text);}
-.unid-comp-bar{flex:2;height:5px;background:var(--surface2);border-radius:99px;overflow:hidden;}
-.unid-comp-fill{height:100%;border-radius:99px;}
-.unid-comp-val{font-size:12px;font-weight:600;font-family:'DM Mono',monospace;min-width:36px;text-align:right;color:var(--text);}
-
-/* ══════════════════════════════════
-   APRESENTAÇÃO / PERFIL
-══════════════════════════════════ */
-.apres-controls{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin-bottom:var(--s6);padding:var(--s4) var(--s5);
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);box-shadow:var(--sh1);
-}
-.apres-controls label{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap;}
-.apres-controls select{
-  background:var(--bg);border:1px solid var(--border2);
-  border-radius:var(--r-sm);color:var(--text);
-  font-family:'Inter',sans-serif;font-size:13px;
-  font-weight:500;padding:8px 12px;outline:none;cursor:pointer;
-}
-.apres-prof-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--r-lg);
-  padding:var(--s6) var(--s8);
-  margin-bottom:var(--s5);
-  display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;
-  box-shadow:var(--sh3);
-}
-.apres-av{
-  width:64px;height:64px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:22px;font-weight:700;color:#fff;flex-shrink:0;
-}
-.apres-prof-nome{font-size:22px;font-weight:700;margin-bottom:2px;color:var(--text);}
-.apres-prof-sub{font-size:13px;color:var(--muted);}
-.apres-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--s2);}
-.apres-section{margin-bottom:var(--s8);}
-.apres-section-title{
-  font-size:12px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);
-  margin-bottom:var(--s4);
-  display:flex;align-items:center;gap:10px;
-}
-.apres-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.apres-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--s3);margin-bottom:var(--s5);}
-.apres-metric{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);
-  text-align:center;box-shadow:var(--sh2);
-}
-.apres-metric .am-val{font-size:28px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;color:var(--text);}
-.apres-metric .am-lbl{font-size:11px;color:var(--muted);margin-top:4px;}
-.apres-metric .am-delta{font-size:11px;margin-top:3px;font-weight:500;}
-.am-delta.up{color:var(--green);}
-.am-delta.dn{color:var(--red);}
-.apres-two{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);margin-bottom:var(--s5);}
-.apres-chart-box{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s5);
-  box-shadow:var(--sh2);
-}
-.apres-chart-title{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:var(--s3);}
-.apres-hl-list{display:flex;flex-direction:column;gap:var(--s2);}
-.apres-hl{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s3) var(--s4);
-  display:flex;gap:var(--s3);align-items:flex-start;
-  box-shadow:var(--sh1);
-}
-.apres-hl-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
-.apres-hl-icon.g{background:var(--green-bg);}
-.apres-hl-icon.r{background:var(--red-bg);}
-.apres-hl-icon.a{background:var(--amber-bg);}
-.apres-hl-name{font-weight:600;font-size:12px;margin-bottom:2px;color:var(--text);}
-.apres-hl-desc{font-size:11px;color:var(--muted);line-height:1.5;}
-.apres-plano-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--s3);}
-.apres-ac{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--card-r);padding:var(--s4) var(--s5);
-  box-shadow:var(--sh2);
-}
-.apres-ac-head{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2);}
-.apres-ac-num{
-  width:24px;height:24px;border-radius:6px;
-  background:var(--accent-dim);border:1px solid var(--accent-glow);
-  color:var(--accent);font-size:11px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;
-}
-.apres-ac-title{font-size:12px;font-weight:600;color:var(--text);}
-.apres-ac-body{font-size:11px;color:var(--muted);line-height:1.6;}
-.apres-ac-body li{margin-left:13px;margin-bottom:2px;list-style:disc;}
-
-/* ══════════════════════════════════
-   RADAR MODAL
-══════════════════════════════════ */
-.radar-modal-box{
-  background:var(--surface);
-  border:1px solid var(--border2);
-  border-radius:var(--r-lg);
-  max-width:900px;margin:30px auto;overflow:hidden;
-  box-shadow:var(--sh4);
-}
-.radar-modal-header{
-  background:var(--bg);
-  border-bottom:1px solid var(--border);
-  padding:var(--s5) var(--s6);
-  display:flex;align-items:center;justify-content:space-between;
-}
-.radar-modal-title{font-size:17px;font-weight:700;color:var(--text);}
-.radar-resultado{padding:var(--s6);}
-.radar-section-title{
-  font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted);
-  margin-bottom:var(--s4);display:flex;align-items:center;gap:8px;
-}
-.radar-section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-.dim-comp-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);}
-.dim-comp-nome{font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.dim-comp-bars{display:flex;flex-direction:column;gap:3px;width:160px;}
-.dim-comp-bar-wrap{display:flex;align-items:center;gap:4px;}
-.dim-comp-label{font-size:11px;width:65px;flex-shrink:0;color:var(--muted);}
-.dim-comp-bar{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;}
-.dim-comp-fill{height:100%;border-radius:2px;}
-.dim-comp-nota{font-size:10px;font-weight:700;font-family:'DM Mono',monospace;min-width:18px;text-align:right;color:var(--text);}
-.divergencia-card{
-  background:var(--amber-bg);border:1px solid var(--amber-border);
-  border-radius:9px;padding:12px var(--s4);margin-bottom:8px;
-}
-.divergencia-titulo{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px;}
-.divergencia-desc{font-size:11px;color:var(--amber);line-height:1.5;opacity:.85;}
-
-/* ── Histórico ciclos radar ── */
-.hist-ciclo{
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:10px;padding:var(--s4);margin-bottom:10px;
-}
-.hist-ciclo-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.hist-ciclo-data{font-size:13px;font-weight:600;color:var(--text);}
-.radar-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;}
-.rb-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);}
-.rb-pend{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);}
-
-/* ── PDI cards ── */
-.pdi-card{
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:10px;padding:var(--s4);margin-bottom:12px;
-}
-.pdi-dim{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:6px;}
-
-/* ══════════════════════════════════
-   RESPONSIVO
-══════════════════════════════════ */
-@media(max-width:900px){
-  .header,.nav-tabs,.home-hero,.home-section,.page{
-    padding-left:var(--s4);
-    padding-right:var(--s4);
-  }
-  .apres-two{grid-template-columns:1fr;}
-  .two-cols,.three-cols{grid-template-columns:1fr;}
-}
-
-/* ══════════════════════════════════
-   MODAL PERFIL
-══════════════════════════════════ */
-#modalPerfil{display:none!important;position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.50)!important;backdrop-filter:blur(6px)!important;z-index:2147483647!important;overflow-y:auto!important;}
-#modalPerfil.open{display:block!important;}
-
-/* ══════════════════════════════════
-   PDI + TIMELINE
-══════════════════════════════════ */
-.tl-wrap{position:relative;padding-left:28px;}
-.tl-wrap::before{
-  content:'';position:absolute;left:9px;top:8px;bottom:8px;
-  width:2px;
-  background:linear-gradient(to bottom,var(--accent),rgba(206,0,46,0.1));
-  border-radius:2px;
-}
-.tl-item{position:relative;margin-bottom:0;}
-.tl-item:last-child{margin-bottom:0;}
-.tl-dot{
-  position:absolute;left:-23px;top:12px;
-  width:14px;height:14px;border-radius:50%;
-  border:2px solid;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  font-size:7px;font-weight:700;transition:all .2s;
-}
-.tl-dot.done{background:var(--green);border-color:var(--green);color:#fff;}
-.tl-dot.late{background:var(--red-bg);border-color:var(--red);color:var(--red);}
-.tl-dot.today{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
-.tl-dot.pending{background:var(--surface2);border-color:var(--border2);color:var(--muted);}
-.tl-dot.milestone-next-rt{background:var(--blue-bg);border-color:var(--blue);color:var(--blue);}
-.tl-card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:9px;padding:10px 13px;margin-bottom:8px;
-  transition:all .15s;cursor:default;
-  display:flex;flex-direction:column;gap:4px;
-  box-shadow:var(--sh1);
-}
-.tl-card:hover{border-color:var(--border2);box-shadow:var(--sh2);}
-.tl-card.done-card{border-color:var(--green-border);background:var(--green-bg);}
-.tl-card.late-card{border-color:var(--red-border);background:var(--red-bg);}
-.tl-card.today-card{border-color:var(--amber-border);background:var(--amber-bg);}
-.tl-card.rt-card{border-color:var(--blue-border);background:var(--blue-bg);}
-.tl-card-top{display:flex;align-items:center;gap:8px;}
-.tl-type-badge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0;}
-.tl-badge-leitura{background:var(--blue-bg);color:var(--blue);}
-.tl-badge-pratica{background:var(--purple-bg);color:var(--purple);}
-.tl-badge-check30{background:var(--amber-bg);color:var(--amber);}
-.tl-badge-check60{background:rgba(249,115,22,.1);color:#EA580C;}
-.tl-badge-rt{background:var(--blue-bg);color:var(--blue);}
-.tl-card-title{font-size:12px;font-weight:500;color:var(--text);flex:1;}
-.tl-status-btn{
-  margin-left:auto;padding:2px 8px;
-  border-radius:6px;font-size:10px;font-weight:500;
-  cursor:pointer;border:1px solid var(--border2);
-  background:var(--bg);color:var(--muted);
-  transition:all .15s;white-space:nowrap;flex-shrink:0;
-}
-.tl-status-btn:hover{background:var(--surface2);color:var(--text);}
-.tl-status-btn.is-done{background:var(--green-bg);color:var(--green);border-color:var(--green-border);}
-.tl-card-meta{display:flex;align-items:center;gap:10px;}
-.tl-date{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;}
-.tl-date strong{color:var(--text);}
-.tl-days-badge{font-size:11px;padding:2px 7px;border-radius:6px;font-weight:600;}
-.tl-days-done{background:var(--green-bg);color:var(--green);}
-.tl-days-late{background:var(--red-bg);color:var(--red);}
-.tl-days-soon{background:var(--amber-bg);color:var(--amber);}
-.tl-days-future{background:var(--surface2);color:var(--muted);}
-.tl-dim-ref{font-size:11px;color:var(--muted);}
-.tl-progress-bar{height:2px;background:var(--surface2);border-radius:1px;overflow:hidden;margin-top:2px;}
-.tl-progress-fill{height:100%;border-radius:1px;transition:width .6s;}
-
-/* Timeline inline perfil */
-.itl-wrap{position:relative;padding-left:22px;}
-.itl-wrap::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:linear-gradient(to bottom,var(--accent),rgba(206,0,46,0.08));border-radius:2px;}
-.itl-item{position:relative;margin-bottom:7px;}
-.itl-dot{position:absolute;left:-18px;top:10px;width:11px;height:11px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;}
-.itl-dot.done{background:var(--green);border-color:var(--green);color:#fff;}
-.itl-dot.late{background:var(--red-bg);border-color:var(--red);color:var(--red);}
-.itl-dot.today{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
-.itl-dot.pending{background:var(--surface2);border-color:var(--border2);}
-.itl-dot.rt-dot{background:var(--blue-bg);border-color:var(--blue);color:var(--blue);}
-.itl-card{
-  background:var(--bg);border:1px solid var(--border);
-  border-radius:7px;padding:8px 11px;
-  box-shadow:var(--sh1);
-}
-.itl-card.done-c{border-color:var(--green-border);background:var(--green-bg);}
-.itl-card.late-c{border-color:var(--red-border);background:var(--red-bg);}
-.itl-card.today-c{border-color:var(--amber-border);background:var(--amber-bg);}
-.itl-card.rt-c{border-color:var(--blue-border);background:var(--blue-bg);}
-.itl-title{font-size:11px;font-weight:500;color:var(--text);margin-bottom:3px;}
-.itl-meta{display:flex;align-items:center;gap:8px;}
-.itl-date{font-size:10px;color:var(--muted);}
-.itl-pill{font-size:11px;padding:2px 7px;border-radius:4px;font-weight:600;}
-.itl-done{background:var(--green-bg);color:var(--green);}
-.itl-late{background:var(--red-bg);color:var(--red);}
-.itl-soon{background:var(--amber-bg);color:var(--amber);}
-.itl-future{background:var(--surface2);color:var(--muted);}
-
-/* PDI result cards */
-.pdi-result-card{background:var(--accent-dim);border:1px solid var(--accent-glow);border-radius:10px;padding:var(--s4);margin-bottom:12px;}
-.pdi-result-dim{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:5px;}
-.pdi-result-score{font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--accent);}
-.pdi-result-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;}
-.pdi-task-block{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px;}
-.pdi-task-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:6px;}
-.pdi-task-leitura{background:var(--blue-bg);color:var(--blue);}
-.pdi-task-pratica{background:var(--purple-bg);color:var(--purple);}
-.pdi-task-text{font-size:11px;color:var(--muted);line-height:1.55;}
-.pdi-obs-line{border-top:1px dashed var(--border2);margin:10px 0 3px;}
-.pdi-sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:var(--s4);}
-.pdi-sign-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:var(--s4);text-align:center;}
-.pdi-sign-line{border-top:1px solid var(--border2);width:160px;margin:0 auto 6px;padding-top:8px;font-size:11px;color:var(--muted);}
-.pdi-sign-role{font-size:11px;color:var(--muted2);}
-
-/* print */
-@media print{
-  body>*{display:none!important;}
-  #screen-portal{display:block!important;}
-  #screen-portal *{display:revert!important;}
-  #screen-portal button,#screen-portal .portal-print-hide{display:none!important;}
-  #screen-portal{position:static!important;overflow:visible!important;}
-  #card-timeline{display:none!important;}
-}
-/* ── Focus states explícitos — feedback imediato ── */
-.btn:focus-visible{
-  outline:2px solid var(--accent);
-  outline-offset:2px;
-}
-.nav-tab:focus-visible{
-  outline:2px solid var(--accent);
-  outline-offset:-2px;
-}
-.hcard:focus-visible,.unid-card:focus-visible{
-  outline:2px solid var(--accent);
-  outline-offset:2px;
-}
-/* ── Transição suave para todos os cards clicáveis ── */
-.hcard,.unid-card,.cockpit-unid-card,.atencao-item,.rt-rank-row{
-  will-change:transform;
-}
-/* ── Seleção de texto — cor consistente com a marca ── */
-::selection{
-  background:var(--accent-dim);
-  color:var(--text);
-}
-/* ── Scrollbar discreta ── */
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
-::-webkit-scrollbar-thumb:hover{background:var(--border3);}
-
-
-#modalRadar{--bg:#0a0a0c;--surface:#16161a;--surface2:#1e1e24;--surface3:#242430;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.22);--text:#f5f4f0;--text2:#d1d0cc;--muted:rgba(245,244,240,0.45);--muted2:rgba(245,244,240,0.28);--red:#E8192C;--red-bg:rgba(232,25,44,0.12);--green:#2ecc71;--green-bg:rgba(46,204,113,0.12);--c-amber:#f59e0b;--c-amber-bg:rgba(245,158,11,0.12);--c-amber-bd:rgba(245,158,11,0.3);--c-green:#22c55e;--c-green-bg:rgba(34,197,94,0.12);--c-green-bd:rgba(34,197,94,0.3);--c-red:#ef4444;--c-red-bg:rgba(239,68,68,0.12);--c-red-bd:rgba(239,68,68,0.3);--c-purple:#a78bfa;--c-purple-bg:rgba(167,139,250,0.12);--c-purple-bd:rgba(167,139,250,0.3);--amber:#f59e0b;--amber-bg:rgba(245,158,11,0.12);--blue:#4f8ef7;--purple:#a78bfa;--purple-border:rgba(167,139,250,0.3);--accent:#4f8ef7;--accent-dim:rgba(79,142,247,0.15);--bg2:#111118;--sh4:0 4px 24px rgba(0,0,0,0.5);--card-r:12px;--r-sm:6px;--r-lg:12px;--r-xl:16px;}
-</style>
+<link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 
@@ -2211,7 +589,7 @@ tbody tr:last-child td{border-bottom:none;}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
     <div>
       <div style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);">Registrar mês</div>
-      <div style="font-size:12px;color:var(--muted);">Preencha a carteira de cada professor — salvo automaticamente.</div>
+      <div style="font-size:12px;color:var(--muted);">Treino (Total, Ativos, Com treino, Vencidos, Em dia, Sem treino) importa da Pacto ao abrir. Revise e clique em Registrar mês.</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <div id="mesChip" onclick="abrirSeletorMesGrade()" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent-dim);border:1px solid var(--accent-glow);border-radius:16px;padding:5px 14px;cursor:pointer;" title="Clique para escolher o mês deste fechamento">
@@ -2219,6 +597,7 @@ tbody tr:last-child td{border-bottom:none;}
         <span id="mesChipLabel" style="font-size:13px;font-weight:600;color:var(--accent);">—</span>
         <span style="font-size:10px;color:var(--accent);opacity:.7;">✎</span>
       </div>
+      <button type="button" id="btnPreencherPacto" onclick="preencherGradeComPacto()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid rgba(224,31,45,.25);background:rgba(224,31,45,.08);color:#e01f2d;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;" title="Atualiza via proxy n8n (key Pacto só no n8n). Bio/Trancados/Cancelados não são alterados.">Atualizar da Pacto</button>
       <button onclick="limparGrade()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:Inter,sans-serif;">Limpar</button>
     </div>
   </div>
@@ -2600,6 +979,8 @@ tbody tr:last-child td{border-bottom:none;}
         <div id="modalProfSub" style="font-size:11px;color:var(--muted);margin-top:2px;"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" id="btnVincularPactoProfs" onclick="vincularCodigosPactoDaUnidade()" style="background:rgba(224,31,45,.08);border:1px solid rgba(224,31,45,.25);border-radius:10px;color:#e01f2d;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Casa cada professor com codigoPessoa da Pacto e grava no Firestore">Vincular Pacto</button>
+        <button type="button" id="btnDedupProfs" onclick="limparDuplicatasProfessores()" style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:10px;color:#c47d0e;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Remove cadastros duplicados (ex.: ALEX DE vs ALEX DE SOUSA), mantendo o que tem cód. Pacto ou nome mais completo">Limpar duplicatas</button>
         <button onclick="abrirFormProfessor()" style="background:rgba(224,31,45,.12);border:1px solid rgba(224,31,45,.3);border-radius:10px;color:#e01f2d;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:Inter,sans-serif;">+ Adicionar</button>
         <button onclick="fecharModalEquipe('prof')" style="background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:#888;padding:6px 12px;cursor:pointer;font-size:12px;font-family:Inter,sans-serif;">✕ Fechar</button>
       </div>
@@ -2608,11 +989,16 @@ tbody tr:last-child td{border-bottom:none;}
     <!-- Formulário de cadastro (oculto por padrão) -->
     <div id="formProfessor" style="display:none;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--bg);">
       <div style="font-size:12px;font-weight:600;color:#e01f2d;margin-bottom:12px;">Novo professor</div>
-      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;">
+      <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:end;">
         <div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Nome completo</div>
           <input id="profNomeInput" type="text" placeholder="Nome do professor..."
             style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);font-family:Inter,sans-serif;outline:none;" />
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Cód. Pacto</div>
+          <input id="profCodigoPactoInput" type="number" inputmode="numeric" placeholder="opcional"
+            style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text);font-family:Inter,sans-serif;outline:none;" title="codigoPessoa da Pacto. Se vazio, tenta casar pelo nome ao salvar." />
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;">
@@ -2638,6 +1024,8 @@ tbody tr:last-child td{border-bottom:none;}
         <button class="btn sm" onclick="setModalProfFiltro(this,'destaque')" style="color:var(--green);border-color:rgba(52,196,124,.3);">🟢 Destaque</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'atencao')" style="color:var(--red);border-color:rgba(240,92,92,.3);">🔴 Atenção</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_pendente')" style="color:#f5a623;border-color:rgba(245,166,35,.3);">⚠ Radar pendente</button>
+        <button class="btn sm" onclick="setModalProfFiltro(this,'sem_pacto')" style="color:#e01f2d;border-color:rgba(224,31,45,.3);">Sem cód. Pacto</button>
+        <button class="btn sm" onclick="setModalProfFiltro(this,'fora_treino')" style="color:#c47d0e;border-color:rgba(245,166,35,.35);">Fora do Treino Web</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_ok')" style="color:var(--c-purple);border-color:rgba(167,139,250,.3);">✓ Radar OK</button>
       </div>
       <div id="modalProfGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
@@ -2794,6 +1182,19 @@ tbody tr:last-child td{border-bottom:none;}
 .rth-eq-delta-up{background:var(--c-green-bg);color:var(--c-green);}
 .rth-eq-delta-dn{background:var(--c-red-bg);color:var(--c-red);}
 .rth-eq-delta-eq{background:var(--surface2);color:var(--muted);}
+.rth-eq-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px;}
+.rth-eq-m{background:var(--surface2);border-radius:6px;padding:5px 4px;text-align:center;border:1px solid var(--border);}
+.rth-eq-m-v{font-size:13px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.15;color:var(--text);}
+.rth-eq-m-l{font-size:8px;color:var(--muted);margin-top:2px;line-height:1.2;}
+.rth-eq-fonte{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);margin-top:6px;}
+.rth-eq-fonte-pacto{color:#c47d0e;}
+@media(max-width:900px){
+  .rth-eq-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:560px){
+  .rth-eq-grid{grid-template-columns:1fr;}
+  .rth-eq-metrics{grid-template-columns:repeat(4,1fr);}
+}
 /* Ações com grupos */
 .rth-acoes{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);padding:14px;box-shadow:var(--sh1);}
 .rth-grupo-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:8px;margin-top:12px;}
@@ -3135,33 +1536,9 @@ window.addEventListener('unhandledrejection', function(e) {
   console.error('[FORENSE PROMISE REJECTION]', e.reason);
 });
 
-// ======================== FIREBASE CONFIG ========================
-const firebaseConfig = {
-  apiKey: "AIzaSyDfZ1_uxhjO_EPUWH4FK6JrUaHJLJHy3XM",
-  authDomain: "mov-fit---gestao-de-carteira.firebaseapp.com",
-  projectId: "mov-fit---gestao-de-carteira",
-  storageBucket: "mov-fit---gestao-de-carteira.firebasestorage.app",
-  messagingSenderId: "711045374561",
-  appId: "1:711045374561:web:09455e9f3045cbd7900020"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-// ── Offline persistence — Firebase SDK nativo ─────────────────────────────────
-// Estratégia: Firebase SDK gerencia o cache IndexedDB automaticamente.
-// "Server always wins" na resolução de conflitos — correto para o Pulso
-// (um único RT por unidade; servidor é sempre a fonte de verdade).
-db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-  // PersistenceUnavailableError: outro tab já é primário (multi-tab normal)
-  // UnimplementedError: browser não suporta (Safari private / Firefox private)
-  if (err.code === 'failed-precondition') {
-    console.warn('[Pulso] Persistência offline: múltiplos tabs abertos. Apenas um sincroniza.');
-  } else if (err.code === 'unimplemented') {
-    console.warn('[Pulso] Persistência offline não disponível neste browser/modo.');
-  }
-  // Não é fatal — app funciona normalmente online
-});
+</script>
+<script src="js/firebase-config.js"></script>
+<script>
 
 // ======================== THRESHOLDS GLOBAIS ========================
 // Centralizados aqui — não altere em outros lugares do código.
@@ -3237,224 +1614,11 @@ async function salvarMetasFirestore() {
 
 
 
-// ======================== AUTH ========================
-// ── Identidade oficial dos usuários ─────────────────────────────────────────
-// campo 'nome' é a fonte oficial de exibição em toda a plataforma
-// 'email' permanece apenas como identificador técnico / autenticação
-const USUARIOS_CONFIG = {
-  'ge.maiconoliveira@gmail.com':  { papel: 'admin', unidade: null,           nome: 'Maicon Oliveira' },
-  'plucassayon@gmail.com':        { papel: 'rt',    unidade: 'premium24',    nome: 'Lucas Sayon' },
-  'jssbarroslf@gmail.com':        { papel: 'rt',    unidade: 'premium24',    nome: 'Jéssica Barros' },
-  'davidmodesto2015@hotmail.com': { papel: 'rt',    unidade: 'medicilandia', nome: 'David Modesto' },
-  'elivelton.veto@gmail.com':     { papel: 'rt',    unidade: 'itaituba',     nome: 'Elivelton Veto' },
-  'ludymylapsantos@gmail.com':    { papel: 'rt',    unidade: 'nrexpress',    nome: 'Ludymyla Santos' },
-};
-
-// Fallback: converte email em nome legível quando campo 'nome' não existe
-// Usado SOMENTE como compatibilidade para dados históricos gravados sem nome
-function formatarNomeDoEmail(email) {
-  if(!email) return 'RT';
-  return email.split('@')[0]
-    .replace(/[._-]/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase())
-    .trim();
-}
-
-// Fonte oficial de nome para qualquer usuário (logado ou referenciado)
-// Prioridade: nome cadastrado > displayName Firebase > formatação do email
-// ── nomeParaId — normalização canônica de nome → ID de documento ───────────
-// CRÍTICO: usada em TODO lugar que precisa transformar o nome de um professor
-// em um ID de documento (colabId). Antes, cada ponto do código fazia essa
-// conversão de forma própria com `.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase()`,
-// o que NÃO neutraliza acentos (Ã, Ç, etc viram "_") nem espaços duplicados —
-// duas grafias levemente diferentes do mesmo nome (com/sem acento, espaço
-// extra, maiúscula/minúscula) geravam DOIS perfis distintos no Firestore,
-// cada um com seu próprio histórico de ciclos, PDI, conquistas e indicadores
-// — fragmentando os dados do mesmo professor sem aviso nenhum.
-// Esta função normaliza de forma determinística antes de gerar o ID:
-// 1. remove acentos/diacríticos (NFD + remove marks)
-// 2. converte para minúsculas
-// 3. colapsa espaços múltiplos em um único
-// 4. remove espaços nas pontas
-// 5. troca qualquer caractere não alfanumérico por "_"
-// 6. colapsa "_" repetidos em um único
-function nomeParaId(nome) {
-  if(!nome) return '_';
-  return String(nome)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
-    .trim()
-    .replace(/\s+/g, ' ')          // colapsa espaços múltiplos
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '_')    // qualquer coisa que não seja letra/número vira _
-    .replace(/_+/g, '_')           // colapsa underscores repetidos
-    .replace(/^_+|_+$/g, '')       // remove _ nas pontas
-    || '_';
-}
-
-function nomeExibicao(emailOuObj) {
-  if(!emailOuObj) return 'RT';
-  if(typeof emailOuObj === 'object') {
-    return emailOuObj.nome || emailOuObj.displayName || formatarNomeDoEmail(emailOuObj.email);
-  }
-  // recebeu email string — buscar no config
-  const cfg = USUARIOS_CONFIG[emailOuObj];
-  if(cfg && cfg.nome) return cfg.nome;
-  return formatarNomeDoEmail(emailOuObj);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// MÓDULO PACTO BI — Integração em tempo real com API Pacto Soluções
-// Chaves armazenadas no Firestore: configuracoes/pacto_api
-// Escopo treino: busca carteira em tempo real por professor
-// Escopo adm:  busca lista de professores e codigoPessoa
-// ════════════════════════════════════════════════════════════════════════
-
-const PACTO_BASE = 'https://apigw.pactosolucoes.com.br';
-
-// Cache em memória para não repetir chamadas na mesma sessão
-const _pactoCache = {};
-
-// ── Busca chave do Firestore (com cache de sessão) ────────────────────
-async function pactoGetChave(campo) {
-  if (_pactoCache['_chave_' + campo]) return _pactoCache['_chave_' + campo];
-  try {
-    const snap = await db.collection('configuracoes').doc('pacto_api').get();
-    if (!snap.exists) { console.warn('[PACTO] Documento pacto_api não encontrado no Firestore.'); return null; }
-    const chave = snap.data()[campo] || null;
-    if (chave) _pactoCache['_chave_' + campo] = chave;
-    return chave;
-  } catch(e) {
-    console.error('[PACTO] Erro ao buscar chave:', e);
-    return null;
-  }
-}
-
-// ── Chamada genérica à API Pacto ─────────────────────────────────────
-async function pactoChamar(endpoint, campoChave, headersExtras = {}) {
-  const chave = await pactoGetChave(campoChave);
-  if (!chave) { console.error('[PACTO] Chave não disponível:', campoChave); return null; }
-  const cacheKey = endpoint + JSON.stringify(headersExtras);
-  if (_pactoCache[cacheKey]) return _pactoCache[cacheKey];
-  try {
-    const resp = await fetch(PACTO_BASE + endpoint, {
-      method: 'GET',
-      headers: {
-        'Authorization': 'Bearer ' + chave,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...headersExtras
-      }
-    });
-    if (!resp.ok) {
-      console.error('[PACTO] Erro HTTP', resp.status, endpoint);
-      return null;
-    }
-    const data = await resp.json();
-    _pactoCache[cacheKey] = data;
-    return data;
-  } catch(e) {
-    console.error('[PACTO] Erro de conexão:', e.message, endpoint);
-    return null;
-  }
-}
-
-// ── Busca professores ativos da unidade (retorna array com codigoPessoa) ──
-// Usa chave ADM + empresaId no header
-// ── Busca professores do Treino Web com indicadores já calculados ────
-// Endpoint BI: retorna só quem tem vínculo ativo com alunos no Treino Web
-// Campos retornados: biTreinoTreinamento, alunosAtivosComTreino,
-//   alunosAtivosSemTreino, alunosProgramaVencidos, + distribuição semanal
-async function pactoBuscarProfessoresBI(empresaId) {
-  const data = await pactoChamar('/psec/colaboradores/bi-professores-vinculos', 'premium24h_treino', { empresaId: String(empresaId) });
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  // Resposta pode estar em data.content
-  if (data.content && Array.isArray(data.content)) return data.content;
-  const chave = Object.keys(data).find(k => Array.isArray(data[k]));
-  return chave ? data[chave] : [];
-}
-
-// Mantida para compatibilidade — usa chave ADM, retorna todos os colaboradores
-async function pactoBuscarProfessores(empresaId) {
-  const data = await pactoChamar('/colaboradores/professores-ativos', 'premium24h_adm', { empresaId: String(empresaId) });
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  const chave = Object.keys(data).find(k => Array.isArray(data[k]));
-  return chave ? data[chave] : [];
-}
-
-// ── Busca dados de carteira de um professor (chave Treino) ────────────
-async function pactoBuscarCarteira(codigoPessoa, empresaId) {
-  const hdr = { empresaId: String(empresaId) };
-  const [ativos, semTreino, vencidos, comTreino] = await Promise.all([
-    pactoChamar(`/psec/treino-bi/alunos-ativos/${codigoPessoa}`,           'premium24h_treino', hdr),
-    pactoChamar(`/psec/treino-bi/alunos-ativo-sem-treino/${codigoPessoa}`, 'premium24h_treino', hdr),
-    pactoChamar(`/psec/treino-bi/alunos-treino-vencido/${codigoPessoa}`,   'premium24h_treino', hdr),
-    pactoChamar(`/psec/treino-bi/alunos-ativos-treino/${codigoPessoa}`,    'premium24h_treino', hdr),
-  ]);
-  // Resposta paginada: { content:[...], quantidadeTotalElementos, size }
-  const contar = d => {
-    if (!d) return 0;
-    if (Array.isArray(d)) return d.length;
-    if (typeof d === 'object') {
-      if (d.quantidadeTotalElementos !== undefined) return d.quantidadeTotalElementos;
-      const k = Object.keys(d).find(x => Array.isArray(d[x]));
-      return k ? d[k].length : (d.total || d.quantidade || d.count || 0);
-    }
-    return 0;
-  };
-  return {
-    ativos:    contar(ativos),
-    semTreino: contar(semTreino),
-    vencidos:  contar(vencidos),
-    comTreino: contar(comTreino),
-    _raw: { ativos, semTreino, vencidos, comTreino }
-  };
-}
-
-// ── Extrai nome do objeto professor ──────────────────────────────────
-// Suporta dois formatos: objeto plano (professores-ativos) e aninhado (bi-professores-vinculos)
-function pactoNomeProfessor(p) {
-  if (!p) return '?';
-  if (p.professor) return p.professor.nome || '?';    // bi-professores-vinculos
-  if (p.pessoa)    return p.pessoa.nome || '?';        // professores-ativos
-  return p.nome || p.nomeColaborador || '?';
-}
-
-// ── Extrai objeto normalizado de indicadores do professor BI ─────────
-function pactoNormalizarProfessor(p) {
-  if (!p) return null;
-  // Formato: { professor: {...}, biTreinoTreinamentoDTO: {...} }
-  const prof = p.professor || p;
-  const bi   = p.biTreinoTreinamentoDTO || {};
-  return {
-    codigo:    prof.codigoPessoa || prof.id || prof.codigo || null,
-    nome:      prof.nome || '?',
-    comTreino: bi.alunosAtivosComTreino    ?? null,
-    emDia:     bi.alunosAtivosProgramaEmDia ?? null,
-    vencidos:  bi.alunosProgramaVencidos   ?? null,
-    aRenovar:  bi.alunosProgramaRenovar    ?? bi.alunosProgramaARenovar ?? null,
-    semTreino: bi.alunosAtivosSemTreino    ?? null,
-  };
-}
-
-// ── TESTE: descobre professores e loga estrutura no console ───────────
-// Chame pactoTesteDescoberta() no console do navegador para validar
-async function pactoTesteDescoberta(empresaId) {
-  console.group('[PACTO] 🔍 Descoberta de professores');
-  console.log('empresaId:', empresaId);
-  const profs = await pactoBuscarProfessores(empresaId);
-  console.log('Total de professores retornados:', profs.length);
-  if (profs.length > 0) {
-    console.log('Estrutura do primeiro professor:', profs[0]);
-    console.log('Campos disponíveis:', Object.keys(profs[0]));
-    console.table(profs.slice(0, 10));
-  } else {
-    console.warn('Nenhum professor retornado — verifique empresaId e escopo da chave ADM');
-  }
-  console.groupEnd();
-  return profs;
-}
+</script>
+<script src="js/auth-config.js"></script>
+<script src="js/n8n-config.js"></script>
+<script src="js/pacto.js"></script>
+<script>
 
 // ════════════════════════════════════════════════════════════════════════
 // MOTOR DE PERFORMANCE — independente do Motor de Desenvolvimento
@@ -5037,10 +3201,16 @@ function buildGradeRow(data, idx, readonly) {
   const nome=data?data[0]:''; const v=data?data.slice(1):Array(12).fill('');
   const av=ac(idx); const ini=nome?initials(nome):'?';
   const nomeAttrs = readonly ? 'readonly style="cursor:default;background:rgba(255,255,255,.02);"' : '';
-  return `<div class="prof-row${nome?' filled':''}" id="gr-${idx}">
+  const foraBadge = data && data._foraTreinoWeb
+    ? `<span class="badge-fora-treino" title="Não retornado pelo BI da Pacto">Fora do Treino Web</span>`
+    : '';
+  return `<div class="prof-row${nome?' filled':''}" id="gr-${idx}"${data && data._foraTreinoWeb ? ' data-fora-treino-web="1"' : ''}>
     <div class="pname-cell">
       <div class="pavatar" style="background:${av}" id="av-${idx}">${ini}</div>
-      <input class="pfield-name" type="text" placeholder="Nome do professor" value="${nome}" oninput="updateAv(${idx},this.value);feedbackGrade();_marcarGradeModificada();" data-gr="${idx}" data-f="0" ${nomeAttrs}>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+        <input class="pfield-name" type="text" placeholder="Nome do professor" value="${nome}" oninput="updateAv(${idx},this.value);feedbackGrade();_marcarGradeModificada();" data-gr="${idx}" data-f="0" ${nomeAttrs}>
+        ${foraBadge}
+      </div>
     </div>
     ${[0,1,2,3,4,5,6,7,8].map((fi,ci)=>{
       const cls=ci===4?'fg':ci===5?'fr':ci===6?'fg':ci===7?'fa':'';
@@ -5050,6 +3220,43 @@ function buildGradeRow(data, idx, readonly) {
     <input class="pfield" type="number" min="0" placeholder="0" title="Bio vencida (>60d)" value="${v[10]!==undefined&&v[10]!==''?v[10]:''}" data-gr="${idx}" data-f="11" style="color:var(--c-purple);" oninput="feedbackGrade();_marcarGradeModificada();">
     <input class="pfield" type="number" min="0" placeholder="0" title="Sem avaliação (nunca fez)" value="${v[11]!==undefined&&v[11]!==''?v[11]:''}" data-gr="${idx}" data-f="12" style="color:var(--c-purple);" oninput="feedbackGrade();_marcarGradeModificada();">
   </div>`;
+}
+
+/** Badge visual na linha da grade: fora do Treino Web (BI Pacto). */
+function marcarLinhaForaTreinoWeb(row, fora) {
+  if (!row) return;
+  const wrap = row.querySelector('.pname-cell > div');
+  let badge = row.querySelector('.badge-fora-treino');
+  if (fora) {
+    row.style.outline = '1px solid rgba(245,166,35,.45)';
+    row.dataset.foraTreinoWeb = '1';
+    if (!badge && wrap) {
+      badge = document.createElement('span');
+      badge.className = 'badge-fora-treino';
+      badge.title = 'Não retornado pelo BI da Pacto (sem vínculo no Treino Web)';
+      badge.textContent = 'Fora do Treino Web';
+      wrap.appendChild(badge);
+    } else if (badge) {
+      badge.style.display = '';
+    }
+  } else {
+    row.style.outline = '1px solid rgba(46,204,113,.35)';
+    delete row.dataset.foraTreinoWeb;
+    if (badge) badge.remove();
+  }
+}
+
+async function marcarForaTreinoWebFirestore(unidId, profId, fora) {
+  if (!unidId || !profId) return;
+  const payload = {
+    foraTreinoWeb: !!fora,
+    foraTreinoWebAtualizadoEm: new Date().toISOString(),
+  };
+  try {
+    await professoresRef(unidId).doc(profId).set(payload, { merge: true });
+  } catch (e) {
+    console.warn('[foraTreinoWeb]', e);
+  }
 }
 
 function updateAv(idx,nome){
@@ -5094,9 +3301,19 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
       </div>`;
       return;
     }
-    const profs = snap.docs.map(d=>d.data());
-    const dados = profs.map(p => [p.nome, ...Array(12).fill('')]);
+    const profs = snap.docs.map(d=>({profId:d.id,...d.data()}));
+    const dados = profs.map(p => {
+      const row = [p.nome, ...Array(12).fill('')];
+      if (p.foraTreinoWeb) row._foraTreinoWeb = true;
+      return row;
+    });
     rows.innerHTML = dados.map((r,i)=>buildGradeRow(r,i,true)).join('');feedbackGrade();
+    // Sempre importa números de treino da Pacto (via proxy n8n) ao abrir a grade.
+    // Não grava no Firestore — o RT ainda precisa clicar em "Registrar mês".
+    if (typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId)) {
+      const seq = ++_gradePactoSeq;
+      await preencherGradeComPacto({ auto: true, unidId, seq });
+    }
   } catch(e) {
     console.warn('[inicializarGradeComProfessoresDaUnidade] erro:', e);
     if(unidadeAtual && unidadeAtual.id === unidId) {
@@ -5115,7 +3332,242 @@ async function limparGrade(){
   document.querySelectorAll('#gradeRows .pfield').forEach(el => { el.value=''; });
   _limparFlagGrade(); // grade zerada = sem modificações pendentes
   feedbackGrade(); // atualizar painel após limpar
-}// ══════════════════════════════════════════════════════════════════════════════
+}
+
+// Preenche a grade com indicadores ao vivo da Pacto (BI).
+// Não grava no Firestore — o RT ainda precisa clicar em "Registrar mês".
+// Não altera: Trancados, Cancelados, Duração, Bio*.
+// opts.auto: true → chamado ao abrir a grade (sem confirmação; toast mais discreto).
+let _gradePactoSeq = 0;
+async function preencherGradeComPacto(opts) {
+  const auto = !!(opts && opts.auto);
+  const seq = opts && opts.seq != null ? opts.seq : null;
+  const btn = document.getElementById('btnPreencherPacto');
+  const rowsEl = document.getElementById('gradeRows');
+  if (!rowsEl) return;
+
+  if (!unidadeAtual) {
+    if (!auto) mostrarToast('Nenhuma unidade selecionada.');
+    return;
+  }
+  const unidId = (opts && opts.unidId) || unidadeAtual.id;
+  if (unidadeAtual.id !== unidId) return;
+
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    if (!auto) mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    return;
+  }
+
+  const rows = Array.from(rowsEl.querySelectorAll('.prof-row'));
+  if (!rows.length) {
+    if (!auto) mostrarToast('A grade está vazia. Cadastre professores na Equipe primeiro.');
+    return;
+  }
+
+  if (!auto) {
+    const temNumeros = rows.some(row =>
+      [1, 2, 5, 6, 7, 8].some(f => {
+        const el = row.querySelector(`[data-f="${f}"]`);
+        return el && String(el.value).trim() !== '' && Number(el.value) !== 0;
+      })
+    );
+    if (temNumeros) {
+      const ok = await confirmDialog(
+        'Alguns campos já têm números. A importação da Pacto vai sobrescrever Total, Ativos, Com treino, Vencidos, Em dia e Sem treino.\n\nTrancados, Cancelados, Duração e Bio não serão alterados.\n\nContinuar?',
+        'Atualizar da Pacto',
+        'warn'
+      );
+      if (!ok) return;
+    } else {
+      const ok = await confirmDialog(
+        'Importar da Pacto os indicadores de treino (ao vivo) para cada professor desta grade?\n\nDepois revise e clique em "Registrar mês" para salvar o snapshot.',
+        'Atualizar da Pacto',
+        'info'
+      );
+      if (!ok) return;
+    }
+  }
+
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Buscando Pacto…';
+  }
+  if (auto && typeof setSaveStatus === 'function') {
+    setSaveStatus('Importando da Pacto…', 'w');
+  }
+
+  try {
+    // Manual: força BI fresco. Auto: reusa cache (evita 429 ao abrir várias telas).
+    if (!auto && typeof pactoLimparCacheDados === 'function') pactoLimparCacheDados();
+    if (typeof n8nPactoConfigOk === 'function' && !n8nPactoConfigOk()) {
+      const msgCfg = 'Configure js/n8n-config.js (N8N_PACTO_BASE + N8N_PROXY_TOKEN). Veja n8n/SETUP.txt.';
+      if (auto) setSaveStatus(msgCfg, 'e');
+      else mostrarToast(msgCfg);
+      return;
+    }
+    const lista = await pactoBuscarProfessoresBI(empresaId);
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+    if (seq != null && seq !== _gradePactoSeq) return;
+    if (!lista || !lista.length) {
+      if (auto) setSaveStatus('Pacto não retornou professores. Verifique o proxy n8n e Credentials.', 'e');
+      else mostrarToast('Pacto não retornou professores. Verifique o n8n (Credentials + webhook).');
+      return;
+    }
+    let normalizados = lista.map(pactoNormalizarProfessor).filter(Boolean);
+
+    // ADM só no refresh manual (1 hit a mais) — no auto o BI + codigoPacto bastam
+    let admNorm = [];
+    if (!auto) {
+      try {
+        const adm = await pactoBuscarProfessores(empresaId);
+        admNorm = (adm || []).map(raw => ({
+          codigo: (raw.pessoa && (raw.pessoa.codigoPessoa || raw.pessoa.id)) || raw.codigoPessoa || raw.id || null,
+          nome: pactoNomeProfessor(raw),
+          comTreino: null, emDia: null, vencidos: null, aRenovar: null, semTreino: null,
+        })).filter(p => p.nome && p.nome !== '?');
+      } catch (e) {
+        console.warn('[PACTO GRADE] ADM fallback:', e);
+      }
+    }
+
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+    if (seq != null && seq !== _gradePactoSeq) return;
+
+    console.group('[PACTO GRADE] Diagnóstico de match');
+    console.log('empresaId:', empresaId, '| BI:', normalizados.length, '| ADM:', admNorm.length);
+    console.table(normalizados.slice(0, 20).map(p => ({
+      codigo: p.codigo, nome: p.nome, comTreino: p.comTreino, emDia: p.emDia, vencidos: p.vencidos, semTreino: p.semTreino
+    })));
+    console.log('Nomes na grade:', rows.map(r => {
+      const el = r.querySelector('[data-f="0"]');
+      return el ? el.value.trim() : '';
+    }).filter(Boolean));
+    console.groupEnd();
+
+    const codigoPorNome = new Map();
+    const profIdPorNome = new Map();
+    try {
+      const snapP = await professoresRef(unidId).get();
+      snapP.forEach(doc => {
+        const d = doc.data() || {};
+        if (d.nome) {
+          const k = nomeParaId(d.nome);
+          profIdPorNome.set(k, doc.id);
+          if (d.codigoPacto != null) codigoPorNome.set(k, d.codigoPacto);
+        }
+      });
+    } catch (e) {}
+    try {
+      const snapC = await colabRef(unidId).get();
+      snapC.forEach(doc => {
+        const d = doc.data() || {};
+        if (d.codigoPacto != null && d.nome) codigoPorNome.set(nomeParaId(d.nome), d.codigoPacto);
+      });
+    } catch (e) {}
+
+    const setField = (row, f, val) => {
+      const el = row.querySelector(`[data-f="${f}"]`);
+      if (!el) return;
+      if (val == null || val === '' || Number.isNaN(Number(val))) return;
+      el.value = String(Math.max(0, Math.round(Number(val))));
+    };
+
+    let okCount = 0, falha = 0;
+    const naoEncontrados = [];
+    const persistFora = [];
+
+    rows.forEach(row => {
+      const nomeEl = row.querySelector('[data-f="0"]');
+      const nome = nomeEl ? nomeEl.value.trim() : '';
+      if (!nome) return;
+
+      const chave = nomeParaId(nome);
+      const codCadastro = codigoPorNome.get(chave);
+      const profId = profIdPorNome.get(chave);
+      let bi = pactoEncontrarProfessor(normalizados, { codigoPacto: codCadastro, nome });
+
+      // Se achou só no ADM, tenta pegar indicadores no BI pelo codigo
+      if (!bi || (bi.comTreino == null && bi.emDia == null && bi.vencidos == null && bi.semTreino == null)) {
+        const admHit = pactoEncontrarProfessor(admNorm, { codigoPacto: codCadastro, nome });
+        if (admHit && admHit.codigo != null) {
+          const biByCod = normalizados.find(p => String(p.codigo) === String(admHit.codigo));
+          bi = biByCod || admHit;
+        } else if (!bi) {
+          bi = admHit || null;
+        }
+      }
+
+      if (!bi || (bi.comTreino == null && bi.emDia == null && bi.vencidos == null && bi.semTreino == null && bi.codigo == null)) {
+        falha++;
+        naoEncontrados.push(nome.split(' ')[0]);
+        marcarLinhaForaTreinoWeb(row, true);
+        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        console.warn('[PACTO GRADE] fora do Treino Web:', nome);
+        return;
+      }
+
+      const comTreino = bi.comTreino;
+      const semTreino = bi.semTreino;
+      const emDia = bi.emDia;
+      const vencidos = bi.vencidos;
+
+      if (comTreino == null && emDia == null && vencidos == null && semTreino == null) {
+        falha++;
+        naoEncontrados.push(nome.split(' ')[0]);
+        marcarLinhaForaTreinoWeb(row, true);
+        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        console.warn('[PACTO GRADE] no BI sem indicadores:', nome, bi);
+        return;
+      }
+
+      const totalEst =
+        comTreino != null && semTreino != null
+          ? Number(comTreino) + Number(semTreino)
+          : comTreino;
+
+      setField(row, 1, totalEst);
+      setField(row, 2, totalEst);
+      setField(row, 5, comTreino);
+      setField(row, 6, vencidos);
+      setField(row, 7, emDia);
+      setField(row, 8, semTreino);
+
+      marcarLinhaForaTreinoWeb(row, false);
+      if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, false));
+      okCount++;
+    });
+
+    if (persistFora.length) {
+      try { await Promise.all(persistFora); } catch (e) {}
+    }
+
+    feedbackGrade();
+    _marcarGradeModificada();
+
+    let msg = `Pacto: ${okCount} professor(es) preenchido(s)`;
+    if (falha) msg += ` · ${falha} fora do Treino Web (${naoEncontrados.slice(0, 3).join(', ')}${naoEncontrados.length > 3 ? '…' : ''})`;
+    msg += '. Revise e clique em Registrar mês.';
+    if (!auto) mostrarToast(msg);
+    setSaveStatus(
+      okCount
+        ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
+        : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
+      okCount ? 'ok' : 'w'
+    );
+  } catch (e) {
+    console.error('[PACTO GRADE]', e);
+    if (!auto) mostrarToast('Erro ao buscar Pacto: ' + (e.message || 'falha'));
+    setSaveStatus('Erro ao importar da Pacto.', 'e');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Atualizar da Pacto';
+    }
+  }
+}
+// ══════════════════════════════════════════════════════════════════════════════
 // FERRAMENTAS DE TESTE — flag ambiente + limpeza de ciclos de homologação
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -12387,46 +10839,8 @@ async function renderRTHome() {
   const nomeCompleto = usuarioLogado && usuarioLogado.nome ? usuarioLogado.nome : 'Coordenador';
   const nome = nomeCompleto.split(' ')[0];
 
-  // ── TESTE Pacto BI — só Premium, só console, sem impacto na tela ─────────
-  // Remove este bloco após validação. Substitua empresaId pelo valor real.
-  if(unidadeAtual.id === 'premium24') {
-    console.group('[PACTO] 🚀 Teste automático ao abrir home RT — Premium 24h');
-    try {
-      // PASSO 1: descobre professores e estrutura do JSON
-      // Troque o empresaId abaixo pelo código real após ver /grupo-colaborador/by-empresa-logada
-      const EMPRESA_ID_TESTE = '1'; // ← AJUSTE AQUI se necessário
-      // Usa endpoint BI — retorna só professores do Treino Web com indicadores prontos
-      const profs = await pactoBuscarProfessoresBI(EMPRESA_ID_TESTE);
-      if(profs.length > 0) {
-        console.log('✅ Professores Treino Web encontrados:', profs.length);
-        console.log('🔎 Objeto RAW completo do primeiro professor:', profs[0]);
-        console.log('Campos disponíveis:', Object.keys(profs[0]));
-        const normalizados = profs.map(pactoNormalizarProfessor);
-        console.table(normalizados.map(p => ({
-          nome:      p.nome,
-          codigo:    p.codigo,
-          comTreino: p.comTreino,
-          emDia:     p.emDia,
-          semTreino: p.semTreino,
-          vencidos:  p.vencidos,
-          aRenovar:  p.aRenovar,
-        })));
-        console.log('✅ Dados normalizados prontos para exibição na tela:', normalizados);
-      } else {
-        console.warn('⚠ Nenhum professor do Treino Web retornado.');
-        console.log('empresaId usado:', EMPRESA_ID_TESTE);
-        console.log('Tentando com chave ADM como fallback...');
-        const profsAdm = await pactoBuscarProfessores(EMPRESA_ID_TESTE);
-        console.log('Fallback ADM retornou:', profsAdm.length, 'colaboradores');
-      }
-    } catch(e) {
-      console.error('[PACTO] Erro no teste:', e);
-    }
-    console.groupEnd();
-  }
-  // ── FIM TESTE Pacto ───────────────────────────────────────────────────────
-
   // ── Contexto temporal ────────────────────────────────────────────────────
+  // (teste automático Pacto na home removido — estourava rate limit 50/min)
   const agora = new Date();
   const diasSemana = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
   const diaSemana  = diasSemana[agora.getDay()];
@@ -12656,111 +11070,143 @@ async function renderRTHome() {
       </div>`;
   }
 
-  // ── Equipe por professor com delta + dados Pacto em tempo real ──────────
+  // ── Equipe por professor — métricas Pacto ao vivo (fallback: mês salvo) ──
   if(elEqGrid) {
     const hist = getHistorico(unidadeAtual.id);
     const ultimo  = hist && hist.length ? hist[hist.length-1] : null;
     const anterior= hist && hist.length >= 2 ? hist[hist.length-2] : null;
 
-    // Busca dados Pacto + mapa de codigoPacto do Firestore
-    let pactoMap = {}; // chave: codigoPacto (number) → dados BI normalizados
-    let codigoPactoMap = {}; // chave: colabId Firestore → codigoPacto
-    if(unidadeAtual.id === 'premium24') {
+    let pactoMap = {}; // codigo → BI normalizado
+    let codigoPactoMap = {}; // profId | nomeParaId → codigo
+    if(unidadeAtual.id === 'premium24' && typeof pactoBuscarProfessoresBI === 'function') {
       try {
-        const EMPRESA_ID = '1'; // ← trocar pelo empresaId real em Produção
-        // 1) Busca dados BI do Pacto — indexado por codigoPessoa
+        const EMPRESA_ID = pactoEmpresaId(unidadeAtual.id) || '1';
         const pactoProfs = await pactoBuscarProfessoresBI(EMPRESA_ID);
-        pactoProfs.forEach(raw => {
+        (pactoProfs || []).forEach(raw => {
           const n = pactoNormalizarProfessor(raw);
           if(n && n.codigo != null) pactoMap[n.codigo] = n;
         });
-        // 2) Lê codigoPacto de cada colaborador no Firestore
-        const colabsSnap = await colabRef(unidadeAtual.id).get();
+        const [colabsSnap, profsSnap] = await Promise.all([
+          colabRef(unidadeAtual.id).get(),
+          professoresRef(unidadeAtual.id).get(),
+        ]);
         colabsSnap.forEach(doc => {
-          const d = doc.data();
-          if(d.codigoPacto != null) codigoPactoMap[doc.id] = d.codigoPacto;
+          const d = doc.data() || {};
+          if(d.codigoPacto != null) {
+            codigoPactoMap[doc.id] = d.codigoPacto;
+            if(d.nome) codigoPactoMap[nomeParaId(d.nome)] = d.codigoPacto;
+          }
         });
-        console.log('[PACTO] Mapa Pacto:', Object.keys(pactoMap).length, 'professores | Firestore com codigoPacto:', Object.keys(codigoPactoMap).length);
+        profsSnap.forEach(doc => {
+          const d = doc.data() || {};
+          if(d.codigoPacto != null) {
+            codigoPactoMap[doc.id] = d.codigoPacto;
+            if(d.nome) codigoPactoMap[nomeParaId(d.nome)] = d.codigoPacto;
+          }
+        });
       } catch(e) { console.warn('[PACTO] Erro ao buscar equipe:', e); }
     }
 
+    const pactoLista = Object.values(pactoMap);
+
     if(ultimo && ultimo.professores && ultimo.professores.length) {
       if(elEqCount) elEqCount.textContent = ultimo.professores.length;
-      const profs = [...ultimo.professores].sort((a,b)=>{
-        const pa = a.comTreino>0?Math.round(a.emDia/a.comTreino*100):0;
-        const pb = b.comTreino>0?Math.round(b.emDia/b.comTreino*100):0;
-        return pa - pb;
-      });
-      elEqGrid.innerHTML = profs.map(p => {
-        const pct    = p.comTreino>0 ? Math.round(p.emDia/p.comTreino*100) : 0;
-        const venc   = p.semTreino || 0;
+
+      const profsEnriquecidos = ultimo.professores.map(p => {
+        const colabId = p.profId || nomeParaId(p.nome);
+        const codigoHint = codigoPactoMap[colabId] ?? codigoPactoMap[nomeParaId(p.nome)] ?? p.codigoPacto ?? null;
+        let bi = null;
+        if (codigoHint != null && pactoMap[codigoHint]) bi = pactoMap[codigoHint];
+        else if (pactoLista.length && typeof pactoEncontrarProfessor === 'function') {
+          bi = pactoEncontrarProfessor(pactoLista, { codigoPacto: codigoHint, nome: p.nome });
+        }
+        const comTreino = bi && bi.comTreino != null ? Number(bi.comTreino) : Number(p.comTreino || 0);
+        const emDia     = bi && bi.emDia != null ? Number(bi.emDia) : Number(p.emDia || 0);
+        const vencidos  = bi && bi.vencidos != null ? Number(bi.vencidos) : Number(p.vencido || 0);
+        const semTreino = bi && bi.semTreino != null ? Number(bi.semTreino) : Number(p.semTreino || 0);
+        const total = (comTreino || 0) + (semTreino || 0) || Number(p.total || p.ativo || 0) || comTreino;
+        const pct = comTreino > 0 ? Math.round(emDia / comTreino * 100) : 0;
+        const duracao = p.duracao != null && p.duracao !== '' ? Number(p.duracao) : null;
+        return {
+          ...p,
+          _bi: bi,
+          _fonte: bi ? 'pacto' : 'mes',
+          _comTreino: comTreino,
+          _emDia: emDia,
+          _vencidos: vencidos,
+          _semTreino: semTreino,
+          _total: total,
+          _pct: pct,
+          _duracao: duracao,
+        };
+      }).sort((a,b) => a._pct - b._pct);
+
+      elEqGrid.innerHTML = profsEnriquecidos.map(p => {
+        const pct = p._pct;
         const status = pct >= 70 ? 'ok' : pct >= 50 ? 'at' : 'cr';
         const statusLabel = status==='ok'?'Em dia':status==='at'?'Atenção':'Crítico';
-        const cor    = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
-        const bg     = status==='cr'?'background:rgba(185,28,28,.03);border-color:rgba(185,28,28,.2);':
-                       status==='at'?'background:rgba(146,64,14,.03);border-color:rgba(146,64,14,.15);':'';
-        const iniciais = p.nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase();
-        const avBg   = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
-        // Delta vs mês anterior
+        const cor = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
+        const bg = status==='cr'?'background:rgba(185,28,28,.03);border-color:rgba(185,28,28,.2);':
+                   status==='at'?'background:rgba(146,64,14,.03);border-color:rgba(146,64,14,.15);':'';
+        const iniciais = p.nome.split(' ').filter(Boolean).slice(0,2).map(n=>n[0]).join('').toUpperCase();
+        const avBg = status==='ok'?'var(--c-green)':status==='at'?'var(--c-amber)':'var(--c-red)';
+        const nomeCurto = (() => {
+          const parts = p.nome.split(/\s+/).filter(Boolean);
+          if (parts.length <= 2) return p.nome;
+          return parts[0] + ' ' + parts[parts.length - 1];
+        })();
+
         let deltaHtml = '';
         if(anterior && anterior.professores) {
-          const pAnt = anterior.professores.find(x=>x.nome===p.nome);
+          const pAnt = anterior.professores.find(x =>
+            x.nome===p.nome
+            || (x.profId && p.profId && x.profId===p.profId)
+            || (typeof nomesProvavelmenteMesmoProfessor === 'function' && nomesProvavelmenteMesmoProfessor(x.nome, p.nome))
+          );
           if(pAnt && pAnt.comTreino > 0) {
             const pctAnt = Math.round(pAnt.emDia/pAnt.comTreino*100);
-            const diff   = pct - pctAnt;
-            if(diff > 0)      deltaHtml = `<span class="rth-eq-delta rth-eq-delta-up">▲ +${diff}pts vs mês ant.</span>`;
-            else if(diff < 0) deltaHtml = `<span class="rth-eq-delta rth-eq-delta-dn">▼ ${diff}pts vs mês ant.</span>`;
-            else              deltaHtml = `<span class="rth-eq-delta rth-eq-delta-eq">→ estável vs mês ant.</span>`;
+            const diff = pct - pctAnt;
+            if(diff > 0)      deltaHtml = `<span class="rth-eq-delta rth-eq-delta-up">▲ +${diff}pts vs mês</span>`;
+            else if(diff < 0) deltaHtml = `<span class="rth-eq-delta rth-eq-delta-dn">▼ ${diff}pts vs mês</span>`;
+            else              deltaHtml = `<span class="rth-eq-delta rth-eq-delta-eq">→ estável</span>`;
           }
         }
-        // Dados Pacto em tempo real — match por codigoPacto (Firestore)
-        const colabId = p.profId || nomeParaId(p.nome);
-        const codigoPacto = codigoPactoMap[colabId] ?? null;
-        const bi = codigoPacto != null ? (pactoMap[codigoPacto] || null) : null;
-        const pactoHtml = bi ? `
-          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);margin-bottom:5px;">🔴 Ao vivo · Pacto</div>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:var(--text);">${bi.comTreino ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Com treino</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:${(bi.semTreino||0)>0?'var(--c-amber)':'var(--c-green)'};">${bi.semTreino ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Sem treino</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:14px;font-weight:700;color:${(bi.vencidos||0)>0?'var(--c-red)':'var(--c-green)'};">${bi.vencidos ?? '—'}</div>
-                <div style="font-size:9px;color:var(--muted);">Vencidos</div>
-              </div>
-            </div>
-          </div>` : '';
+
+        const m = (v, l, c) =>
+          `<div class="rth-eq-m"><div class="rth-eq-m-v"${c?` style="color:${c}"`:''}>${v}</div><div class="rth-eq-m-l">${l}</div></div>`;
+
+        const fonteCls = p._fonte === 'pacto' ? 'rth-eq-fonte rth-eq-fonte-pacto' : 'rth-eq-fonte';
+        const fonteTxt = p._fonte === 'pacto' ? 'Ao vivo · Pacto' : 'Mês salvo';
+        const profIdAttr = p.profId ? String(p.profId).replace(/'/g, '') : '';
+
         return `
-          <div class="rth-eq-item" style="${bg}" onclick="goTab('radar')">
+          <div class="rth-eq-item" style="${bg}" onclick="abrirPerfilProfessor('${esc(p.nome)}','${profIdAttr}')">
             <span class="rth-eq-badge rth-eq-${status}">${statusLabel}</span>
             <div class="rth-eq-top">
               <div class="rth-eq-av" style="background:${avBg};">${iniciais}</div>
-              <div>
-                <div class="rth-eq-nome">${p.nome.split(' ')[0]} ${p.nome.split(' ').slice(-1)[0]}</div>
-                <div class="rth-eq-tipo">${p.modalidade||'Professor'}</div>
+              <div style="min-width:0;padding-right:48px;">
+                <div class="rth-eq-nome">${esc(nomeCurto)}</div>
+                <div class="rth-eq-tipo">${p._fonte === 'pacto' ? 'Pacto ao vivo' : (p.modalidade||'Professor')}</div>
               </div>
             </div>
-            <div class="rth-eq-row">
-              <span class="rth-eq-lbl">Em dia</span>
-              <div class="rth-eq-bar-bg"><div class="rth-eq-bar-fill" style="width:${pct}%;background:${cor};"></div></div>
-              <span class="rth-eq-val" style="color:${cor};">${pct}%</span>
+            <div class="rth-eq-metrics">
+              ${m(p._total, 'Total')}
+              ${m(p._total, 'Ativos')}
+              ${m(p._emDia, 'Em dia', 'var(--c-green)')}
+              ${m(pct + '%', '% em dia', cor)}
+              ${m(p._vencidos, 'Vencidos', p._vencidos > 0 ? 'var(--c-red)' : undefined)}
+              ${m(p._semTreino, 'Sem treino', p._semTreino > 0 ? 'var(--c-amber)' : undefined)}
+              ${m(p._comTreino, 'Com treino')}
+              ${m(p._duracao != null && !Number.isNaN(p._duracao) ? p._duracao + 'd' : '—', 'Duração')}
             </div>
-            <div class="rth-eq-row">
-              <span class="rth-eq-lbl">Vencidos</span>
-              <div class="rth-eq-bar-bg"><div class="rth-eq-bar-fill" style="width:${Math.min(100,venc*3)}%;background:${cor};opacity:.3;"></div></div>
-              <span class="rth-eq-val" style="color:${cor};">${venc}</span>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-top:2px;">
+              <span class="${fonteCls}">${fonteTxt}</span>
+              ${deltaHtml}
             </div>
-            ${deltaHtml}
-            ${pactoHtml}
           </div>`;
       }).join('');
     } else {
-      elEqGrid.innerHTML = '<div style="font-size:11px;color:var(--muted);grid-column:1/-1;">Salve ao menos um mês para ver a equipe.</div>';
+      elEqGrid.innerHTML = '<div style="font-size:11px;color:var(--muted);grid-column:1/-1;">Salve ao menos um mês para ver a equipe. Os números ao vivo vêm da Pacto após o registro.</div>';
     }
   }
 
@@ -15300,8 +13746,12 @@ async function buscarProfPorNome(unidId, nome){
   try {
     const snap = await professoresRef(unidId).get();
     const alvo = nomeParaId(nome);
-    const match = snap.docs.find(d => nomeParaId(d.data().nome) === alvo);
-    return match ? { profId: match.id, ...match.data() } : null;
+    const exact = snap.docs.find(d => nomeParaId(d.data().nome) === alvo);
+    if (exact) return { profId: exact.id, ...exact.data() };
+    // Nome parecido (ALMADA ALMADA vs ALMADA) — não cria segundo cadastro
+    const fuzzy = snap.docs.find(d => typeof nomesProvavelmenteMesmoProfessor === 'function'
+      && nomesProvavelmenteMesmoProfessor(d.data().nome, nome));
+    return fuzzy ? { profId: fuzzy.id, ...fuzzy.data() } : null;
   } catch(e) { console.warn('[buscarProfPorNome] erro:', e); return null; }
 }
 
@@ -15343,7 +13793,10 @@ async function vincularProfessoresAoCadastro(unidId, profs){
   for(const p of profs){
     if(!p.nome) continue;
     const chave = nomeParaId(p.nome);
-    const existente = cadastradosPorChave.get(chave);
+    let existente = cadastradosPorChave.get(chave);
+    if(!existente && typeof nomesProvavelmenteMesmoProfessor === 'function') {
+      existente = cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome)) || null;
+    }
     if(existente) { p.profId = existente.profId; continue; }
     try {
       const novoDoc = professoresRef(unidId).doc();
@@ -15354,7 +13807,9 @@ async function vincularProfessoresAoCadastro(unidId, profs){
         criadoPor: usuarioLogado?.nome || 'RT'
       });
       p.profId = novoDoc.id;
-      cadastradosPorChave.set(chave, { profId: novoDoc.id, nome: p.nome }); // evita duplicar se o nome repetir na mesma grade
+      const novo = { profId: novoDoc.id, nome: p.nome };
+      cadastrados.push(novo);
+      cadastradosPorChave.set(chave, novo);
     } catch(e3){ console.warn('[vincularProfessoresAoCadastro] erro ao cadastrar', p.nome, e3); }
   }
 }
@@ -15391,7 +13846,15 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
       const chave = nomeParaId(p.nome);
       if(nomesVistos.has(chave)) continue;
       nomesVistos.add(chave);
-      if(cadastradosPorChave.has(chave)) continue; // já cadastrado, nada a fazer
+      if(cadastradosPorChave.has(chave)) continue;
+      // Já existe com nome parecido (ex.: histórico "ALMADA ALMADA" vs cadastro "ALMADA")
+      const parecido = typeof nomesProvavelmenteMesmoProfessor === 'function'
+        ? cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome))
+        : null;
+      if(parecido) {
+        cadastradosPorChave.set(chave, parecido); // mapeia a grafia do histórico ao cadastro existente
+        continue;
+      }
       try {
         const novoDoc = professoresRef(unidId).doc();
         await novoDoc.set({
@@ -15400,7 +13863,9 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
           criadoEm: new Date().toISOString(),
           criadoPor: usuarioLogado?.nome || 'RT'
         });
-        cadastradosPorChave.set(chave, { profId: novoDoc.id, nome: p.nome }); // evita recriar se o nome repetir
+        const novo = { profId: novoDoc.id, nome: p.nome };
+        cadastrados.push(novo);
+        cadastradosPorChave.set(chave, novo);
       } catch(e){ console.warn('[sincronizarCadastroProfessoresComHistorico] erro ao cadastrar', p.nome, e); }
     }
   }
@@ -15435,8 +13900,9 @@ function fecharModalEquipe(tipo) {
   const id = tipo==='prof' ? 'modalEquipeProf' : 'modalEquipeEst';
   document.getElementById(id).style.display = 'none';
 }
-async function renderModalProf() {
+async function renderModalProf(opts) {
   if(!unidadeAtual) return;
+  const skipDedup = !!(opts && opts.skipDedup);
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante o carregamento
   const grid = document.getElementById('modalProfGrid');
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px 0;"><div style="font-size:11px;color:var(--muted);">Carregando...</div></div>';
@@ -15445,6 +13911,19 @@ async function renderModalProf() {
   // salvo ganha um cadastro fixo automaticamente, antes de listar.
   await sincronizarCadastroProfessoresComHistorico(unidId);
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — descarta o resultado
+
+  // Remove duplicatas (ALMADA ALMADA vs cadastro Pacto) automaticamente
+  if (!skipDedup && typeof _aplicarDeduplicataProfessores === 'function') {
+    try {
+      const n = await _aplicarDeduplicataProfessores(unidId, { auto: true });
+      if (n > 0) {
+        mostrarToast(`Removido(s) ${n} cadastro(s) duplicado(s). Mantido o da Pacto.`);
+        return renderModalProf({ skipDedup: true });
+      }
+    } catch (e) {
+      console.warn('[renderModalProf] dedup:', e);
+    }
+  }
 
   const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
@@ -15467,10 +13946,14 @@ async function renderModalProf() {
   const profs = profsBase.map(prof => {
     const meses = [];
     hist.forEach(mes => {
-      const m = (mes.professores||[]).find(p => p.profId===prof.profId || nomeParaId(p.nome)===nomeParaId(prof.nome));
+      const m = (mes.professores||[]).find(p =>
+        p.profId===prof.profId
+        || nomeParaId(p.nome)===nomeParaId(prof.nome)
+        || (typeof nomesProvavelmenteMesmoProfessor === 'function' && nomesProvavelmenteMesmoProfessor(p.nome, prof.nome))
+      );
       if(m) meses.push({mesNome:mes.nome, ...m});
     });
-    return {nome: prof.nome, profId: prof.profId, meses};
+    return {nome: prof.nome, profId: prof.profId, codigoPacto: prof.codigoPacto != null ? prof.codigoPacto : null, foraTreinoWeb: !!prof.foraTreinoWeb, meses};
   });
 
   const colabs = await Promise.all(profs.map(async prof => {
@@ -15480,7 +13963,8 @@ async function renderModalProf() {
   }));
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checagem final antes de atualizar a tela
   _modalProfCards = colabs;
-  document.getElementById('modalProfSub').textContent = `${colabs.length} professores · ${unidadeAtual.nome}`;
+  const comPacto = colabs.filter(p => p.codigoPacto != null).length;
+  document.getElementById('modalProfSub').textContent = `${colabs.length} professores · ${comPacto} com cód. Pacto · ${unidadeAtual.nome}`;
   document.getElementById('equipeCardProfCount').textContent = colabs.length;
   filtrarModalProf();
 }
@@ -15493,6 +13977,8 @@ function abrirFormProfessor() {
 function fecharFormProfessor() {
   document.getElementById('formProfessor').style.display = 'none';
   document.getElementById('profNomeInput').value = '';
+  const codEl = document.getElementById('profCodigoPactoInput');
+  if (codEl) codEl.value = '';
 }
 
 async function salvarProfessor() {
@@ -15500,6 +13986,12 @@ async function salvarProfessor() {
   if(!nome) { mostrarToast('Informe o nome do professor.'); return; }
   if(!unidadeAtual) return;
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se o usuário trocar de unidade durante o await
+  const codManualRaw = (document.getElementById('profCodigoPactoInput')?.value || '').trim();
+  const codManual = codManualRaw !== '' ? Number(codManualRaw) : null;
+  if (codManualRaw !== '' && Number.isNaN(codManual)) {
+    mostrarToast('Código Pacto inválido.');
+    return;
+  }
 
   // Evita cadastro duplicado mesmo com grafia diferente
   const existente = await buscarProfPorNome(unidId, nome);
@@ -15508,8 +14000,31 @@ async function salvarProfessor() {
     return;
   }
 
-  await garantirCadastroProfessor(unidId, nome);
-  mostrarToast(`✓ ${nome} cadastrado.`);
+  const profId = await garantirCadastroProfessor(unidId, nome);
+
+  let codigoFinal = (codManual != null && !Number.isNaN(codManual)) ? codManual : null;
+  if (codigoFinal == null) {
+    try {
+      const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+      if (empresaId) {
+        const lista = await pactoBuscarProfessoresBI(empresaId);
+        const normalizados = (lista || []).map(pactoNormalizarProfessor).filter(Boolean);
+        const hit = pactoEncontrarProfessor(normalizados, { nome });
+        if (hit && hit.codigo != null) codigoFinal = Number(hit.codigo);
+      }
+    } catch (e) {
+      console.warn('[salvarProfessor] auto-match Pacto:', e);
+    }
+  }
+  if (codigoFinal != null && !Number.isNaN(codigoFinal)) {
+    await gravarCodigoPactoProfessor(unidId, profId, codigoFinal);
+  }
+
+  mostrarToast(
+    codigoFinal != null
+      ? `✓ ${nome} cadastrado · Pacto #${codigoFinal}`
+      : `✓ ${nome} cadastrado (sem cód. Pacto — use Vincular Pacto)`
+  );
   fecharFormProfessor();
   // Se o usuário ainda está na mesma unidade, atualiza a tela; se trocou de
   // unidade enquanto salvava, não mexe na tela da unidade nova por engano.
@@ -15547,6 +14062,8 @@ function filtrarModalProf() {
     if(_modalProfFiltro === 'atencao') return ul ? pe < 70 : true; // sem mês ainda conta como "atenção"
     if(_modalProfFiltro === 'radar_pendente') return !radarOk;
     if(_modalProfFiltro === 'radar_ok') return radarOk;
+    if(_modalProfFiltro === 'sem_pacto') return prof.codigoPacto == null;
+    if(_modalProfFiltro === 'fora_treino') return !!prof.foraTreinoWeb;
     return true;
   });
 
@@ -15573,7 +14090,7 @@ function filtrarModalProf() {
     const diasDesde = ciclo ? Math.floor((Date.now()-new Date(ciclo.criadoEm).getTime())/(1000*60*60*24)) : null;
     const precisaNovoCiclo = !ciclo || diasDesde >= 76;
     const mediaRt = temRt ? (Object.values(ciclo.notasRt).reduce((s,v)=>s+(v.nota||0),0)/12).toFixed(1) : null;
-    const nomeExibir = prof.nome.split(' ').slice(0,3).join(' ');
+    const nomeExibir = (prof.nome || '').trim();
     const badgeRadar = precisaNovoCiclo
       ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(224,31,45,.1);color:#e01f2d;border:1px solid rgba(224,31,45,.25)">Radar pendente</span>`
       : diasDesde>=61
@@ -15583,13 +14100,21 @@ function filtrarModalProf() {
     const badgeColab = temColab ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.2)">✓ Prof</span>` : '';
     const badgeMedia = mediaRt ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(167,139,250,.1);color:var(--c-purple);border:1px solid rgba(167,139,250,.2)">⭐ ${mediaRt}</span>` : '';
     const badgeSemMes = !ul ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--border);color:var(--muted);">Sem mês registrado ainda</span>` : '';
+    const badgePacto = prof.codigoPacto != null
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.25);">Pacto #${prof.codigoPacto}</span>`
+      : prof.foraTreinoWeb
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(245,166,35,.12);color:#c47d0e;border:1px solid rgba(245,166,35,.35);" title="Não retornado pelo BI da Pacto">Fora do Treino Web</span>`
+      : `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(224,31,45,.1);color:#e01f2d;border:1px solid rgba(224,31,45,.25);">Sem cód. Pacto</span>`;
+    const badgeForaExtra = (prof.foraTreinoWeb && prof.codigoPacto != null)
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(245,166,35,.12);color:#c47d0e;border:1px solid rgba(245,166,35,.35);">Fora do Treino Web</span>`
+      : '';
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">
       <div style="height:3px;background:${cor};width:100%;"></div>
       <div style="padding:12px 14px;flex:1;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;background:${cor};flex-shrink:0;">${ini}</div>
           <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.4;">${nomeExibir}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.4;word-break:break-word;">${esc(nomeExibir)}</div>
             <div style="font-size:10px;color:var(--muted);">${ul ? ul.total+' alunos' : 'Aguardando primeiro mês'}</div>
           </div>
         </div>
@@ -15603,10 +14128,11 @@ function filtrarModalProf() {
             <div style="font-size:9px;color:var(--muted);margin-top:1px;">vencidos</div>
           </div>
         </div>` : ''}
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgePacto}${badgeForaExtra}${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
       </div>
       <div style="padding:7px 14px;border-top:1px solid rgba(255,255,255,.06);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);" onclick="event.stopPropagation()">
         <button onclick="excluirProfessorCadastro('${prof.profId}','${esc(prof.nome)}')" style="background:none;border:none;color:#e01f2d;cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✕ Remover</button>
+        <button type="button" onclick="editarCodigoPactoUI('${prof.profId}','${esc(prof.nome)}',${prof.codigoPacto != null ? String(prof.codigoPacto) : 'null'})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✎ Cód. Pacto</button>
         <span style="cursor:pointer;color:${cor};" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">Ver perfil →</span>
       </div>
     </div>`;
@@ -15631,6 +14157,338 @@ async function excluirProfessorCadastro(profId, nome) {
       if(linha) linha.remove();
     }
   } catch(e) { mostrarToast('Erro ao remover: '+e.message); }
+}
+
+/** Nomes que provavelmente são a mesma pessoa (ex.: ALEX DE vs ALEX DE SOUSA ALMADA). */
+function nomesProvavelmenteMesmoProfessor(a, b) {
+  if (!a || !b) return false;
+  if (nomeParaId(a) === nomeParaId(b)) return true;
+  // "ALMADA ALMADA" e "ALMADA" viram a mesma chave após limpar repetição
+  if (nomeParaId(nomeLimpoProfessor(a)) === nomeParaId(nomeLimpoProfessor(b))) return true;
+  if (typeof pactoNomesCompativeis === 'function' && pactoNomesCompativeis(a, b)) return true;
+  if (typeof pactoTokensNome !== 'function') return false;
+  const ta = pactoTokensNome(a);
+  const tb = pactoTokensNome(b);
+  if (!ta.length || !tb.length) return false;
+  if (ta[0] !== tb[0]) return false;
+  if (ta[ta.length - 1] === tb[tb.length - 1] && ta.length >= 2 && tb.length >= 2) return true;
+  const short = ta.length <= tb.length ? ta : tb;
+  const long = ta.length <= tb.length ? tb : ta;
+  return short.every(t => long.includes(t));
+}
+
+/** Remove sobrenome repetido no fim: "ALMADA ALMADA" → "ALMADA". */
+function nomeLimpoProfessor(nome) {
+  const parts = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  const out = [];
+  for (const p of parts) {
+    if (!out.length || nomeParaId(out[out.length - 1]) !== nomeParaId(p)) out.push(p);
+  }
+  return out.join(' ');
+}
+
+function _scoreCadastroProfessor(p) {
+  let s = 0;
+  if (p.codigoPacto != null) s += 1000; // Pacto vence sempre
+  if (!p.foraTreinoWeb) s += 50;
+  const limpo = nomeLimpoProfessor(p.nome);
+  if (limpo === String(p.nome || '').trim()) s += 30;
+  s += limpo.split(/\s+/).length * 5;
+  s += limpo.length;
+  s += (p.meses && p.meses.length) ? p.meses.length * 20 : 0;
+  return s;
+}
+
+/** Aplica deduplicata. auto=true: sem confirmação (ao abrir Equipe). Retorna qtd removida. */
+async function _aplicarDeduplicataProfessores(unidId, opts) {
+  const auto = !!(opts && opts.auto);
+  const snap = await professoresRef(unidId).get();
+  const lista = snap.docs.map(d => {
+    const card = (_modalProfCards || []).find(c => c.profId === d.id);
+    return { profId: d.id, ...d.data(), meses: card ? card.meses : [] };
+  });
+
+  const parent = {};
+  lista.forEach(p => { parent[p.profId] = p.profId; });
+  function find(id) {
+    while (parent[id] !== id) id = parent[id] = parent[parent[id]];
+    return id;
+  }
+  function unite(a, b) {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  }
+
+  for (let i = 0; i < lista.length; i++) {
+    for (let j = i + 1; j < lista.length; j++) {
+      const a = lista[i], b = lista[j];
+      const mesmoCodigo = a.codigoPacto != null && b.codigoPacto != null
+        && String(a.codigoPacto) === String(b.codigoPacto);
+      if (mesmoCodigo || nomesProvavelmenteMesmoProfessor(a.nome, b.nome)) {
+        unite(a.profId, b.profId);
+      }
+    }
+  }
+
+  const porRaiz = new Map();
+  lista.forEach(p => {
+    const r = find(p.profId);
+    if (!porRaiz.has(r)) porRaiz.set(r, []);
+    porRaiz.get(r).push(p);
+  });
+  const grupos = Array.from(porRaiz.values()).filter(g => g.length > 1);
+  if (!grupos.length) return 0;
+
+  const plano = grupos.map(g => {
+    const ordenado = [...g].sort((a, b) => _scoreCadastroProfessor(b) - _scoreCadastroProfessor(a));
+    const manter = ordenado[0];
+    const remover = ordenado.slice(1);
+    const melhorNome = nomeLimpoProfessor(
+      [...g].sort((a, b) => nomeLimpoProfessor(b.nome).split(/\s+/).length - nomeLimpoProfessor(a.nome).split(/\s+/).length
+        || nomeLimpoProfessor(b.nome).length - nomeLimpoProfessor(a.nome).length)[0].nome
+    );
+    const melhorCod = g.map(x => x.codigoPacto).find(c => c != null);
+    return { manter, remover, melhorNome, melhorCod };
+  });
+
+  if (!auto) {
+    const resumo = plano.map(p =>
+      `Manter "${p.melhorNome || p.manter.nome}"${p.melhorCod != null ? ' (Pacto #' + p.melhorCod + ')' : ''}\n  Remover: ${p.remover.map(r => r.nome).join(', ')}`
+    ).join('\n\n');
+    const ok = await confirmDialog(
+      `Encontradas ${plano.length} duplicata(s) do mesmo professor:\n\n${resumo}\n\nMantém o que tem código Pacto. O histórico de meses permanece.`,
+      'Limpar duplicatas',
+      'warn'
+    );
+    if (!ok) return -1;
+  }
+
+  let removidos = 0;
+  for (const p of plano) {
+    const patch = {};
+    if (p.melhorNome && p.melhorNome !== p.manter.nome) patch.nome = p.melhorNome;
+    if (p.melhorCod != null && (p.manter.codigoPacto == null || String(p.manter.codigoPacto) !== String(p.melhorCod))) {
+      patch.codigoPacto = Number(p.melhorCod);
+      patch.foraTreinoWeb = false;
+    }
+    if (Object.keys(patch).length) {
+      await professoresRef(unidId).doc(p.manter.profId).set(patch, { merge: true });
+    }
+    for (const r of p.remover) {
+      await professoresRef(unidId).doc(r.profId).delete();
+      removidos++;
+      const tabDados = document.getElementById('tab-dados');
+      if (tabDados && tabDados.classList.contains('active')) {
+        const linha = Array.from(document.querySelectorAll('#gradeRows .prof-row')).find(row => {
+          const input = row.querySelector('[data-f="0"]');
+          return input && nomeParaId(input.value) === nomeParaId(r.nome);
+        });
+        if (linha) linha.remove();
+      }
+    }
+  }
+  return removidos;
+}
+
+async function limparDuplicatasProfessores() {
+  if (!unidadeAtual) { mostrarToast('Nenhuma unidade selecionada.'); return; }
+  const unidId = unidadeAtual.id;
+  const btn = document.getElementById('btnDedupProfs');
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Limpando…'; }
+  try {
+    const n = await _aplicarDeduplicataProfessores(unidId, { auto: false });
+    if (n === 0) mostrarToast('Nenhuma duplicata encontrada (nome ou cód. Pacto).');
+    else if (n > 0) {
+      mostrarToast(`✓ ${n} duplicata(s) removida(s). Vale o cadastro com Pacto.`);
+      if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf({ skipDedup: true });
+    }
+  } catch (e) {
+    console.error('[DEDUP PROFS]', e);
+    mostrarToast('Erro ao limpar duplicatas: ' + (e.message || e));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Limpar duplicatas';
+    }
+  }
+}
+
+/** Grava codigoPacto em professores e espelha em colaboradores (mesmo id). */
+async function gravarCodigoPactoProfessor(unidId, profId, codigo) {
+  if (!unidId || !profId || codigo == null || codigo === '') return false;
+  const cod = Number(codigo);
+  if (Number.isNaN(cod)) return false;
+  const payload = {
+    codigoPacto: cod,
+    foraTreinoWeb: false,
+    codigoPactoAtualizadoEm: new Date().toISOString(),
+    codigoPactoAtualizadoPor: (usuarioLogado && usuarioLogado.nome) || 'RT',
+  };
+  await professoresRef(unidId).doc(profId).set(payload, { merge: true });
+  try {
+    await colabRef(unidId).doc(profId).set(payload, { merge: true });
+  } catch (e) {
+    console.warn('[gravarCodigoPactoProfessor] espelho colaboradores:', e);
+  }
+  return true;
+}
+
+async function editarCodigoPactoUI(profId, nome, codigoAtual) {
+  if (!unidadeAtual || !profId) return;
+  const unidId = unidadeAtual.id;
+  const atual = codigoAtual != null && codigoAtual !== 'null' ? String(codigoAtual) : '';
+  const raw = window.prompt(
+    `Código Pacto (codigoPessoa) de ${nome}\n\nDeixe vazio para remover o vínculo.`,
+    atual
+  );
+  if (raw === null) return; // cancelou
+  const trimmed = String(raw).trim();
+  try {
+    if (!trimmed) {
+      await professoresRef(unidId).doc(profId).set({
+        codigoPacto: firebase.firestore.FieldValue.delete(),
+        codigoPactoAtualizadoEm: new Date().toISOString(),
+      }, { merge: true });
+      try {
+        await colabRef(unidId).doc(profId).set({
+          codigoPacto: firebase.firestore.FieldValue.delete(),
+        }, { merge: true });
+      } catch (e) {}
+      mostrarToast(`Vínculo Pacto removido de ${nome}.`);
+    } else {
+      const cod = Number(trimmed);
+      if (Number.isNaN(cod)) { mostrarToast('Código inválido.'); return; }
+      await gravarCodigoPactoProfessor(unidId, profId, cod);
+      mostrarToast(`✓ ${nome} → Pacto #${cod}`);
+    }
+    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf();
+  } catch (e) {
+    mostrarToast('Erro ao salvar código: ' + (e.message || e));
+  }
+}
+
+/**
+ * Casa professores da unidade com codigoPessoa da Pacto (BI) e grava no Firestore.
+ * Não sobrescreve quem já tem codigoPacto. Ambíguos (mesmo código para 2+) ficam de fora.
+ * Usa só o BI (mesmo webhook) — evita 2ª chamada ADM / rate limit.
+ */
+async function vincularCodigosPactoDaUnidade() {
+  if (!unidadeAtual) { mostrarToast('Nenhuma unidade selecionada.'); return; }
+  const unidId = unidadeAtual.id;
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    return;
+  }
+
+  const ok = await confirmDialog(
+    'Vincular automaticamente o código Pacto (codigoPessoa) de cada professor sem vínculo?\n\nQuem já tem código não é alterado. Casos ambíguos (dois nomes no mesmo código) ficam para ajuste manual.',
+    'Vincular Pacto',
+    'info'
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById('btnVincularPactoProfs');
+  const labelOriginal = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Vinculando…'; }
+
+  try {
+    // Reusa cache BI da sessão (não limpa) — 1 hit se o cache expirou
+    const [listaBi, snapP] = await Promise.all([
+      pactoBuscarProfessoresBI(empresaId),
+      professoresRef(unidId).get(),
+    ]);
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+
+    const biNorm = (listaBi || []).map(pactoNormalizarProfessor).filter(Boolean);
+    const pool = biNorm.filter(p => p.codigo != null);
+
+    if (!pool.length) {
+      mostrarToast('Pacto BI não retornou professores. Verifique o n8n e tente de novo.');
+      return;
+    }
+
+    const profs = snapP.docs.map(d => ({ profId: d.id, ...d.data() }));
+    const usados = new Set(
+      profs.filter(p => p.codigoPacto != null).map(p => String(p.codigoPacto))
+    );
+
+    let jaTinham = 0;
+    const propostas = []; // { profId, nome, codigo }
+    const semMatch = [];
+
+    for (const p of profs) {
+      if (p.codigoPacto != null) { jaTinham++; continue; }
+      const hit = pactoEncontrarProfessor(pool, { nome: p.nome });
+      if (!hit || hit.codigo == null) {
+        semMatch.push(p.nome);
+        continue;
+      }
+      propostas.push({ profId: p.profId, nome: p.nome, codigo: hit.codigo });
+    }
+
+    // Ambíguos: mesmo codigo proposto para mais de um professor
+    const porCod = new Map();
+    propostas.forEach(pr => {
+      const k = String(pr.codigo);
+      if (!porCod.has(k)) porCod.set(k, []);
+      porCod.get(k).push(pr);
+    });
+
+    let vinculados = 0;
+    const ambiguos = [];
+    const conflitoUsado = [];
+    const persistFora = [];
+
+    for (const [cod, grupo] of porCod.entries()) {
+      if (grupo.length > 1) {
+        grupo.forEach(g => ambiguos.push(g.nome));
+        continue;
+      }
+      const pr = grupo[0];
+      if (usados.has(cod)) {
+        conflitoUsado.push(pr.nome);
+        continue;
+      }
+      await gravarCodigoPactoProfessor(unidId, pr.profId, pr.codigo);
+      usados.add(cod);
+      vinculados++;
+    }
+
+    // Quem não bateu no BI → marca Fora do Treino Web
+    for (const nome of semMatch) {
+      const p = profs.find(x => x.nome === nome);
+      if (p && p.profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, p.profId, true));
+    }
+
+    if (persistFora.length) {
+      try { await Promise.all(persistFora); } catch (e) {}
+    }
+
+    console.group('[PACTO VÍNCULO]');
+    console.log({ vinculados, jaTinham, foraTreinoWeb: semMatch.length, ambiguos: ambiguos.length, conflitoUsado: conflitoUsado.length });
+    if (semMatch.length) console.warn('Fora do Treino Web:', semMatch);
+    if (ambiguos.length) console.warn('Ambíguos:', ambiguos);
+    console.groupEnd();
+
+    let msg = `Pacto: ${vinculados} vinculado(s)`;
+    if (jaTinham) msg += ` · ${jaTinham} já tinham`;
+    if (semMatch.length) msg += ` · ${semMatch.length} fora do Treino Web`;
+    if (ambiguos.length) msg += ` · ${ambiguos.length} ambíguo(s)`;
+    if (conflitoUsado.length) msg += ` · ${conflitoUsado.length} código já em uso`;
+    mostrarToast(msg);
+
+    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf();
+  } catch (e) {
+    console.error('[PACTO VÍNCULO]', e);
+    mostrarToast('Erro ao vincular Pacto: ' + (e.message || 'falha'));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = labelOriginal || 'Vincular Pacto';
+    }
+  }
 }
 
 // ── Estagiários ──────────────────────────────────────────────────────────────
@@ -21745,6 +20603,131 @@ function pdiItensArr(val) {
   return [];
 }
 
+// Resolve codigoPacto no Firestore (colaboradores ou professores)
+async function resolverCodigoPactoProfessor(unidId, colabId, nome) {
+  if (!unidId) return null;
+  try {
+    if (colabId) {
+      const d = await colabRef(unidId).doc(colabId).get();
+      if (d.exists && d.data().codigoPacto != null) return d.data().codigoPacto;
+    }
+  } catch (e) {}
+  try {
+    if (colabId) {
+      const p = await professoresRef(unidId).doc(colabId).get();
+      if (p.exists && p.data().codigoPacto != null) return p.data().codigoPacto;
+    }
+  } catch (e) {}
+  try {
+    if (nome) {
+      const byName = await buscarProfPorNome(unidId, nome);
+      if (byName && byName.codigoPacto != null) return byName.codigoPacto;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function _htmlMetricasCarteiraCards(metrics) {
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
+    ${metrics.map(m => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;text-align:center;">
+        <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:${m.c};line-height:1.2;">${m.v == null || m.v === '' ? '—' : m.v}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;">${m.l}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function _metricasDeFirestore(ult) {
+  if (!ult) return null;
+  const pe = pct(ult.emDia, ult.comTreino);
+  const dur = ult.duracao != null && ult.duracao !== '' ? ult.duracao + 'd' : '—';
+  return [
+    { l: 'Total', v: ult.total != null ? ult.total : '—', c: 'var(--text)' },
+    { l: 'Ativos', v: ult.ativo != null ? ult.ativo : '—', c: 'var(--text)' },
+    { l: 'Em dia', v: ult.emDia != null ? ult.emDia : '—', c: '#2ecc71' },
+    { l: '% em dia', v: pe + '%', c: corPct(pe) },
+    { l: 'Vencidos', v: ult.vencido != null ? ult.vencido : '—', c: (ult.vencido || 0) > 0 ? '#e01f2d' : '#2ecc71' },
+    { l: 'Sem treino', v: ult.semTreino != null ? ult.semTreino : '—', c: (ult.semTreino || 0) > 0 ? '#f5a623' : '#2ecc71' },
+    { l: 'Duração', v: dur, c: (ult.duracao || 0) > 50 ? '#f5a623' : 'var(--text)' },
+  ];
+}
+
+function _metricasDePacto(bi, ultFs) {
+  const pe = pct(bi.emDia, bi.comTreino);
+  const durFs = ultFs && ultFs.duracao != null && ultFs.duracao !== '' ? ultFs.duracao + 'd' : '—';
+  return [
+    { l: 'Total', v: bi.total != null ? bi.total : '—', c: 'var(--text)' },
+    { l: 'Ativos', v: bi.ativos != null ? bi.ativos : '—', c: 'var(--text)' },
+    { l: 'Em dia', v: bi.emDia != null ? bi.emDia : '—', c: '#2ecc71' },
+    { l: '% em dia', v: (bi.emDia != null && bi.comTreino != null) ? pe + '%' : '—', c: corPct(pe) },
+    { l: 'Vencidos', v: bi.vencidos != null ? bi.vencidos : '—', c: (bi.vencidos || 0) > 0 ? '#e01f2d' : '#2ecc71' },
+    { l: 'Sem treino', v: bi.semTreino != null ? bi.semTreino : '—', c: (bi.semTreino || 0) > 0 ? '#f5a623' : '#2ecc71' },
+    { l: 'Com treino', v: bi.comTreino != null ? bi.comTreino : '—', c: 'var(--text)' },
+    { l: 'Duração', v: durFs, c: (ultFs && ultFs.duracao > 50) ? '#f5a623' : 'var(--text)' },
+  ];
+}
+
+// Preenche o bloco CARTEIRA do Resumo com dados ao vivo da Pacto (fallback Firestore)
+async function preencherCarteiraPerfilAoVivo(opts) {
+  const host = document.getElementById(opts.hostId || 'perfilCarteiraAoVivo');
+  if (!host) return;
+  const unidId = opts.unidId;
+  const colabId = opts.colabId;
+  const nome = opts.nome;
+  const ult = opts.ult || null;
+  const rank = opts.rank || 0;
+  const delta = opts.delta;
+  const prevMes = opts.prevMes || null;
+
+  const badgesFs = `
+    ${delta !== null && delta !== undefined && prevMes ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${delta >= 0 ? 'rgba(46,204,113,.1)' : 'rgba(224,31,45,.1)'};color:${delta >= 0 ? '#2ecc71' : '#e01f2d'};">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta)} pts vs ${esc(prevMes.mesNome || '')}</span>` : ''}
+    ${rank > 0 ? `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(245,166,35,.1);color:var(--c-amber);">🏆 #${rank} no ranking</span>` : ''}
+  `;
+
+  const renderShell = (tituloExtra, badges, bodyHtml) => {
+    host.innerHTML = `
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        📊 Carteira${tituloExtra || ''}
+        ${badges || ''}
+      </div>
+      ${bodyHtml}`;
+  };
+
+  renderShell(' · carregando…', badgesFs, `
+    <div style="font-size:12px;color:var(--muted);padding:12px 0;">Buscando dados na Pacto…</div>`);
+
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if (!empresaId) {
+    const m = _metricasDeFirestore(ult);
+    renderShell(ult ? ` · ${esc(ult.mesNome)}` : '', badgesFs,
+      m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — unidade sem empresaId Pacto configurado.</div>`
+        : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>');
+    return;
+  }
+
+  try {
+    const codigoPacto = await resolverCodigoPactoProfessor(unidId, colabId, nome);
+    const bi = await pactoBuscarIndicadoresProfessor(unidId, { codigoPacto, nome });
+    if (bi) {
+      const pe = pct(bi.emDia, bi.comTreino);
+      renderShell(
+        ` · <span style="color:#e01f2d;">Ao vivo · Pacto</span>`,
+        `${badgesFs}<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(224,31,45,.08);color:#e01f2d;border:1px solid rgba(224,31,45,.2);">${pe}% em dia</span>`,
+        _htmlMetricasCarteiraCards(_metricasDePacto(bi, ult)) +
+        `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: API Pacto (BI)${bi.codigo != null ? ' · codigoPessoa ' + bi.codigo : ''}${ult && ult.mesNome ? ' · duração do mês ' + esc(ult.mesNome) : ''}.</div>`
+      );
+      return;
+    }
+  } catch (e) {
+    console.warn('[PACTO] Carteira perfil:', e);
+  }
+
+  const m = _metricasDeFirestore(ult);
+  renderShell(ult ? ` · ${esc(ult.mesNome)}` : '', badgesFs,
+    m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — Pacto sem match para este professor.</div>`
+      : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>');
+}
+
 function renderPerfilConteudoDin() {
     const el = document.getElementById('perfilConteudoDin');
   if(!el || !perfilColabAtual) return;
@@ -22177,24 +21160,10 @@ function renderPerfilConteudoDin() {
           </div>
         `}
       </div>
-      <!-- SEÇÃO: CARTEIRA -->
-      <div style="margin-bottom:20px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-          📊 Carteira${ult?` · ${ult.mesNome}`:''}
-          ${delta!==null?`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:${delta>=0?'rgba(46,204,113,.1)':'rgba(224,31,45,.1)'};color:${delta>=0?'#2ecc71':'#e01f2d'};">${delta>=0?'▲':'▼'} ${Math.abs(delta)} pts vs ${prevMes.mesNome}</span>`:''}
-          ${rank>0?`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:rgba(245,166,35,.1);color:var(--c-amber);">🏆 #${rank} no ranking</span>`:''}
-        </div>
-        ${ult ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
-          ${[
-            {l:'Total',v:ult.total,c:'#f0f0f2'},
-            {l:'Ativos',v:ult.ativo,c:'#f0f0f2'},
-            {l:'Em dia',v:ult.emDia,c:'#2ecc71'},
-            {l:'% em dia',v:pe+'%',c:corPct(pe)},
-            {l:'Vencidos',v:ult.vencido,c:ult.vencido>0?'#e01f2d':'#2ecc71'},
-            {l:'Sem treino',v:ult.semTreino,c:ult.semTreino>0?'#f5a623':'#2ecc71'},
-            {l:'Duração',v:ult.duracao+'d',c:ult.duracao>50?'#f5a623':'#f0f0f2'},
-          ].map(m=>'<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;text-align:center;"><div style="font-size:20px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+m.c+';line-height:1.2;">'+m.v+'</div><div style="font-size:10px;color:var(--muted);margin-top:3px;">'+m.l+'</div></div>').join('')}
-        </div>` : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>'}
+      <!-- SEÇÃO: CARTEIRA (Pacto ao vivo, fallback Firestore) -->
+      <div id="perfilCarteiraAoVivo" style="margin-bottom:20px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;">📊 Carteira · carregando…</div>
+        <div style="font-size:12px;color:var(--muted);padding:8px 0;">Buscando dados na Pacto…</div>
       </div>
 
       <!-- SEÇÃO: RADAR STATUS -->
@@ -22275,6 +21244,17 @@ function renderPerfilConteudoDin() {
           ${(isAdmin||isRt)&&ultimoCiclo?`<button onclick="gerarLinkColab('${colabId}','${ultimoCiclo.id}')" style="background:rgba(167,139,250,.1);color:var(--c-purple);border:1px solid rgba(167,139,250,.25);border-radius:6px;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">🔗 Link autoavaliação</button>`:''}
         </div>
       </div>`;
+    // Carteira ao vivo (Pacto) — async, não bloqueia o restante do Resumo
+    preencherCarteiraPerfilAoVivo({
+      hostId: 'perfilCarteiraAoVivo',
+      unidId: unidadeAtual && unidadeAtual.id,
+      colabId,
+      nome: perfilColabAtual.nome,
+      ult,
+      rank,
+      delta,
+      prevMes
+    });
     return;
       } catch(e) { console.error('[ERRO ABA RESUMO]', e.message, '\nStack:', e.stack ? e.stack.split("\\n").slice(0,4).join("\\n") : ''); }
   }

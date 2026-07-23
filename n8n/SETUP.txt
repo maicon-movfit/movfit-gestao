@@ -1,0 +1,63 @@
+MOV FIT — Proxy Pacto via n8n
+================================
+
+Objetivo: a key Bearer da Pacto fica SÓ nas Credentials do n8n.
+O front chama estes webhooks; o browser nunca vê a key.
+
+1) CREDENTIALS (n8n)
+--------------------
+Credentials → Add → Header Auth (ou "Header Auth" / Generic):
+  Name:   Pacto API Treino
+  Name:   Authorization
+  Value:  Bearer SUA_CHAVE_TREINO_AQUI
+
+Se a lista ADM usar outra key:
+  Name:   Pacto API Adm
+  Value:  Bearer SUA_CHAVE_ADM_AQUI
+
+(Se treino e adm forem a mesma key, use a mesma credential nos 3 HTTP Request.)
+
+2) IMPORTAR WORKFLOW
+--------------------
+n8n → Workflows → Import from File →
+  movfit-pacto-proxy.json
+
+No nó "Check proxy token":
+  - Defina a variável de ambiente N8N_MOVFIT_PROXY_TOKEN no servidor n8n
+    OU edite o nó e coloque o token fixo (mesmo valor de js/n8n-config.js).
+
+Nos nós HTTP Request:
+  - Selecione a credential Pacto criada no passo 1.
+  - BI e Carteira → credential Treino
+  - Professores → credential Adm (ou Treino se for a mesma)
+
+3) ATIVAR
+---------
+Salve e Active = ON.
+Anote a URL Production do Webhook (ex.:
+  https://SEU-N8N/webhook/movfit/pacto )
+
+4) FRONT
+--------
+Em js/n8n-config.js:
+  N8N_PACTO_BASE  = essa URL (sem barra no final)
+  N8N_PROXY_TOKEN = o mesmo token do Check proxy
+
+5) LIMPEZA FIRESTORE
+--------------------
+No console do app (logado como admin):
+  await limparChavesPactoFirestore()
+
+Depois ROTACIONE a key na Pacto (a antiga já vazou) e atualize a Credential no n8n.
+
+6) TESTE RÁPIDO (curl)
+----------------------
+curl -X POST "https://SEU-N8N/webhook/movfit/pacto" \
+  -H "Content-Type: application/json" \
+  -H "X-Movfit-Proxy: SEU_TOKEN" \
+  -d "{\"action\":\"bi\",\"empresaId\":\"1\"}"
+
+Ações aceitas:
+  bi           → lista BI professores
+  professores  → lista ADM professores-ativos
+  carteira     → { codigoPessoa, empresaId } → totais
