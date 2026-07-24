@@ -2365,6 +2365,12 @@ async function adicionarMes(mesObj, unidId) {
 }
 
 async function deletarMes(nome) {
+  const ok = await confirmDialog(
+    `Excluir "${nome}" do histórico?\n\nEsta ação não pode ser desfeita.`,
+    'Excluir mês',
+    'danger'
+  );
+  if(!ok) return;
   const uid=unidadeAtual&&unidadeAtual.id; if(!uid) return;
   try { await db.collection('unidades').doc(uid).collection('meses').doc(nome.replace(/[^a-zA-Z0-9]/g,'_')).delete(); }
   catch(e) {
@@ -8438,7 +8444,6 @@ async function renderHistorico(){
     return`<div class="hcard${sel?' selected':''}" id="hc-${esc(m.nome)}" onclick="toggleSel('${esc(m.nome)}')">
       <div class="hcard-top">
         <div class="hcard-month">${m.nome}${badgeHtml}</div>
-        <span class="hcard-del" onclick="event.stopPropagation();deletarMes('${esc(m.nome)}')" title="Excluir">✕</span>
         <div class="hcard-check">${sel?'✓':''}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -8469,12 +8474,13 @@ async function renderHistorico(){
       </div>
       ${durFlag}
       ${peBio!==null?`<div style="font-size:11px;color:var(--c-purple);margin-top:6px;">🔬 Bio em dia: ${peBio}%</div>`:''}
-      <div class="hcard-stats" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-        <div class="hstat">
-          <span class="hstat-lbl">${profs.length} prof. · ${tot.toLocaleString('pt-BR')} alunos</span>
-          <span onclick="event.stopPropagation();verPainelMes('${esc(m.nome)}')" style="color:var(--accent);cursor:pointer;font-size:11px;font-weight:600;">Ver painel →</span>
-          <span onclick="event.stopPropagation();editarMes('${esc(m.nome)}')" style="color:#f5a623;cursor:pointer;font-size:11px;font-weight:600;margin-left:12px;">✎ Editar →</span>
-          <span onclick="event.stopPropagation();renomearMes('${esc(m.nome)}')" style="color:var(--c-purple);cursor:pointer;font-size:11px;font-weight:600;margin-left:12px;">🏷 Renomear</span>
+      <div class="hcard-stats">
+        <div class="hstat-lbl">${profs.length} prof. · ${tot.toLocaleString('pt-BR')} alunos</div>
+        <div class="hcard-actions">
+          <span class="hcard-act hcard-act-panel" onclick="event.stopPropagation();verPainelMes('${esc(m.nome)}')">Ver painel</span>
+          <span class="hcard-act hcard-act-edit" onclick="event.stopPropagation();editarMes('${esc(m.nome)}')">✎ Editar</span>
+          <span class="hcard-act hcard-act-rename" onclick="event.stopPropagation();renomearMes('${esc(m.nome)}')">🏷 Renomear</span>
+          <span class="hcard-act hcard-act-del" onclick="event.stopPropagation();deletarMes('${esc(m.nome)}')" title="Excluir mês do histórico">🗑 Excluir</span>
         </div>
       </div>
     </div>`;
