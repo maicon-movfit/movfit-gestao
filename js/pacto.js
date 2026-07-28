@@ -18,16 +18,25 @@ function pactoLimparCacheDados() {
 }
 
 /**
- * POST no webhook n8n (action: bi | professores | carteira).
+ * action no webhook = academia (ex.: stmpremium24).
+ * tipo = operação Pacto (bi | professores | carteira).
  * Nunca envia nem recebe a key Pacto.
  * Cache TTL + single-flight: várias telas pedindo BI ao mesmo tempo = 1 HTTP.
  */
-async function pactoViaN8n(action, body = {}) {
+async function pactoViaN8n(tipo, body = {}) {
   if (typeof n8nPactoConfigOk !== 'function' || !n8nPactoConfigOk()) {
     console.error('[PACTO] Configure N8N_PACTO_BASE e N8N_PROXY_TOKEN em js/n8n-config.js (veja n8n/SETUP.txt).');
     return null;
   }
-  const cacheKey = action + JSON.stringify(body);
+  const unidId = body.unidId || pactoUnidadePorEmpresa(body.empresaId) || null;
+  const action = pactoActionWebhook(unidId);
+  if (!action) {
+    console.error('[PACTO] Sem action de webhook para a unidade', unidId || '(desconhecida)');
+    return null;
+  }
+  const { unidId: _omitUnid, ...rest } = body;
+  const payload = { action, tipo, ...rest };
+  const cacheKey = action + '|' + tipo + '|' + JSON.stringify(rest);
   const cached = _pactoCache[cacheKey];
   if (cached !== undefined && (Date.now() - (_pactoCacheAt[cacheKey] || 0)) < PACTO_CACHE_TTL_MS) {
     return cached;
@@ -43,10 +52,10 @@ async function pactoViaN8n(action, body = {}) {
           'Accept': 'application/json',
           'X-Movfit-Proxy': N8N_PROXY_TOKEN,
         },
-        body: JSON.stringify({ action, ...body }),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) {
-        console.error('[PACTO] Proxy n8n HTTP', resp.status, action);
+        console.error('[PACTO] Proxy n8n HTTP', resp.status, action, tipo);
         return null;
       }
       const data = await resp.json();
@@ -54,7 +63,7 @@ async function pactoViaN8n(action, body = {}) {
       _pactoCacheAt[cacheKey] = Date.now();
       return data;
     } catch (e) {
-      console.error('[PACTO] Erro de conexão com n8n:', e.message, action);
+      console.error('[PACTO] Erro de conexão com n8n:', e.message, action, tipo);
       return null;
     } finally {
       delete _pactoInflight[cacheKey];
@@ -64,32 +73,64 @@ async function pactoViaN8n(action, body = {}) {
   return _pactoInflight[cacheKey];
 }
 
-/** Extrai array de lista da resposta Pacto (array direto, content, ou 1ª chave array). */
+/** Extrai array de lista da resposta Pacto (array direto, content, ou [{content}]). */
 function pactoExtrairLista(data) {
   if (!data) return [];
-  if (Array.isArray(data)) return data;
+  if (Array.isArray(data)) {
+    // n8n às vezes devolve [{ content: [professores...] }]
+    if (data.length === 1 && data[0] && Array.isArray(data[0].content)) {
+      return data[0].content;
+    }
+    const comContent = data.find(x => x && Array.isArray(x.content));
+    if (comContent && !(data[0] && (data[0].professor || data[0].biTreinoTreinamentoDTO))) {
+      return comContent.content;
+    }
+    return data;
+  }
   if (data.content && Array.isArray(data.content)) return data.content;
   const chave = Object.keys(data).find(k => Array.isArray(data[k]));
   return chave ? data[chave] : [];
 }
 
+/** Ativos Treino Web = comTreino + semTreino. */
+function pactoCalcularAtivos(comTreino, semTreino) {
+  if (comTreino == null && semTreino == null) return null;
+  return Number(comTreino || 0) + Number(semTreino || 0);
+}
+
+/**
+ * Total carteira = Ativos + Trancados + Cancelados (opção A).
+ * Sem tranc/canc informados, Total = Ativos.
+ */
+function pactoCalcularTotal(ativos, trancado, cancelado) {
+  if (ativos == null || Number.isNaN(Number(ativos))) return null;
+  return Number(ativos) + Number(trancado || 0) + Number(cancelado || 0);
+}
+
 // ── Busca professores do Treino Web com indicadores já calculados ────
-async function pactoBuscarProfessoresBI(empresaId) {
-  const data = await pactoViaN8n('bi', { empresaId: String(empresaId) });
+async function pactoBuscarProfessoresBI(empresaId, unidId) {
+  const data = await pactoViaN8n('bi', {
+    empresaId: String(empresaId),
+    unidId: unidId || pactoUnidadePorEmpresa(empresaId) || undefined,
+  });
   return pactoExtrairLista(data);
 }
 
 // Mantida para compatibilidade — lista ADM via proxy
-async function pactoBuscarProfessores(empresaId) {
-  const data = await pactoViaN8n('professores', { empresaId: String(empresaId) });
+async function pactoBuscarProfessores(empresaId, unidId) {
+  const data = await pactoViaN8n('professores', {
+    empresaId: String(empresaId),
+    unidId: unidId || pactoUnidadePorEmpresa(empresaId) || undefined,
+  });
   return pactoExtrairLista(data);
 }
 
 // ── Busca dados de carteira de um professor (agregado no n8n) ─────────
-async function pactoBuscarCarteira(codigoPessoa, empresaId) {
+async function pactoBuscarCarteira(codigoPessoa, empresaId, unidId) {
   const data = await pactoViaN8n('carteira', {
     empresaId: String(empresaId),
     codigoPessoa: String(codigoPessoa),
+    unidId: unidId || pactoUnidadePorEmpresa(empresaId) || undefined,
   });
   if (!data) {
     return { ativos: 0, semTreino: 0, vencidos: 0, comTreino: 0, _raw: null };
@@ -117,14 +158,24 @@ function pactoNormalizarProfessor(p) {
   const prof = p.professor || p.pessoa || p;
   const bi   = p.biTreinoTreinamentoDTO || p.biTreinoTreinamento || {};
   const nome = prof.nome || prof.nomeCompleto || pactoNomeProfessor(p);
+  const comTreino = bi.alunosAtivosComTreino    ?? null;
+  const semTreino = bi.alunosAtivosSemTreino    ?? null;
+  const ativos = pactoCalcularAtivos(comTreino, semTreino);
+  const durMedio = bi.tempoPermanenciaPrograma && bi.tempoPermanenciaPrograma.medio != null
+    ? Number(bi.tempoPermanenciaPrograma.medio)
+    : null;
   return {
     codigo:    prof.codigoPessoa || prof.id || prof.codigo || p.codigoPessoa || null,
     nome:      nome || '?',
-    comTreino: bi.alunosAtivosComTreino    ?? null,
+    comTreino,
     emDia:     bi.alunosAtivosProgramaEmDia ?? null,
     vencidos:  bi.alunosProgramaVencidos   ?? null,
     aRenovar:  bi.alunosProgramaRenovar    ?? bi.alunosProgramaARenovar ?? null,
-    semTreino: bi.alunosAtivosSemTreino    ?? null,
+    semTreino,
+    ativos,
+    // Total sem tranc/canc do cadastro local — quem soma é a grade/perfil
+    total:     ativos,
+    duracao:   (durMedio != null && !Number.isNaN(durMedio) && durMedio > 0) ? Math.round(durMedio) : null,
   };
 }
 
@@ -170,10 +221,11 @@ function pactoEncontrarProfessor(normalizados, opts = {}) {
   return fuzzy || null;
 }
 
-async function pactoTesteDescoberta(empresaId) {
+async function pactoTesteDescoberta(empresaId, unidId) {
   console.group('[PACTO] Descoberta de professores (via n8n)');
-  console.log('empresaId:', empresaId, '| proxy:', typeof N8N_PACTO_BASE !== 'undefined' ? N8N_PACTO_BASE : '(não configurado)');
-  const profs = await pactoBuscarProfessores(empresaId);
+  const uid = unidId || pactoUnidadePorEmpresa(empresaId);
+  console.log('empresaId:', empresaId, '| unidId:', uid, '| action:', pactoActionWebhook(uid), '| proxy:', typeof N8N_PACTO_BASE !== 'undefined' ? N8N_PACTO_BASE : '(não configurado)');
+  const profs = await pactoBuscarProfessores(empresaId, uid);
   console.log('Total de professores retornados:', profs.length);
   if (profs.length > 0) {
     console.log('Estrutura do primeiro professor:', profs[0]);
@@ -186,20 +238,50 @@ async function pactoTesteDescoberta(empresaId) {
   return profs;
 }
 
+/** Header empresaId na Pacto — igual para todas as academias MOV FIT. */
 const PACTO_EMPRESA_POR_UNIDADE = {
   premium24: '1',
+  nrexpress: '1',
+  itaituba: '1',
+  medicilandia: '1',
+};
+
+/** action enviada ao webhook n8n (seleciona key/fluxo da academia). */
+const PACTO_ACTION_POR_UNIDADE = {
+  premium24: 'stmpremium24',
+  nrexpress: 'nrexpress',
+  itaituba: 'itaituba',
+  medicilandia: 'medicilandia',
 };
 
 function pactoEmpresaId(unidId) {
   if (!unidId) return null;
-  return PACTO_EMPRESA_POR_UNIDADE[unidId] || null;
+  if (!PACTO_EMPRESA_POR_UNIDADE[unidId]) return null;
+  // empresaId é '1' para todas; o que libera a unidade é ter action no webhook
+  if (!pactoActionWebhook(unidId)) return null;
+  return PACTO_EMPRESA_POR_UNIDADE[unidId];
+}
+
+/** Só resolve unidade se houver exatamente um match (empresaId é compartilhado = '1'). */
+function pactoUnidadePorEmpresa(empresaId) {
+  if (empresaId == null || empresaId === '') return null;
+  const eid = String(empresaId);
+  const hits = Object.entries(PACTO_EMPRESA_POR_UNIDADE)
+    .filter(([, v]) => String(v) === eid)
+    .map(([id]) => id);
+  return hits.length === 1 ? hits[0] : null;
+}
+
+function pactoActionWebhook(unidId) {
+  if (!unidId) return null;
+  return PACTO_ACTION_POR_UNIDADE[unidId] || null;
 }
 
 async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
   const empresaId = pactoEmpresaId(unidId);
   if (!empresaId) return null;
 
-  const lista = await pactoBuscarProfessoresBI(empresaId);
+  const lista = await pactoBuscarProfessoresBI(empresaId, unidId);
   if (!lista || !lista.length) return null;
 
   const normalizados = lista.map(pactoNormalizarProfessor).filter(Boolean);
@@ -207,7 +289,7 @@ async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
 
   if (!match) {
     try {
-      const adm = await pactoBuscarProfessores(empresaId);
+      const adm = await pactoBuscarProfessores(empresaId, unidId);
       const admNorm = (adm || []).map(raw => ({
         codigo: (raw.pessoa && (raw.pessoa.codigoPessoa || raw.pessoa.id)) || raw.codigoPessoa || raw.id || null,
         nome: pactoNomeProfessor(raw),
@@ -219,6 +301,7 @@ async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
           match = {
             ...admMatch,
             comTreino: null, emDia: null, vencidos: null, aRenovar: null, semTreino: null,
+            ativos: null, total: null, duracao: null,
           };
         }
       }
@@ -228,14 +311,14 @@ async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
 
   // Não chama carteira (4 hits na Pacto) se o BI já trouxe indicadores —
   // evita rate limit 429. Ativos = comTreino + semTreino.
-  let ativos = null;
+  let ativos = match.ativos != null ? match.ativos : null;
   const precisaCarteira = opts.forcarCarteira === true
     && match.codigo != null
     && match.comTreino == null
     && match.semTreino == null;
   if (precisaCarteira) {
     try {
-      const cart = await pactoBuscarCarteira(match.codigo, empresaId);
+      const cart = await pactoBuscarCarteira(match.codigo, empresaId, unidId);
       if (cart && cart.ativos != null) ativos = cart.ativos;
     } catch (e) {
       console.warn('[PACTO] carteira opcional falhou:', e);
@@ -244,9 +327,7 @@ async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
 
   const comTreino = match.comTreino;
   const semTreino = match.semTreino;
-  const totalEstimado =
-    ativos != null ? ativos
-    : (comTreino != null && semTreino != null ? Number(comTreino) + Number(semTreino) : comTreino);
+  if (ativos == null) ativos = pactoCalcularAtivos(comTreino, semTreino);
 
   return {
     fonte: 'pacto',
@@ -258,8 +339,9 @@ async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
     vencidos: match.vencidos,
     aRenovar: match.aRenovar,
     semTreino,
-    ativos: ativos != null ? ativos : totalEstimado,
-    total: totalEstimado,
+    ativos,
+    total: ativos,
+    duracao: match.duracao != null ? match.duracao : null,
   };
 }
 
