@@ -1,8 +1,9 @@
 // ════════════════════════════════════════════════════════════════════════
 // CONFIG n8n — proxy Pacto (a key Bearer NÃO fica aqui nem no Firestore)
 //
-// 1) No n8n: Credentials → Header Auth (ou similar) com Authorization: Bearer <key Pacto>
+// 1) No n8n: Credentials → Header Auth com Authorization: Bearer <key Pacto>
 // 2) Importe o workflow em n8n/movfit-pacto-proxy.json e ative
+//    Body: action=stmpremium24 (academia) + tipo=bi|professores|carteira
 // 3) Preencha abaixo a URL pública do webhook e o mesmo token do nó "Check proxy"
 // ════════════════════════════════════════════════════════════════════════
 

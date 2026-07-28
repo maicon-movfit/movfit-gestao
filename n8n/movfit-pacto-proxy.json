@@ -2,7 +2,7 @@
   "name": "MOVFIT Pacto Proxy",
   "meta": {
     "templateCredsSetupCompleted": false,
-    "description": "Proxy Pacto: key só nas Credentials. Front POST action=bi|professores|carteira + header X-Movfit-Proxy."
+    "description": "Proxy Pacto: key só nas Credentials. Front POST action=stmpremium24 (academia) + tipo=bi|professores|carteira + header X-Movfit-Proxy."
   },
   "nodes": [
     {
@@ -23,7 +23,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const headers = $input.first().json.headers || {};\nconst h = Object.fromEntries(\n  Object.entries(headers).map(([k, v]) => [String(k).toLowerCase(), v])\n);\nconst expected = $env.N8N_MOVFIT_PROXY_TOKEN || 'SUBSTITUA_TOKEN_AQUI';\nconst got = h['x-movfit-proxy'] || '';\nif (!expected || expected === 'SUBSTITUA_TOKEN_AQUI') {\n  return [{ json: { ok: false, status: 500, error: 'Configure N8N_MOVFIT_PROXY_TOKEN no n8n (ou edite este nó).' } }];\n}\nif (got !== expected) {\n  return [{ json: { ok: false, status: 401, error: 'Unauthorized' } }];\n}\nconst body = $input.first().json.body || $input.first().json;\nconst action = String(body.action || '').toLowerCase();\nconst empresaId = String(body.empresaId || '1');\nconst codigoPessoa = body.codigoPessoa != null ? String(body.codigoPessoa) : '';\nif (!['bi', 'professores', 'carteira'].includes(action)) {\n  return [{ json: { ok: false, status: 400, error: 'action deve ser bi | professores | carteira' } }];\n}\nif (action === 'carteira' && !codigoPessoa) {\n  return [{ json: { ok: false, status: 400, error: 'codigoPessoa obrigatório para carteira' } }];\n}\nreturn [{ json: { ok: true, action, empresaId, codigoPessoa } }];"
+        "jsCode": "const headers = $input.first().json.headers || {};\nconst h = Object.fromEntries(\n  Object.entries(headers).map(([k, v]) => [String(k).toLowerCase(), v])\n);\nconst expected = $env.N8N_MOVFIT_PROXY_TOKEN || 'SUBSTITUA_TOKEN_AQUI';\nconst got = h['x-movfit-proxy'] || '';\nif (!expected || expected === 'SUBSTITUA_TOKEN_AQUI') {\n  return [{ json: { ok: false, status: 500, error: 'Configure N8N_MOVFIT_PROXY_TOKEN no n8n (ou edite este nó).' } }];\n}\nif (got !== expected) {\n  return [{ json: { ok: false, status: 401, error: 'Unauthorized' } }];\n}\nconst body = $input.first().json.body || $input.first().json;\nlet action = String(body.action || '').toLowerCase();\nlet tipo = String(body.tipo || '').toLowerCase();\nconst empresaId = String(body.empresaId || '1');\nconst codigoPessoa = body.codigoPessoa != null ? String(body.codigoPessoa) : '';\nconst TIPOS = ['bi', 'professores', 'carteira'];\nif (TIPOS.includes(action) && !tipo) { tipo = action; action = 'stmpremium24'; }\nif (!action) {\n  return [{ json: { ok: false, status: 400, error: 'action (academia) obrigatório, ex: stmpremium24' } }];\n}\nif (!TIPOS.includes(tipo)) {\n  return [{ json: { ok: false, status: 400, error: 'tipo deve ser bi | professores | carteira' } }];\n}\nif (tipo === 'carteira' && !codigoPessoa) {\n  return [{ json: { ok: false, status: 400, error: 'codigoPessoa obrigatório para carteira' } }];\n}\nreturn [{ json: { ok: true, action, tipo, empresaId, codigoPessoa } }];"
       },
       "id": "check-token",
       "name": "Check proxy token",
@@ -71,7 +71,7 @@
               "conditions": {
                 "string": [
                   {
-                    "value1": "={{ $json.action }}",
+                    "value1": "={{ $json.tipo }}",
                     "value2": "bi"
                   }
                 ]
@@ -82,7 +82,7 @@
               "conditions": {
                 "string": [
                   {
-                    "value1": "={{ $json.action }}",
+                    "value1": "={{ $json.tipo }}",
                     "value2": "professores"
                   }
                 ]
@@ -93,7 +93,7 @@
               "conditions": {
                 "string": [
                   {
-                    "value1": "={{ $json.action }}",
+                    "value1": "={{ $json.tipo }}",
                     "value2": "carteira"
                   }
                 ]

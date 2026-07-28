@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MOV FIT — Central de Gestão [DBG-0688]</title>
+<title>MOV FIT — Central de Gestão</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/main.css?v=20260724">
 </head>
 <body>
 
@@ -2372,11 +2372,13 @@ async function deletarMes(nome) {
   );
   if(!ok) return;
   const uid=unidadeAtual&&unidadeAtual.id; if(!uid) return;
-  try { await db.collection('unidades').doc(uid).collection('meses').doc(nome.replace(/[^a-zA-Z0-9]/g,'_')).delete(); }
-  catch(e) {
+  try {
+    await db.collection('unidades').doc(uid).collection('meses').doc(nome.replace(/[^a-zA-Z0-9]/g,'_')).delete();
+    // onSnapshot atualiza o cache; não limpar localmente se o delete falhar
+  } catch(e) {
     console.warn('Firebase delete error:',e);
-    _cache[uid]=(_cache[uid]||[]).filter(m=>m.nome!==nome);
-    atualizarHeader(); atualizarSelects(); renderHistorico();
+    if(typeof mostrarToast==='function') mostrarToast('Não foi possível excluir. Tente novamente.');
+    else if(typeof alert==='function') alert('Não foi possível excluir. Tente novamente.');
   }
 }
 
@@ -3342,7 +3344,8 @@ async function limparGrade(){
 
 // Preenche a grade com indicadores ao vivo da Pacto (BI).
 // Não grava no Firestore — o RT ainda precisa clicar em "Registrar mês".
-// Não altera: Trancados, Cancelados, Duração, Bio*.
+// Não altera: Trancados, Cancelados, Bio* (somados no Total se já preenchidos).
+// Preenche: Total, Ativos, Com treino, Vencidos, Em dia, Sem treino, Duração (médio Pacto).
 // opts.auto: true → chamado ao abrir a grade (sem confirmação; toast mais discreto).
 let _gradePactoSeq = 0;
 async function preencherGradeComPacto(opts) {
@@ -3361,7 +3364,7 @@ async function preencherGradeComPacto(opts) {
 
   const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
   if (!empresaId) {
-    if (!auto) mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    if (!auto) mostrarToast('Esta unidade ainda não tem action Pacto (webhook) configurada.');
     return;
   }
 
@@ -3413,7 +3416,7 @@ async function preencherGradeComPacto(opts) {
       else mostrarToast(msgCfg);
       return;
     }
-    const lista = await pactoBuscarProfessoresBI(empresaId);
+    const lista = await pactoBuscarProfessoresBI(empresaId, unidId);
     if (!unidadeAtual || unidadeAtual.id !== unidId) return;
     if (seq != null && seq !== _gradePactoSeq) return;
     if (!lista || !lista.length) {
@@ -3427,7 +3430,7 @@ async function preencherGradeComPacto(opts) {
     let admNorm = [];
     if (!auto) {
       try {
-        const adm = await pactoBuscarProfessores(empresaId);
+        const adm = await pactoBuscarProfessores(empresaId, unidId);
         admNorm = (adm || []).map(raw => ({
           codigo: (raw.pessoa && (raw.pessoa.codigoPessoa || raw.pessoa.id)) || raw.codigoPessoa || raw.id || null,
           nome: pactoNomeProfessor(raw),
@@ -3528,17 +3531,29 @@ async function preencherGradeComPacto(opts) {
         return;
       }
 
-      const totalEst =
-        comTreino != null && semTreino != null
-          ? Number(comTreino) + Number(semTreino)
-          : comTreino;
+      // Opção A: Ativos = com+sem; Total = Ativos + Trancados + Cancelados (já na linha)
+      const ativos = typeof pactoCalcularAtivos === 'function'
+        ? pactoCalcularAtivos(comTreino, semTreino)
+        : (Number(comTreino || 0) + Number(semTreino || 0));
+      const readNum = (f) => {
+        const el = row.querySelector(`[data-f="${f}"]`);
+        if (!el || el.value === '' || el.value == null) return 0;
+        const n = Number(el.value);
+        return Number.isNaN(n) ? 0 : n;
+      };
+      const trancado = readNum(3);
+      const cancelado = readNum(4);
+      const total = typeof pactoCalcularTotal === 'function'
+        ? pactoCalcularTotal(ativos, trancado, cancelado)
+        : (ativos + trancado + cancelado);
 
-      setField(row, 1, totalEst);
-      setField(row, 2, totalEst);
+      setField(row, 1, total);
+      setField(row, 2, ativos);
       setField(row, 5, comTreino);
       setField(row, 6, vencidos);
       setField(row, 7, emDia);
       setField(row, 8, semTreino);
+      if (bi.duracao != null) setField(row, 9, bi.duracao);
 
       marcarLinhaForaTreinoWeb(row, false);
       if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, false));
@@ -8162,10 +8177,13 @@ function confirmDialog(msg, titulo, tipo) {
 
     bg.classList.add('open');
 
-    // Fechar com ESC
+    // Fechar com ESC; Enter confirma só em info/warn (não em danger)
     function onKeydown(e) {
       if(e.key === 'Escape') { cleanup(); resolve(false); }
-      if(e.key === 'Enter')  { cleanup(); resolve(true); }
+      if(e.key === 'Enter') {
+        if(tipo === 'danger') return;
+        cleanup(); resolve(true);
+      }
     }
     document.addEventListener('keydown', onKeydown);
 
@@ -10792,7 +10810,7 @@ function calcScoreRT(unidId, mesNomeAlvo) {
   execScore-=Math.min(10,foraDuracao*3);
   execScore=Math.max(0,execScore);
 
-  const vencidos=ultimo.professores.reduce((s,p)=>s+(p.semTreino||0),0);
+  const vencidos=ultimo.professores.reduce((s,p)=>s+(p.vencido||0),0);
   const total=resScore+acompScore+execScore;
   const badge=total>=80?{label:'Bom',cls:'pg'}:total>=60?{label:'Regular',cls:'pa'}:{label:'Crítico',cls:'pr'};
   return{total,resScore,acompScore,execScore,badge,pe,metaT,vencidos};
@@ -11032,17 +11050,38 @@ async function renderRTHome() {
   // ── Heatmap 5 dimensões ───────────────────────────────────────────────────
   if(elHeatmap && score) {
     const hmCor = (val, meta) => val >= meta ? 'rth-hm-g' : val >= meta-5 ? 'rth-hm-a' : 'rth-hm-r';
-    // Fechamento semanal
-    let pulsoStatus = '0/2'; let pulsoCls = 'rth-hm-gray';
+    // Fechamento semanal — lê `pulsos` (operacional); fallback legado `pulsoSemanal`
+    let pulsoStatus = '—'; let pulsoCls = 'rth-hm-gray';
     try {
       const semId = pulsoSemanaId ? pulsoSemanaId() : null;
-      if(semId) {
-        const pSnap = await db.collection('unidades').doc(unidadeAtual.id).collection('pulsoSemanal').doc(semId).get();
-        if(pSnap.exists) {
-          const pd = pSnap.data();
-          const dias = [pd.dia1,pd.dia2].filter(Boolean).length;
-          pulsoStatus = `${dias}/2`;
-          pulsoCls = dias >= 2 ? 'rth-hm-g' : dias === 1 ? 'rth-hm-a' : 'rth-hm-gray';
+      if(semId && unidadeAtual && unidadeAtual.id) {
+        let pd = null;
+        try {
+          const pSnap = typeof _pulsoRef === 'function'
+            ? await _pulsoRef(unidadeAtual.id, semId).get()
+            : await db.collection('unidades').doc(unidadeAtual.id).collection('pulsos').doc(semId).get();
+          if(pSnap.exists) pd = pSnap.data();
+        } catch(_) {}
+        if(!pd) {
+          const legacy = await db.collection('unidades').doc(unidadeAtual.id).collection('pulsoSemanal').doc(semId).get();
+          if(legacy.exists) pd = legacy.data();
+        }
+        if(pd) {
+          if(pd.dias && typeof pd.dias === 'object') {
+            const diasArr = Object.values(pd.dias);
+            const n = (pd.totais && pd.totais.diasPreenchidos != null)
+              ? Number(pd.totais.diasPreenchidos)
+              : (typeof pulsoDiaCompleto === 'function'
+                  ? diasArr.filter(pulsoDiaCompleto).length
+                  : diasArr.filter(d => d && d.preenchidoEm).length);
+            const denom = diasArr.length || 6;
+            pulsoStatus = `${n}/${denom}`;
+            pulsoCls = (pd.isCompleted || n >= denom) ? 'rth-hm-g' : n > 0 ? 'rth-hm-a' : 'rth-hm-gray';
+          } else {
+            const dias = [pd.dia1, pd.dia2].filter(Boolean).length;
+            pulsoStatus = `${dias}/2`;
+            pulsoCls = dias >= 2 ? 'rth-hm-g' : dias === 1 ? 'rth-hm-a' : 'rth-hm-gray';
+          }
         }
       }
     } catch(e){}
@@ -11084,10 +11123,11 @@ async function renderRTHome() {
 
     let pactoMap = {}; // codigo → BI normalizado
     let codigoPactoMap = {}; // profId | nomeParaId → codigo
-    if(unidadeAtual.id === 'premium24' && typeof pactoBuscarProfessoresBI === 'function') {
+    // Ao vivo Pacto para qualquer unidade com action/empresa mapeados (não só premium24)
+    const _eqEmpresaPacto = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidadeAtual.id) : null;
+    if(_eqEmpresaPacto && typeof pactoBuscarProfessoresBI === 'function') {
       try {
-        const EMPRESA_ID = pactoEmpresaId(unidadeAtual.id) || '1';
-        const pactoProfs = await pactoBuscarProfessoresBI(EMPRESA_ID);
+        const pactoProfs = await pactoBuscarProfessoresBI(_eqEmpresaPacto, unidadeAtual.id);
         (pactoProfs || []).forEach(raw => {
           const n = pactoNormalizarProfessor(raw);
           if(n && n.codigo != null) pactoMap[n.codigo] = n;
@@ -11130,9 +11170,24 @@ async function renderRTHome() {
         const emDia     = bi && bi.emDia != null ? Number(bi.emDia) : Number(p.emDia || 0);
         const vencidos  = bi && bi.vencidos != null ? Number(bi.vencidos) : Number(p.vencido || 0);
         const semTreino = bi && bi.semTreino != null ? Number(bi.semTreino) : Number(p.semTreino || 0);
-        const total = (comTreino || 0) + (semTreino || 0) || Number(p.total || p.ativo || 0) || comTreino;
+        // Opção A: Ativos = com+sem; Total = Ativos + trancados + cancelados do mês
+        const ativosEstim = typeof pactoCalcularAtivos === 'function'
+          ? pactoCalcularAtivos(comTreino, semTreino)
+          : (Number(comTreino || 0) + Number(semTreino || 0));
+        const ativos = bi
+          ? (ativosEstim != null ? ativosEstim : Number(p.ativo || 0))
+          : (Number(p.ativo || 0) || ativosEstim || 0);
+        const tranc = Number(p.trancado || 0);
+        const canc = Number(p.cancelado || 0);
+        const total = bi
+          ? (typeof pactoCalcularTotal === 'function'
+              ? pactoCalcularTotal(ativos, tranc, canc)
+              : (Number(ativos || 0) + tranc + canc))
+          : (Number(p.total || 0) || ativos || Number(comTreino || 0));
         const pct = comTreino > 0 ? Math.round(emDia / comTreino * 100) : 0;
-        const duracao = p.duracao != null && p.duracao !== '' ? Number(p.duracao) : null;
+        const duracao = (bi && bi.duracao != null)
+          ? Number(bi.duracao)
+          : (p.duracao != null && p.duracao !== '' ? Number(p.duracao) : null);
         return {
           ...p,
           _bi: bi,
@@ -11142,6 +11197,7 @@ async function renderRTHome() {
           _vencidos: vencidos,
           _semTreino: semTreino,
           _total: total,
+          _ativos: ativos,
           _pct: pct,
           _duracao: duracao,
         };
@@ -11197,7 +11253,7 @@ async function renderRTHome() {
             </div>
             <div class="rth-eq-metrics">
               ${m(p._total, 'Total')}
-              ${m(p._total, 'Ativos')}
+              ${m(p._ativos, 'Ativos')}
               ${m(p._emDia, 'Em dia', 'var(--c-green)')}
               ${m(pct + '%', '% em dia', cor)}
               ${m(p._vencidos, 'Vencidos', p._vencidos > 0 ? 'var(--c-red)' : undefined)}
@@ -14013,7 +14069,7 @@ async function salvarProfessor() {
     try {
       const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
       if (empresaId) {
-        const lista = await pactoBuscarProfessoresBI(empresaId);
+        const lista = await pactoBuscarProfessoresBI(empresaId, unidId);
         const normalizados = (lista || []).map(pactoNormalizarProfessor).filter(Boolean);
         const hit = pactoEncontrarProfessor(normalizados, { nome });
         if (hit && hit.codigo != null) codigoFinal = Number(hit.codigo);
@@ -14384,7 +14440,7 @@ async function vincularCodigosPactoDaUnidade() {
   const unidId = unidadeAtual.id;
   const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
   if (!empresaId) {
-    mostrarToast('Esta unidade ainda não tem empresaId Pacto configurado.');
+    mostrarToast('Esta unidade ainda não tem action Pacto (webhook) configurada.');
     return;
   }
 
@@ -14402,7 +14458,7 @@ async function vincularCodigosPactoDaUnidade() {
   try {
     // Reusa cache BI da sessão (não limpa) — 1 hit se o cache expirou
     const [listaBi, snapP] = await Promise.all([
-      pactoBuscarProfessoresBI(empresaId),
+      pactoBuscarProfessoresBI(empresaId, unidId),
       professoresRef(unidId).get(),
     ]);
     if (!unidadeAtual || unidadeAtual.id !== unidId) return;
@@ -20660,16 +20716,30 @@ function _metricasDeFirestore(ult) {
 
 function _metricasDePacto(bi, ultFs) {
   const pe = pct(bi.emDia, bi.comTreino);
-  const durFs = ultFs && ultFs.duracao != null && ultFs.duracao !== '' ? ultFs.duracao + 'd' : '—';
+  const ativos = bi.ativos != null
+    ? bi.ativos
+    : (typeof pactoCalcularAtivos === 'function'
+        ? pactoCalcularAtivos(bi.comTreino, bi.semTreino)
+        : (Number(bi.comTreino || 0) + Number(bi.semTreino || 0)));
+  const tranc = ultFs ? Number(ultFs.trancado || 0) : 0;
+  const canc = ultFs ? Number(ultFs.cancelado || 0) : 0;
+  const total = bi.total != null && bi.total !== ativos
+    ? bi.total
+    : (typeof pactoCalcularTotal === 'function'
+        ? pactoCalcularTotal(ativos, tranc, canc)
+        : (Number(ativos || 0) + tranc + canc));
+  const durNum = bi.duracao != null ? bi.duracao
+    : (ultFs && ultFs.duracao != null && ultFs.duracao !== '' ? ultFs.duracao : null);
+  const dur = durNum != null ? durNum + 'd' : '—';
   return [
-    { l: 'Total', v: bi.total != null ? bi.total : '—', c: 'var(--text)' },
-    { l: 'Ativos', v: bi.ativos != null ? bi.ativos : '—', c: 'var(--text)' },
+    { l: 'Total', v: total != null ? total : '—', c: 'var(--text)' },
+    { l: 'Ativos', v: ativos != null ? ativos : '—', c: 'var(--text)' },
     { l: 'Em dia', v: bi.emDia != null ? bi.emDia : '—', c: '#2ecc71' },
     { l: '% em dia', v: (bi.emDia != null && bi.comTreino != null) ? pe + '%' : '—', c: corPct(pe) },
     { l: 'Vencidos', v: bi.vencidos != null ? bi.vencidos : '—', c: (bi.vencidos || 0) > 0 ? '#e01f2d' : '#2ecc71' },
     { l: 'Sem treino', v: bi.semTreino != null ? bi.semTreino : '—', c: (bi.semTreino || 0) > 0 ? '#f5a623' : '#2ecc71' },
     { l: 'Com treino', v: bi.comTreino != null ? bi.comTreino : '—', c: 'var(--text)' },
-    { l: 'Duração', v: durFs, c: (ultFs && ultFs.duracao > 50) ? '#f5a623' : 'var(--text)' },
+    { l: 'Duração', v: dur, c: (durNum || 0) > 50 ? '#f5a623' : 'var(--text)' },
   ];
 }
 
@@ -20706,7 +20776,7 @@ async function preencherCarteiraPerfilAoVivo(opts) {
   if (!empresaId) {
     const m = _metricasDeFirestore(ult);
     renderShell(ult ? ` · ${esc(ult.mesNome)}` : '', badgesFs,
-      m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — unidade sem empresaId Pacto configurado.</div>`
+      m ? _htmlMetricasCarteiraCards(m) + `<div style="font-size:10px;color:var(--muted);margin-top:8px;">Fonte: mês salvo (Firestore) — unidade sem action Pacto no webhook.</div>`
         : '<div style="font-size:13px;color:var(--muted);padding:16px 0;">Nenhum dado de carteira.</div>');
     return;
   }
@@ -26739,7 +26809,7 @@ async function montarDadosRelatorioRT(unidId, emailRT, mesNome) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // REFLEXÃO SEMANAL — Modal de 3 perguntas sequenciais
-// Salva em pulsoSemanal/{semId}.reflexao{1,2,3} e inclui no PDF
+// Salva reflexão em pulsos/{semId} (+ legado pulsoSemanal) e inclui no PDF
 // ══════════════════════════════════════════════════════════════════════════════
 const _REFLEXAO_PERGUNTAS = [
   {
@@ -26827,18 +26897,29 @@ function _reflexaoVoltar() {
 }
 
 async function _reflexaoSalvarFirestore(unidId, semId, respostas) {
+  const payload = {
+    reflexao1: respostas[0],
+    reflexao2: respostas[1],
+    reflexao3: respostas[2],
+    reflexaoEm: new Date().toISOString(),
+    reflexaoRTNome: usuarioLogado?.nome || ''
+  };
+  try {
+    // Fonte operacional (mesma do Pulso diário)
+    const ref = typeof _pulsoRef === 'function'
+      ? _pulsoRef(unidId, semId)
+      : db.collection('unidades').doc(unidId).collection('pulsos').doc(semId);
+    await ref.set(payload, { merge: true });
+  } catch(e) {
+    console.warn('[REFLEXAO] erro ao salvar em pulsos:', e);
+  }
+  // Mantém legado para leitores antigos / PDF
   try {
     await db.collection('unidades').doc(unidId)
       .collection('pulsoSemanal').doc(semId)
-      .set({
-        reflexao1: respostas[0],
-        reflexao2: respostas[1],
-        reflexao3: respostas[2],
-        reflexaoEm: new Date().toISOString(),
-        reflexaoRTNome: usuarioLogado?.nome || ''
-      }, { merge: true });
+      .set(payload, { merge: true });
   } catch(e) {
-    console.warn('[REFLEXAO] erro ao salvar:', e);
+    console.warn('[REFLEXAO] erro ao salvar legado:', e);
   }
 }
 

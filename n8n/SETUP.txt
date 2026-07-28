@@ -55,9 +55,14 @@ Depois ROTACIONE a key na Pacto (a antiga já vazou) e atualize a Credential no 
 curl -X POST "https://SEU-N8N/webhook/movfit/pacto" \
   -H "Content-Type: application/json" \
   -H "X-Movfit-Proxy: SEU_TOKEN" \
-  -d "{\"action\":\"bi\",\"empresaId\":\"1\"}"
+  -d "{\"action\":\"stmpremium24\",\"tipo\":\"bi\",\"empresaId\":\"1\"}"
 
-Ações aceitas:
-  bi           → lista BI professores
-  professores  → lista ADM professores-ativos
-  carteira     → { codigoPessoa, empresaId } → totais
+Body:
+  action    → academia / key no n8n (ex.: stmpremium24 = Premium 24h)
+  tipo      → bi | professores | carteira
+  empresaId → sempre "1" (todas as academias MOV FIT)
+  codigoPessoa (só carteira)
+
+A key diferente por academia é escolhida no n8n pelo action, não pelo empresaId.
+
+Legado: se action for bi|professores|carteira sem tipo, o template assume action=stmpremium24.
