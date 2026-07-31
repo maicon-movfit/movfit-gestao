@@ -3302,14 +3302,16 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
 
 
-    if(snap.empty) {
+    const profs = snap.docs
+      .map(d=>({profId:d.id,...d.data()}))
+      .filter(professorEstaAtivo);
+    if(!profs.length) {
       rows.innerHTML = `<div style="text-align:center;padding:30px 16px;">
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">Nenhum professor cadastrado nesta unidade</div>
         <div style="font-size:12px;color:var(--muted);">Vá em Equipe → Professores → "+ Adicionar" para cadastrar o primeiro.</div>
       </div>`;
       return;
     }
-    const profs = snap.docs.map(d=>({profId:d.id,...d.data()}));
     const dados = profs.map(p => {
       const row = [p.nome, ...Array(12).fill('')];
       if (p.foraTreinoWeb) row._foraTreinoWeb = true;
@@ -3461,6 +3463,7 @@ async function preencherGradeComPacto(opts) {
       const snapP = await professoresRef(unidId).get();
       snapP.forEach(doc => {
         const d = doc.data() || {};
+        if (!professorEstaAtivo(d)) return;
         if (d.nome) {
           const k = nomeParaId(d.nome);
           profIdPorNome.set(k, doc.id);
@@ -13801,9 +13804,25 @@ function colabRef(unidId){return db.collection('unidades').doc(unidId).collectio
 // sem quebrar nenhum vínculo, porque o ID nunca muda.
 function professoresRef(unidId){return db.collection('unidades').doc(unidId).collection('professores');}
 
+/** Cadastros sem o campo `ativo` (legado) contam como ativos. Soft-delete usa ativo:false. */
+function professorEstaAtivo(p){
+  return !p || p.ativo !== false;
+}
+
+async function reativarProfessorCadastro(unidId, profId, patch){
+  if(!unidId || !profId) return;
+  await professoresRef(unidId).doc(profId).set({
+    ativo: true,
+    reativadoEm: new Date().toISOString(),
+    reativadoPor: usuarioLogado?.nome || 'RT',
+    ...(patch || {})
+  }, { merge: true });
+}
+
 // Busca o profId de um professor pelo nome, tentando casar via nomeParaId
 // (tolerante a variações de formatação). Usado para vincular uma linha da
 // grade de "Registrar mês" a um cadastro já existente, sem criar duplicata.
+// Inclui inativos (soft-delete) para reaproveitar o mesmo profId ao reativar.
 async function buscarProfPorNome(unidId, nome){
   try {
     const snap = await professoresRef(unidId).get();
@@ -13819,14 +13838,20 @@ async function buscarProfPorNome(unidId, nome){
 
 // Garante que existe um cadastro de professor para esse nome nesta unidade —
 // se já existir (mesmo com grafia levemente diferente), reaproveita o profId
-// existente; se não existir, cria um novo com ID gerado pelo Firestore.
+// existente; se estiver soft-deletado, reativa; se não existir, cria um novo.
 async function garantirCadastroProfessor(unidId, nome){
   const existente = await buscarProfPorNome(unidId, nome);
-  if(existente) return existente.profId;
+  if(existente) {
+    if(!professorEstaAtivo(existente)) {
+      await reativarProfessorCadastro(unidId, existente.profId, { nome: nome.trim() });
+    }
+    return existente.profId;
+  }
   const novoDoc = professoresRef(unidId).doc(); // ID aleatório gerado pelo Firestore
   await novoDoc.set({
     nome: nome.trim(),
     profId: novoDoc.id,
+    ativo: true,
     criadoEm: new Date().toISOString(),
     criadoPor: usuarioLogado?.nome || 'RT'
   });
@@ -13859,17 +13884,27 @@ async function vincularProfessoresAoCadastro(unidId, profs){
     if(!existente && typeof nomesProvavelmenteMesmoProfessor === 'function') {
       existente = cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome)) || null;
     }
-    if(existente) { p.profId = existente.profId; continue; }
+    if(existente) {
+      p.profId = existente.profId;
+      if(!professorEstaAtivo(existente)) {
+        try {
+          await reativarProfessorCadastro(unidId, existente.profId, { nome: p.nome.trim() });
+          existente.ativo = true;
+        } catch(eRe){ console.warn('[vincularProfessoresAoCadastro] erro ao reativar', p.nome, eRe); }
+      }
+      continue;
+    }
     try {
       const novoDoc = professoresRef(unidId).doc();
       await novoDoc.set({
         nome: p.nome.trim(),
         profId: novoDoc.id,
+        ativo: true,
         criadoEm: new Date().toISOString(),
         criadoPor: usuarioLogado?.nome || 'RT'
       });
       p.profId = novoDoc.id;
-      const novo = { profId: novoDoc.id, nome: p.nome };
+      const novo = { profId: novoDoc.id, nome: p.nome, ativo: true };
       cadastrados.push(novo);
       cadastradosPorChave.set(chave, novo);
     } catch(e3){ console.warn('[vincularProfessoresAoCadastro] erro ao cadastrar', p.nome, e3); }
@@ -13881,6 +13916,8 @@ async function vincularProfessoresAoCadastro(unidId, profs){
 // Professores é aberta, para que ninguém "suma" da grade ao migrar do fluxo
 // antigo (cadastro implícito ao salvar mês) para o fluxo novo (cadastro
 // obrigatório antes de aparecer na grade).
+// Soft-delete (ativo:false) NÃO é recriado: o doc inativo permanece e bloqueia
+// a ressurreição a partir do histórico — Remover da equipe fica efetivo.
 // Lock por unidade para evitar execuções simultâneas
 const _sincLock = {};
 
@@ -13893,6 +13930,7 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
   // Busca a lista de professores já cadastrados UMA VEZ, em vez de relê-la
   // a cada nome encontrado no histórico (evitava dezenas de leituras
   // repetidas da mesma coleção numa unidade com muitos meses salvos).
+  // Inclui inativos de propósito: impedem recriar quem foi removido da equipe.
   let cadastrados;
   try {
     const snap = await professoresRef(unidId).get();
@@ -13908,7 +13946,7 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
       const chave = nomeParaId(p.nome);
       if(nomesVistos.has(chave)) continue;
       nomesVistos.add(chave);
-      if(cadastradosPorChave.has(chave)) continue;
+      if(cadastradosPorChave.has(chave)) continue; // ativo ou inativo — não recria
       // Já existe com nome parecido (ex.: histórico "ALMADA ALMADA" vs cadastro "ALMADA")
       const parecido = typeof nomesProvavelmenteMesmoProfessor === 'function'
         ? cadastrados.find(c => nomesProvavelmenteMesmoProfessor(c.nome, p.nome))
@@ -13922,10 +13960,11 @@ async function sincronizarCadastroProfessoresComHistorico(unidId){
         await novoDoc.set({
           nome: p.nome.trim(),
           profId: novoDoc.id,
+          ativo: true,
           criadoEm: new Date().toISOString(),
           criadoPor: usuarioLogado?.nome || 'RT'
         });
-        const novo = { profId: novoDoc.id, nome: p.nome };
+        const novo = { profId: novoDoc.id, nome: p.nome, ativo: true };
         cadastrados.push(novo);
         cadastradosPorChave.set(chave, novo);
       } catch(e){ console.warn('[sincronizarCadastroProfessoresComHistorico] erro ao cadastrar', p.nome, e); }
@@ -13989,7 +14028,10 @@ async function renderModalProf(opts) {
 
   const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
-  if(snap.empty) {
+  const profsBase = snap.docs
+    .map(d=>({profId:d.id,...d.data()}))
+    .filter(professorEstaAtivo);
+  if(!profsBase.length) {
     document.getElementById('modalProfSub').textContent = '0 professores cadastrados';
     document.getElementById('equipeCardProfCount').textContent = '0';
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px 0;">
@@ -14000,7 +14042,6 @@ async function renderModalProf(opts) {
     return;
   }
 
-  const profsBase = snap.docs.map(d=>({profId:d.id,...d.data()}));
   const hist = getHistorico(unidId);
 
 
@@ -14055,14 +14096,22 @@ async function salvarProfessor() {
     return;
   }
 
-  // Evita cadastro duplicado mesmo com grafia diferente
+  // Evita cadastro duplicado mesmo com grafia diferente (reativa se estava removido)
   const existente = await buscarProfPorNome(unidId, nome);
-  if(existente) {
+  if(existente && professorEstaAtivo(existente)) {
     mostrarToast(`Já existe um professor cadastrado como "${existente.nome}".`);
     return;
   }
 
-  const profId = await garantirCadastroProfessor(unidId, nome);
+  let profId;
+  let foiReativado = false;
+  if(existente && !professorEstaAtivo(existente)) {
+    profId = existente.profId;
+    await reativarProfessorCadastro(unidId, profId, { nome });
+    foiReativado = true;
+  } else {
+    profId = await garantirCadastroProfessor(unidId, nome);
+  }
 
   let codigoFinal = (codManual != null && !Number.isNaN(codManual)) ? codManual : null;
   if (codigoFinal == null) {
@@ -14082,10 +14131,11 @@ async function salvarProfessor() {
     await gravarCodigoPactoProfessor(unidId, profId, codigoFinal);
   }
 
+  const verbo = foiReativado ? 'reativado' : 'cadastrado';
   mostrarToast(
     codigoFinal != null
-      ? `✓ ${nome} cadastrado · Pacto #${codigoFinal}`
-      : `✓ ${nome} cadastrado (sem cód. Pacto — use Vincular Pacto)`
+      ? `✓ ${nome} ${verbo} · Pacto #${codigoFinal}`
+      : `✓ ${nome} ${verbo} (sem cód. Pacto — use Vincular Pacto)`
   );
   fecharFormProfessor();
   // Se o usuário ainda está na mesma unidade, atualiza a tela; se trocou de
@@ -14202,22 +14252,28 @@ function filtrarModalProf() {
 }
 
 async function excluirProfessorCadastro(profId, nome) {
-  if(!(await confirmDialog(`Remover "${nome}" do cadastro de professores?\n\nIsso retira o professor da grade de "Registrar mês" e da listagem ativa.\nO histórico de meses, ciclos e PDI já salvos NÃO é apagado — só fica fora da lista de quem ainda está na equipe.`, 'Remover professor', 'danger'))) return;
+  if(!(await confirmDialog(`Remover "${nome}" do cadastro de professores?\n\nIsso retira o professor da grade de "Registrar mês" e da listagem ativa.\nO histórico de meses, ciclos e PDI já salvos NÃO é apagado — só fica fora da lista de quem ainda está na equipe.\n\nSe cadastrar de novo com o mesmo nome, o perfil é reativado.`, 'Remover professor', 'danger'))) return;
   if(!unidadeAtual) return;
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante a confirmação/exclusão
+  if(!profId) { mostrarToast('Não foi possível remover: id do professor ausente.'); return; }
   try {
-    await professoresRef(unidId).doc(profId).delete();
+    // Soft-delete: mantém o doc com ativo:false para a sync com histórico
+    // NÃO recriar o professor ao abrir Equipe / Registrar mês.
+    await professoresRef(unidId).doc(profId).set({
+      ativo: false,
+      removidoEm: new Date().toISOString(),
+      removidoPor: usuarioLogado?.nome || 'RT'
+    }, { merge: true });
     mostrarToast(`${nome} removido do cadastro ativo.`);
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — não mexe na tela errada
+    // Remove da grade imediatamente (mesmo se a aba Dados não estiver ativa)
+    const linha = Array.from(document.querySelectorAll('#gradeRows .prof-row')).find(row => {
+      const input = row.querySelector('[data-f="0"]');
+      return input && nomeParaId(input.value) === nomeParaId(nome);
+    });
+    if(linha) linha.remove();
+    if(typeof feedbackGrade === 'function') feedbackGrade();
     renderModalProf();
-    const tabDados = document.getElementById('tab-dados');
-    if(tabDados && tabDados.classList.contains('active')) {
-      const linha = Array.from(document.querySelectorAll('#gradeRows .prof-row')).find(row => {
-        const input = row.querySelector('[data-f="0"]');
-        return input && nomeParaId(input.value) === nomeParaId(nome);
-      });
-      if(linha) linha.remove();
-    }
   } catch(e) { mostrarToast('Erro ao remover: '+e.message); }
 }
 
@@ -14251,6 +14307,7 @@ function nomeLimpoProfessor(nome) {
 
 function _scoreCadastroProfessor(p) {
   let s = 0;
+  if (professorEstaAtivo(p)) s += 2000; // ativo vence inativo (soft-delete)
   if (p.codigoPacto != null) s += 1000; // Pacto vence sempre
   if (!p.foraTreinoWeb) s += 50;
   const limpo = nomeLimpoProfessor(p.nome);
@@ -14265,10 +14322,11 @@ function _scoreCadastroProfessor(p) {
 async function _aplicarDeduplicataProfessores(unidId, opts) {
   const auto = !!(opts && opts.auto);
   const snap = await professoresRef(unidId).get();
+  // Só deduplica ativos — inativos (soft-delete) ficam fora para não ressussitar nem apagar o "bloqueio" do histórico
   const lista = snap.docs.map(d => {
     const card = (_modalProfCards || []).find(c => c.profId === d.id);
     return { profId: d.id, ...d.data(), meses: card ? card.meses : [] };
-  });
+  }).filter(professorEstaAtivo);
 
   const parent = {};
   lista.forEach(p => { parent[p.profId] = p.profId; });
@@ -14471,9 +14529,10 @@ async function vincularCodigosPactoDaUnidade() {
       return;
     }
 
-    const profs = snapP.docs.map(d => ({ profId: d.id, ...d.data() }));
+    const todos = snapP.docs.map(d => ({ profId: d.id, ...d.data() }));
+    const profs = todos.filter(professorEstaAtivo);
     const usados = new Set(
-      profs.filter(p => p.codigoPacto != null).map(p => String(p.codigoPacto))
+      todos.filter(p => p.codigoPacto != null).map(p => String(p.codigoPacto))
     );
 
     let jaTinham = 0;
@@ -14803,11 +14862,12 @@ async function renderColabGrid(){
 
 
   const profs=Object.values(profMap).sort((a,b)=>a.nome.localeCompare(b.nome));
-  // Contar do Firestore (fonte de verdade) em vez do histórico local
+  // Contar do Firestore (fonte de verdade) em vez do histórico local — só ativos
   try {
     const snapCount = await professoresRef(unidId).get();
+    const ativos = snapCount.docs.filter(d => professorEstaAtivo(d.data()));
     const cntProf=document.getElementById('equipeCardProfCount');
-    if(cntProf) cntProf.textContent=snapCount.size;
+    if(cntProf) cntProf.textContent=ativos.length;
   } catch(_) {
     const cntProf=document.getElementById('equipeCardProfCount');
     if(cntProf) cntProf.textContent=profs.length;
@@ -26743,9 +26803,13 @@ async function montarDadosRelatorioRT(unidId, emailRT, mesNome) {
       });
     };
 
-    // Professores
+    // Professores (só ativos na equipe atual — soft-delete fica fora do relatório vivo)
     const profSnap = await db.collection('unidades').doc(unidId).collection('professores').get();
-    await Promise.all(profSnap.docs.map(d=>processarMembro(d,'colaborador')));
+    await Promise.all(
+      profSnap.docs
+        .filter(d => typeof professorEstaAtivo !== 'function' || professorEstaAtivo(d.data()))
+        .map(d=>processarMembro(d,'colaborador'))
+    );
 
     // Estagiários (coleção pode não existir — silencia erro)
     try {
@@ -27863,10 +27927,12 @@ async function montarDadosFechamentoRegional(chaveMes, semIdSel) {
 
   const totaisRedeAnterior = unidadesData.reduce((acc, u) => {
     const t = u.totaisAnterior || {};
-    acc.bioNovas     += t.bioNovas     || 0;
-    acc.reavaliacoes += t.reavaliacoes || 0;
+    acc.bioNovas         += t.bioNovas         || 0;
+    acc.reavaliacoes     += t.reavaliacoes     || 0;
+    acc.treinosRenovados += t.treinosRenovados || 0;
+    acc.treinosRevisados += t.treinosRevisados || 0;
     return acc;
-  }, {bioNovas:0, reavaliacoes:0});
+  }, {bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0});
 
   return { unidadesData, totaisRede, totaisRedeAnterior, chaveMes, semIdSel: semIdAtual, nomeMes: unidadesData[0]?.nomeMes || '', nomeRegional };
 }
@@ -27907,7 +27973,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
 .faixa-unid{height:3px}
 .sec{padding:14px 20px 0}
 .sec-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${CIN};border-bottom:1px solid #e5e7eb;padding-bottom:4px;margin-bottom:10px}
-.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px}
 .kpi{background:#f8f9fa;border-radius:5px;padding:8px 6px;text-align:center;border:1px solid #e5e7eb}
 .kpi-val{font-size:20px;font-weight:800;color:#111;font-family:monospace}
 .kpi-lbl{font-size:7px;color:${CIN};margin-top:1px;text-transform:uppercase;letter-spacing:.04em}
@@ -27925,7 +27991,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
   const Tant = d.totaisRedeAnterior || {};
   const semLabel = d.unidadesData[0]?.semLabel || '—';
 
-  // Tabela comparativa — Página 1
+  // Tabela comparativa — Página 1 (Renovados e Revisados em colunas próprias)
   const redeRows = d.unidadesData.map(u => {
     const t = u.totaisAtual || {};
     const ta = u.totaisAnterior || {};
@@ -27937,7 +28003,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
       <td style="text-align:center">${t.diasPreenchidos||0}</td>
       <td style="text-align:center"><span style="color:${BOM};font-weight:600">${t.bioNovas||0}</span>${delta(t.bioNovas,ta.bioNovas)}</td>
       <td style="text-align:center">${t.reavaliacoes||0}${delta(t.reavaliacoes,ta.reavaliacoes)}</td>
-      <td style="text-align:center"><span style="font-size:8px;color:${CIN}">R:${t.treinosRenovados||0} V:${t.treinosRevisados||0}</span></td>
+      <td style="text-align:center"><span style="font-weight:600">${t.treinosRenovados||0}</span>${delta(t.treinosRenovados,ta.treinosRenovados)}</td>
+      <td style="text-align:center"><span style="font-weight:600">${t.treinosRevisados||0}</span>${delta(t.treinosRevisados,ta.treinosRevisados)}</td>
       <td style="text-align:center"><strong>${aval}</strong>${delta(aval,avalAnt)}</td>
       <td style="text-align:center">${status}</td>
     </tr>`;
@@ -28001,18 +28068,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
       <div class="kpi"><div class="kpi-val">${T2.diasPreenchidos||0}</div><div class="kpi-lbl">Dias preenchidos</div></div>
       <div class="kpi"><div class="kpi-val" style="color:${BOM}">${T2.bioNovas||0}</div><div class="kpi-delta">${delta(T2.bioNovas,Ta2.bioNovas)||'—'}</div><div class="kpi-lbl">Bio novas</div></div>
       <div class="kpi"><div class="kpi-val" style="color:${AMB}">${T2.reavaliacoes||0}</div><div class="kpi-delta">${delta(T2.reavaliacoes,Ta2.reavaliacoes)||'—'}</div><div class="kpi-lbl">Reavaliações</div></div>
-      <div class="kpi"><div class="kpi-val">${T2.treinosRenovados||0}</div><div class="kpi-lbl">Renovados</div></div>
-      <div class="kpi"><div class="kpi-val">${T2.treinosRevisados||0}</div><div class="kpi-lbl">Revisados</div></div>
+      <div class="kpi"><div class="kpi-val">${T2.treinosRenovados||0}</div><div class="kpi-delta">${delta(T2.treinosRenovados,Ta2.treinosRenovados)||'—'}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val">${T2.treinosRevisados||0}</div><div class="kpi-delta">${delta(T2.treinosRevisados,Ta2.treinosRevisados)||'—'}</div><div class="kpi-lbl">Revisados</div></div>
+      <div class="kpi"><div class="kpi-val">${(T2.bioNovas||0)+(T2.reavaliacoes||0)}</div><div class="kpi-lbl">Total aval.</div></div>
     </div>
   </div>
   <div class="sec">
     <div class="sec-title">Detalhamento por dia (segunda a sexta)</div>
     ${conteudoDias}
-    ${(T2.treinosRenovados||0)+(T2.treinosRevisados||0) > 0 ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-          <div class="kpi"><div class="kpi-val">${T2.treinosRenovados||0}</div><div class="kpi-lbl">Treinos renovados na semana</div></div>
-          <div class="kpi"><div class="kpi-val">${T2.treinosRevisados||0}</div><div class="kpi-lbl">Treinos revisados na semana</div></div>
-        </div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <div class="kpi"><div class="kpi-val">${T2.treinosRenovados||0}</div><div class="kpi-delta">${delta(T2.treinosRenovados,Ta2.treinosRenovados)||''}</div><div class="kpi-lbl">Treinos renovados na semana</div></div>
+      <div class="kpi"><div class="kpi-val">${T2.treinosRevisados||0}</div><div class="kpi-delta">${delta(T2.treinosRevisados,Ta2.treinosRevisados)||''}</div><div class="kpi-lbl">Treinos revisados na semana</div></div>
+    </div>
     ${u.obsAtual ? `<div style="background:#f8f9fa;border-left:3px solid ${u.cor};padding:8px 12px;margin-top:10px;font-size:9pt;line-height:1.5"><strong>Observações:</strong> ${u.obsAtual}</div>` : ''}
   </div>
   <div class="rodape"><span>MOV FIT · ${u.unidade}</span><span>Gerado em ${dataGeracao}</span></div>
@@ -28042,16 +28109,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
       </div>
       <div class="kpi"><div class="kpi-val" style="color:${BOM}">${T.bioNovas}</div><div class="kpi-delta">${delta(T.bioNovas,Tant.bioNovas)}</div><div class="kpi-lbl">Bio novas</div></div>
       <div class="kpi"><div class="kpi-val" style="color:${AMB}">${T.reavaliacoes}</div><div class="kpi-delta">${delta(T.reavaliacoes,Tant.reavaliacoes)}</div><div class="kpi-lbl">Reavaliações</div></div>
-      <div class="kpi"><div class="kpi-val">${T.treinosRenovados}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val">${T.treinosRenovados||0}</div><div class="kpi-delta">${delta(T.treinosRenovados,Tant.treinosRenovados)}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val">${T.treinosRevisados||0}</div><div class="kpi-delta">${delta(T.treinosRevisados,Tant.treinosRevisados)}</div><div class="kpi-lbl">Revisados</div></div>
       <div class="kpi"><div class="kpi-val">${T.bioNovas+T.reavaliacoes}</div><div class="kpi-delta">${delta(T.bioNovas+T.reavaliacoes, Tant.bioNovas+Tant.reavaliacoes)}</div><div class="kpi-lbl">Total avaliações</div></div>
     </div>
   </div>
   <div class="sec">
     <div class="sec-title">Por unidade — comparativo vs semana anterior</div>
     <table class="tbl">
-      <thead><tr><th>Unidade / RT</th><th style="text-align:center">Dias</th><th style="text-align:center">Bio</th><th style="text-align:center">Reav</th><th style="text-align:center">Treinos</th><th style="text-align:center">Total aval.</th><th style="text-align:center">Status</th></tr></thead>
+      <thead><tr><th>Unidade / RT</th><th style="text-align:center">Dias</th><th style="text-align:center">Bio</th><th style="text-align:center">Reav</th><th style="text-align:center">Renov.</th><th style="text-align:center">Revis.</th><th style="text-align:center">Total aval.</th><th style="text-align:center">Status</th></tr></thead>
       <tbody>${redeRows}</tbody>
-      <tfoot><tr class="total-row"><td>Rede total</td><td style="text-align:center">${T.diasPreenchidos}</td><td style="text-align:center">${T.bioNovas}${delta(T.bioNovas,Tant.bioNovas)}</td><td style="text-align:center">${T.reavaliacoes}${delta(T.reavaliacoes,Tant.reavaliacoes)}</td><td style="text-align:center;font-size:9px">R:${T.treinosRenovados} V:${T.treinosRevisados}</td><td style="text-align:center"><strong>${T.bioNovas+T.reavaliacoes}${delta(T.bioNovas+T.reavaliacoes,Tant.bioNovas+Tant.reavaliacoes)}</strong></td><td></td></tr></tfoot>
+      <tfoot><tr class="total-row"><td>Rede total</td><td style="text-align:center">${T.diasPreenchidos}</td><td style="text-align:center">${T.bioNovas}${delta(T.bioNovas,Tant.bioNovas)}</td><td style="text-align:center">${T.reavaliacoes}${delta(T.reavaliacoes,Tant.reavaliacoes)}</td><td style="text-align:center">${T.treinosRenovados||0}${delta(T.treinosRenovados,Tant.treinosRenovados)}</td><td style="text-align:center">${T.treinosRevisados||0}${delta(T.treinosRevisados,Tant.treinosRevisados)}</td><td style="text-align:center"><strong>${T.bioNovas+T.reavaliacoes}${delta(T.bioNovas+T.reavaliacoes,Tant.bioNovas+Tant.reavaliacoes)}</strong></td><td></td></tr></tfoot>
     </table>
   </div>
   <div class="sec" style="margin-top:14px;">
@@ -28335,14 +28403,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
         <td style="text-align:center">${totalAval} avaliações</td>
       </tr></tfoot>
     </table>
-    ${(T.treinosRenovados||0)+(T.treinosRevisados||0) > 0 ? `
-        <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb;">
-          <div class="sec-title" style="margin-bottom:8px;">Treinos da semana</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div class="kpi"><div class="kpi-val">${T.treinosRenovados||0}</div><div class="kpi-lbl">Renovados</div></div>
-            <div class="kpi"><div class="kpi-val">${T.treinosRevisados||0}</div><div class="kpi-lbl">Revisados</div></div>
-          </div>
-        </div>` : ''}
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid #e5e7eb;">
+      <div class="sec-title" style="margin-bottom:8px;">Treinos da semana</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="kpi"><div class="kpi-val">${T.treinosRenovados||0}</div><div class="kpi-lbl">Renovados</div></div>
+        <div class="kpi"><div class="kpi-val">${T.treinosRevisados||0}</div><div class="kpi-lbl">Revisados</div></div>
+      </div>
+    </div>
     ${d.obsAtual ? `<div class="obs"><strong>Observações da semana:</strong><br>${d.obsAtual}</div>` : ''}
     ${d.reflexaoRT ? `<div class="analise-regional" style="border-left:3px solid #6d28d9;background:rgba(109,40,217,.05);">
       <strong style="color:#6d28d9;">🧠 Reflexão do RT</strong>
@@ -29073,10 +29140,18 @@ function pulsoCalcTotais(pulso) {
   const dias = Object.values(pulso.dias || {});
   const bio = dias.reduce((s,d)=>s+(d.operou?d.bioNovas||0:0),0);
   const reav = dias.reduce((s,d)=>s+(d.operou?d.reavaliacoes||0:0),0);
-  // Treinos vêm de indicadoresSemana (nível semanal) — não dos dias individuais
+  // Treinos vêm de indicadoresSemana (nível semanal) — não dos dias individuais.
+  // Usa != null para respeitar 0 preenchido; só cai no legado (soma dos dias)
+  // quando o campo semanal ainda não existe no documento.
   const ind = pulso.indicadoresSemana || {};
-  const renov = ind.treinosRenovados || dias.reduce((s,d)=>s+(d.operou?d.treinosRenovados||0:0),0);
-  const revis = ind.treinosRevisados || dias.reduce((s,d)=>s+(d.operou?d.treinosRevisados||0:0),0);
+  const somaDiasRenov = dias.reduce((s,d)=>s+(d.operou?d.treinosRenovados||0:0),0);
+  const somaDiasRevis = dias.reduce((s,d)=>s+(d.operou?d.treinosRevisados||0:0),0);
+  const renov = (ind.treinosRenovados != null && ind.treinosRenovados !== '')
+    ? (Number(ind.treinosRenovados) || 0)
+    : somaDiasRenov;
+  const revis = (ind.treinosRevisados != null && ind.treinosRevisados !== '')
+    ? (Number(ind.treinosRevisados) || 0)
+    : somaDiasRevis;
   return { bioNovas:bio, reavaliacoes:reav, treinosRenovados:renov, treinosRevisados:revis,
     totalAvaliacoes:bio+reav, diasPreenchidos:dias.filter(pulsoDiaCompleto).length };
 }
