@@ -2343,8 +2343,10 @@ function professorOcultoNoMesHistorico(p, mesNome, inativosList, ultimoMesNome) 
     (p.nome && inv.keys.indexOf(nomeParaId(p.nome)) >= 0)
   );
   if (!match) return false;
-  // Sem data de remoção: só oculta no mês mais recente do histórico
-  const corte = match.mesRemocao || ultimoMesNome;
+  // Sem data de remoção: usa o mês calendário atual (ou o último do histórico)
+  const corte = match.mesRemocao
+    || (typeof gerarNomeMesAtual === 'function' ? gerarNomeMesAtual() : null)
+    || ultimoMesNome;
   if (!corte) return false;
   return compararMeses(mesNome, corte) >= 0;
 }
@@ -2403,6 +2405,78 @@ function desmarcarProfessorInativoNoCache(unidId, profId, nome) {
   _inativosHistMeta[unidId] = _inativosHistMeta[unidId].filter(inv =>
     !keys.some(k => inv.keys.indexOf(k) >= 0)
   );
+}
+
+/**
+ * Remove o professor dos documentos de mês a partir de mesCorte (inclusive).
+ * Meses anteriores (quando ainda estava ativo) são preservados.
+ */
+async function removerProfessorDosMesesAPartirDe(unidId, opts) {
+  const mesCorte = opts && opts.mesCorte;
+  if (!unidId || !mesCorte) return 0;
+  const keySet = new Set();
+  (opts.keys || []).forEach(k => { if (k != null && k !== '') keySet.add(String(k)); });
+  if (opts.profId) keySet.add(String(opts.profId));
+  if (opts.nome) keySet.add(nomeParaId(opts.nome));
+  if (!keySet.size) return 0;
+
+  let snap;
+  try {
+    snap = await db.collection('unidades').doc(unidId).collection('meses').get();
+  } catch (e) {
+    console.warn('[limparMeses] leitura:', e);
+    return 0;
+  }
+
+  const matchProf = (p) => {
+    if (!p) return false;
+    if (p.profId && keySet.has(String(p.profId))) return true;
+    if (p.nome && keySet.has(nomeParaId(p.nome))) return true;
+    return false;
+  };
+
+  const updates = [];
+  snap.docs.forEach(doc => {
+    const mes = doc.data() || {};
+    const nomeMes = mes.nome || '';
+    if (!nomeMes || compararMeses(nomeMes, mesCorte) < 0) return;
+    const antes = mes.professores || [];
+    const depois = antes.filter(p => !matchProf(p));
+    if (depois.length === antes.length) return;
+    updates.push({ ref: doc.ref, nomeMes, depois });
+  });
+  if (!updates.length) return 0;
+
+  for (let i = 0; i < updates.length; i += 400) {
+    const chunk = updates.slice(i, i + 400);
+    const batch = db.batch();
+    chunk.forEach(u => batch.update(u.ref, { professores: u.depois }));
+    try { await batch.commit(); } catch (e) { console.warn('[limparMeses] commit:', e); }
+  }
+
+  if (_cache[unidId]) {
+    const byNome = new Map(updates.map(u => [u.nomeMes, u.depois]));
+    _cache[unidId] = _cache[unidId].map(mes => {
+      if (!byNome.has(mes.nome)) return mes;
+      return { ...mes, professores: byNome.get(mes.nome) };
+    });
+  }
+  return updates.length;
+}
+
+/** Para cada inativo do cadastro, tira dos meses >= mês da exclusão (relatórios/executivo). */
+async function limparInativosDosMesesHistorico(unidId) {
+  if (!unidId) return 0;
+  const list = await atualizarCacheInativosProfessores(unidId);
+  if (!list.length) return 0;
+  const fallbackCorte = typeof gerarNomeMesAtual === 'function' ? gerarNomeMesAtual() : null;
+  let n = 0;
+  for (const inv of list) {
+    const mesCorte = inv.mesRemocao || fallbackCorte;
+    if (!mesCorte) continue;
+    n += await removerProfessorDosMesesAPartirDe(unidId, { keys: inv.keys, mesCorte });
+  }
+  return n;
 }
 
 function ativarListenerTempoReal(unidId) {
@@ -14110,7 +14184,10 @@ async function sincronizarStatusPactoProfessores(unidId, opts){
   if(result.reativados) console.log('[syncStatusPacto] Reativados:', nomesReativados);
 
   if(result.inativados || result.reativados){
-    try { await atualizarCacheInativosProfessores(unidId); } catch(e) {}
+    try {
+      await atualizarCacheInativosProfessores(unidId);
+      if (result.inativados) await limparInativosDosMesesHistorico(unidId);
+    } catch(e) {}
   }
 
   return result;
@@ -14635,7 +14712,7 @@ function filtrarModalProf() {
 }
 
 async function excluirProfessorCadastro(profId, nome) {
-  if(!(await confirmDialog(`Remover "${nome}" do cadastro de professores?\n\nIsso retira o professor da grade de "Registrar mês" e da listagem ativa.\nO histórico de meses, ciclos e PDI já salvos NÃO é apagado — só fica fora da lista de quem ainda está na equipe.\n\nSe cadastrar de novo com o mesmo nome, o perfil é reativado.`, 'Remover professor', 'danger'))) return;
+  if(!(await confirmDialog(`Remover "${nome}" do cadastro de professores?\n\nSai da grade e da equipe ativa.\nNo mês da exclusão e nos seguintes, deixa de entrar no Painel e no Relatório Executivo.\nMeses anteriores (quando ainda estava ativo) e ciclos/PDI são mantidos.\n\nSe cadastrar de novo com o mesmo nome, o perfil é reativado.`, 'Remover professor', 'danger'))) return;
   if(!unidadeAtual) return;
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante a confirmação/exclusão
   if(!profId) { mostrarToast('Não foi possível remover: id do professor ausente.'); return; }
@@ -14650,6 +14727,10 @@ async function excluirProfessorCadastro(profId, nome) {
       removidoPor: usuarioLogado?.nome || 'RT'
     }, { merge: true });
     marcarProfessorInativoNoCache(unidId, profId, nome, removidoEm);
+    const mesCorte = nomeMesDeDataIso(removidoEm);
+    try {
+      await removerProfessorDosMesesAPartirDe(unidId, { profId, nome, mesCorte });
+    } catch (e) { console.warn('[excluir] limpar meses:', e); }
     mostrarToast(`${nome} removido do cadastro ativo.`);
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — não mexe na tela errada
     // Remove da grade imediatamente (mesmo se a aba Dados não estiver ativa)
@@ -14661,6 +14742,11 @@ async function excluirProfessorCadastro(profId, nome) {
     if(typeof feedbackGrade === 'function') feedbackGrade();
     if(typeof atualizarHeader === 'function') atualizarHeader();
     if(typeof renderHistorico === 'function') renderHistorico();
+    if(typeof renderDash === 'function') {
+      const hist = getHistorico(unidId);
+      const ultimo = hist.length ? hist[hist.length - 1] : null;
+      if (ultimo) renderDash(ultimo.nome);
+    }
     renderModalProf({ skipDedup: true, skipPactoSync: true });
   } catch(e) { mostrarToast('Erro ao remover: '+e.message); }
 }
@@ -26318,7 +26404,15 @@ function atualizarRTsDoRelatorio(){
 
 // Monta o objeto de dados no formato que gerarHTMLRelatorio() espera,
 // a partir dos dados reais do Firebase já em cache.
-function montarDadosRelatorio(chave){
+// Excluídos/inativos não entram nos totais do mês da exclusão em diante.
+async function montarDadosRelatorio(chave){
+  await Promise.all(UNIDADES.map(async u => {
+    try {
+      await getHistoricoAsync(u.id);
+      await limparInativosDosMesesHistorico(u.id);
+    } catch (e) { console.warn('[relExecutivo] limpar inativos', u.id, e); }
+  }));
+
   const labelMes=labelDeChaveMes(chave);
   const hoje=new Date();
   const dataGeracao=hoje.toLocaleDateString('pt-BR');
@@ -26338,7 +26432,40 @@ function montarDadosRelatorio(chave){
   }
   function soma(profs,fn){ return (profs||[]).reduce((s,p)=>s+(fn(p)||0),0); }
 
-  const unidades=UNIDADES.map(u=>{
+  function parseChaveParaAnoMes(chaveMes){
+    const [mesStr, anoStr] = String(chaveMes||'').split('/');
+    const ano = 2000 + (parseInt(anoStr, 10) || new Date().getFullYear() % 100);
+    const raw = (mesStr||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const map = {
+      JAN:0,JANEIRO:0, FEV:1,FEVEREIRO:1, MAR:2,MARCO:2,
+      ABR:3,ABRIL:3, MAI:4,MAIO:4, JUN:5,JUNHO:5,
+      JUL:6,JULHO:6, AGO:7,AGOSTO:7, SET:8,SETEMBRO:8,
+      OUT:9,OUTUBRO:9, NOV:10,NOVEMBRO:10, DEZ:11,DEZEMBRO:11
+    };
+    const mes = map[raw] ?? map[raw.slice(0,3)] ?? new Date().getMonth();
+    return { ano, mes };
+  }
+
+  async function carregarTotaisPulsoMes(unidId, ano, mes){
+    if (typeof pulsoSemanasDoMes !== 'function' || typeof _pulsoRef !== 'function') {
+      return pulsoSomarTotaisMes([]);
+    }
+    const semanas = pulsoSemanasDoMes(ano, mes);
+    const snaps = await Promise.all(
+      semanas.map(s => _pulsoRef(unidId, s.semanaId).get().catch(() => null))
+    );
+    const hist = semanas.map((s, i) => {
+      const snap = snaps[i];
+      const pulso = snap && snap.exists ? snap.data() : null;
+      return {
+        totais: pulso && typeof pulsoCalcTotais === 'function' ? pulsoCalcTotais(pulso) : null,
+        status: typeof pulsoStatus === 'function' ? pulsoStatus(pulso) : null
+      };
+    });
+    return pulsoSomarTotaisMes(hist);
+  }
+
+  const unidadesBase=UNIDADES.map(u=>{
     const atual=getMesHistorico(u.id,chave);
     const anterior=getMesAnterior(u.id,chave);
     if(!atual) return null;
@@ -26416,13 +26543,34 @@ function montarDadosRelatorio(chave){
     }
 
     return{
-      nome:u.nome, unidId:u.id, rts:getRTs(u.id),
+      nome:u.nome, unidId:u.id, cor:u.cor, rts:getRTs(u.id),
       alunos:tot, treinoEmDia, meta:meta.metaTreino, gap,
       vencidos:venc, percentVencidos, scoreRT:score?score.total:null,
       duracaoMedia, duracaoOk:duracaoMedia?duracaoOk(duracaoMedia):null,
       status, evolucao, destaques
     };
   }).filter(Boolean);
+
+  // Pulso: consolidado operacional do mês × mês anterior (Bio/Reav/Renov/Revis)
+  const { ano: anoPulso, mes: mesPulso } = parseChaveParaAnoMes(chave);
+  const mesAntPulso = mesPulso === 0 ? 11 : mesPulso - 1;
+  const anoAntPulso = mesPulso === 0 ? anoPulso - 1 : anoPulso;
+  const nomeMesAnteriorPulso = new Date(anoAntPulso, mesAntPulso, 1)
+    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const unidades = await Promise.all(unidadesBase.map(async u => {
+    let pulsoMes = pulsoSomarTotaisMes([]);
+    let pulsoMesAnt = pulsoSomarTotaisMes([]);
+    try {
+      [pulsoMes, pulsoMesAnt] = await Promise.all([
+        carregarTotaisPulsoMes(u.unidId, anoPulso, mesPulso),
+        carregarTotaisPulsoMes(u.unidId, anoAntPulso, mesAntPulso)
+      ]);
+    } catch (e) {
+      console.warn('[relExecutivo] pulso mês', u.unidId, e);
+    }
+    return { ...u, pulsoMes, pulsoMesAnt };
+  }));
 
   const totAlunos=unidades.reduce((s,u)=>s+u.alunos,0);
   const totCom=UNIDADES.reduce((s,u)=>{
@@ -26442,6 +26590,25 @@ function montarDadosRelatorio(chave){
     ?Math.round(unidades.filter(u=>u.scoreRT!==null).reduce((s,u)=>s+u.scoreRT,0)/unidades.filter(u=>u.scoreRT!==null).length)
     :0;
 
+  const pulsoRede = unidades.reduce((acc, u) => {
+    const t = u.pulsoMes || {};
+    acc.bioNovas += t.bioNovas || 0;
+    acc.reavaliacoes += t.reavaliacoes || 0;
+    acc.treinosRenovados += t.treinosRenovados || 0;
+    acc.treinosRevisados += t.treinosRevisados || 0;
+    acc.diasPreenchidos += t.diasPreenchidos || 0;
+    return acc;
+  }, { bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0, diasPreenchidos:0 });
+
+  const pulsoRedeAnt = unidades.reduce((acc, u) => {
+    const t = u.pulsoMesAnt || {};
+    acc.bioNovas += t.bioNovas || 0;
+    acc.reavaliacoes += t.reavaliacoes || 0;
+    acc.treinosRenovados += t.treinosRenovados || 0;
+    acc.treinosRevisados += t.treinosRevisados || 0;
+    acc.diasPreenchidos += t.diasPreenchidos || 0;
+    return acc;
+  }, { bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0, diasPreenchidos:0 });
   // ── Comparativos da rede (mês anterior) ─────────────────────────────
   let redeAnt={totalAlunos:null,emDia:null,vencidos:null,unidadesNaMeta:null,scoreMedio:null};
   const unidsComAnt2=unidades.filter(u=>u.evolucao);
@@ -26459,6 +26626,7 @@ function montarDadosRelatorio(chave){
 
   return{
     mesReferencia:labelMes, dataGeracao,
+    nomeMesAnteriorPulso,
     rede:{
       totalAlunos:totAlunos,
       percentTreinoEmDia:pct(totEmDia,totCom),
@@ -26468,11 +26636,13 @@ function montarDadosRelatorio(chave){
       scoreMedioRT,
       anterior:redeAnt
     },
+    pulsoRede,
+    pulsoRedeAnt,
     unidades
   };
 }
 
-// Retorna a string HTML completa do relatório com as 3 páginas e CSS inline.
+// Retorna a string HTML completa do relatório com as 4 páginas e CSS inline.
 function gerarHTMLRelatorio(dados){
   const R='#CE002E', BOM='#1a7a42', AMB='#c07800', CIN='#6b7280';
   const corU=u=>u.status==='critico'?R:u.status==='meta'?BOM:AMB;
@@ -26791,7 +26961,164 @@ function gerarHTMLRelatorio(dados){
     <div class="nota">Score RT: Resultado até 40pts (% treino em dia vs meta + tendência) + Acompanhamento até 35pts (evidência sobre casos críticos) + Execução até 25pts (sem treino e duração na faixa). Faixas: 80 ou mais = Bom · 60–79 = Regular · abaixo de 60 = Crítico.</div>
   </div>`;
 
-  return`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>MOV FIT — Relatório Executivo ${dados.mesReferencia}</title><style>${css}<\/style></head><body>${p1}${p2}${p3}</body></html>`;
+  // ── PÁGINA 4 — Consolidado operacional do mês (Pulso) vs mês anterior ─────
+const PR = dados.pulsoRede || {};
+  const PRa = dados.pulsoRedeAnt || {};
+  const labelMesAnt = dados.nomeMesAnteriorPulso || 'mês anterior';
+
+  const deltaAbsPct = (atual, anterior, bomSeSobe = true) => {
+    if (anterior === null || anterior === undefined) return '';
+    const a = Number(atual) || 0;
+    const b = Number(anterior) || 0;
+    const d = a - b;
+    if (d === 0 && a === 0) return '';
+    const cor = d === 0 ? CIN : (bomSeSobe ? (d > 0 ? BOM : R) : (d < 0 ? BOM : R));
+    const setaD = d > 0 ? '▲' : d < 0 ? '▼' : '=';
+    const abs = d === 0 ? '0' : (d > 0 ? '+' + d : String(d));
+    let pctStr = '';
+    if (b > 0) {
+      const p = Math.round((d / b) * 100);
+      pctStr = ' · ' + (p > 0 ? '+' : '') + p + '%';
+    } else if (a > 0 && b === 0) {
+      pctStr = ' · novo';
+    }
+    return `<div style="font-size:7.5pt;font-weight:600;color:${cor};margin-top:2px;">${setaD} ${abs}${pctStr}</div>`;
+  };
+
+  const fechHtmlExec = (tm) => {
+    const tot = (tm && tm.semanasTotal) || 0;
+    const ok = (tm && tm.semanasConcluidas) || 0;
+    if (!tot) return `<span style="color:${CIN}">—</span>`;
+    if (ok >= tot) return `<span style="color:${BOM};font-weight:700">✓ ${ok}/${tot}</span>`;
+    return `<span style="color:${R};font-weight:700">${ok}/${tot} sem.</span>`;
+  };
+
+  const unidsAtivasPulso = dados.unidades.filter(u => {
+    const t = u.pulsoMes || {};
+    return (t.bioNovas || 0) + (t.reavaliacoes || 0) + (t.treinosRenovados || 0) + (t.treinosRevisados || 0) > 0;
+  }).length;
+
+  const rowsPulso = dados.unidades.map(u => {
+    const t = u.pulsoMes || {};
+    const ta = u.pulsoMesAnt || {};
+    const aval = (t.bioNovas || 0) + (t.reavaliacoes || 0);
+    const avalAnt = (ta.bioNovas || 0) + (ta.reavaliacoes || 0);
+    const corU = u.cor || R;
+    return `<tr>
+      <td>
+        <div style="font-weight:700;color:${corU}">${u.nome}</div>
+        <div style="font-size:7.5pt;color:${CIN};margin-top:1px;">${(u.rts || []).join(' + ') || '—'}</div>
+      </td>
+      <td style="text-align:center;font-weight:600">${t.diasPreenchidos || 0}</td>
+      <td style="text-align:center">
+        <div style="font-weight:700;color:${BOM}">${t.bioNovas || 0}</div>
+        ${deltaAbsPct(t.bioNovas, ta.bioNovas, true)}
+      </td>
+      <td style="text-align:center">
+        <div style="font-weight:700;color:${AMB}">${t.reavaliacoes || 0}</div>
+        ${deltaAbsPct(t.reavaliacoes, ta.reavaliacoes, true)}
+      </td>
+      <td style="text-align:center;font-size:8.5pt;line-height:1.4">
+        <div><span style="color:${CIN}">R:</span> <strong>${t.treinosRenovados || 0}</strong></div>
+        ${deltaAbsPct(t.treinosRenovados, ta.treinosRenovados, true)}
+        <div style="margin-top:4px"><span style="color:${CIN}">V:</span> <strong>${t.treinosRevisados || 0}</strong></div>
+        ${deltaAbsPct(t.treinosRevisados, ta.treinosRevisados, true)}
+      </td>
+      <td style="text-align:center">
+        <div style="font-weight:700">${aval}</div>
+        ${deltaAbsPct(aval, avalAnt, true)}
+      </td>
+      <td style="text-align:center">${fechHtmlExec(t)}</td>
+    </tr>`;
+  }).join('');
+
+  const participacaoHtml = (() => {
+    const total = dados.unidades.reduce((s, u) => {
+      const t = u.pulsoMes || {};
+      return s + (t.bioNovas || 0) + (t.reavaliacoes || 0);
+    }, 0);
+    if (!total) return `<div style="font-size:9pt;color:${CIN}">Sem avaliações no mês para calcular participação.</div>`;
+    return dados.unidades.map(u => {
+      const t = u.pulsoMes || {};
+      const aval = (t.bioNovas || 0) + (t.reavaliacoes || 0);
+      const p = Math.round((aval / total) * 100);
+      const corU = u.cor || R;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div style="width:10px;height:10px;border-radius:2px;background:${corU};flex-shrink:0"></div>
+        <div style="flex:1;font-size:8.5pt;font-weight:600;color:#222">${u.nome.split(' ')[0]}</div>
+        <div style="width:120px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;">
+          <div style="width:${p}%;height:100%;background:${corU};border-radius:3px;"></div>
+        </div>
+        <div style="width:72px;text-align:right;font-size:8pt;color:${CIN}">${aval} · ${p}%</div>
+      </div>`;
+    }).join('');
+  })();
+
+    const p4 = `
+  <div class="page">
+    <div><span class="titulo-mov">MOV</span><span class="titulo-txt">FIT · Relatório Executivo</span></div>
+    <div class="subtitulo">Consolidado operacional do mês · ${dados.mesReferencia} · vs ${labelMesAnt}</div>
+
+    <div class="sec">Consolidado operacional (Pulso)</div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-l">Unidades ativas</div>
+        <div class="kpi-v" style="color:${BOM}">${unidsAtivasPulso}/${dados.unidades.length}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Bio novas</div>
+        <div class="kpi-v" style="color:${BOM}">${PR.bioNovas || 0}</div>
+        ${deltaAbsPct(PR.bioNovas, PRa.bioNovas, true)}
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Reavaliações</div>
+        <div class="kpi-v" style="color:${AMB}">${PR.reavaliacoes || 0}</div>
+        ${deltaAbsPct(PR.reavaliacoes, PRa.reavaliacoes, true)}
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Renovados</div>
+        <div class="kpi-v">${PR.treinosRenovados || 0}</div>
+        ${deltaAbsPct(PR.treinosRenovados, PRa.treinosRenovados, true)}
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Total avaliações</div>
+        <div class="kpi-v">${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}</div>
+        ${deltaAbsPct((PR.bioNovas || 0) + (PR.reavaliacoes || 0), (PRa.bioNovas || 0) + (PRa.reavaliacoes || 0), true)}
+      </div>
+    </div>
+
+    <div class="sec">Por unidade — vs ${labelMesAnt}</div>
+    <table class="tbl">
+      <thead><tr>
+        <th>Unidade / RT</th>
+        <th style="text-align:center">Dias</th>
+        <th style="text-align:center">Bio</th>
+        <th style="text-align:center">Reav</th>
+        <th style="text-align:center">Treinos</th>
+        <th style="text-align:center">Total aval.</th>
+        <th style="text-align:center">Fechamentos</th>
+      </tr></thead>
+      <tbody>${rowsPulso}</tbody>
+      <tfoot>
+        <tr>
+          <td>Rede total</td>
+          <td style="text-align:center">${PR.diasPreenchidos || 0}</td>
+          <td style="text-align:center">${PR.bioNovas || 0}${deltaAbsPct(PR.bioNovas, PRa.bioNovas, true)}</td>
+          <td style="text-align:center">${PR.reavaliacoes || 0}${deltaAbsPct(PR.reavaliacoes, PRa.reavaliacoes, true)}</td>
+          <td style="text-align:center;font-size:8.5pt">R:${PR.treinosRenovados || 0} · V:${PR.treinosRevisados || 0}</td>
+          <td style="text-align:center">${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}${deltaAbsPct((PR.bioNovas || 0) + (PR.reavaliacoes || 0), (PRa.bioNovas || 0) + (PRa.reavaliacoes || 0), true)}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="nota">Comparativo vs ${labelMesAnt}: ▲ aumento · ▼ queda. Treinos: R = renovados · V = revisados. Fechamentos = semanas concluídas no mês.</div>
+
+    <div class="sec">Participação no total de avaliações</div>
+    ${participacaoHtml}
+  </div>`;
+
+
+  return`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>MOV FIT — Relatório Executivo ${dados.mesReferencia}</title><style>${css}<\/style></head><body>${p1}${p2}${p3}${p4}</body></html>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -27449,8 +27776,9 @@ async function gerarRelatorioBtn(){
       setTimeout(()=>{ document.getElementById('relatorioModal').style.display='none'; },3000);
     } else {
       // Relatório executivo (fluxo original)
+      if(st) st.textContent='Atualizando equipe e montando relatório...';
       for(const u of UNIDADES){ await getHistoricoAsync(u.id); }
-      const dados=montarDadosRelatorio(chave);
+      const dados=await montarDadosRelatorio(chave);
       if(!dados.unidades.length){ if(st) st.textContent='Nenhuma unidade com dados para este mês.'; btn.textContent='📥 Gerar e baixar PDF';btn.disabled=false; return; }
       if(st) st.textContent='Abrindo relatório...';
       const html=gerarHTMLRelatorio(dados);
@@ -27946,6 +28274,30 @@ async function abrirRelatorioIndividualCarteira(unidId, colabId, mesNome) {
 // RELATÓRIO FECHAMENTO SEMANAL REGIONAL — 5 páginas (visão de rede + 4 unidades)
 // ════════════════════════════════════════════════════════════════════════════
 
+/** Soma totais de várias semanas do Pulso (histórico do mês). */
+function pulsoSomarTotaisMes(historicoMes) {
+  const acc = {
+    bioNovas: 0, reavaliacoes: 0, treinosRenovados: 0, treinosRevisados: 0,
+    diasPreenchidos: 0, semanasTotal: 0, semanasConcluidas: 0, semanasComDados: 0
+  };
+  (historicoMes || []).forEach(s => {
+    acc.semanasTotal++;
+    const t = s.totais || {};
+    const bio = Number(t.bioNovas) || 0;
+    const reav = Number(t.reavaliacoes) || 0;
+    const renov = Number(t.treinosRenovados) || 0;
+    const revis = Number(t.treinosRevisados) || 0;
+    acc.bioNovas += bio;
+    acc.reavaliacoes += reav;
+    acc.treinosRenovados += renov;
+    acc.treinosRevisados += revis;
+    acc.diasPreenchidos += Number(t.diasPreenchidos) || 0;
+    if (bio + reav + renov + revis > 0) acc.semanasComDados++;
+    if (s.status === 'concluido') acc.semanasConcluidas++;
+  });
+  return acc;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // FECHAMENTO MENSAL — consolida todas as semanas do mês para todas as unidades
 // ══════════════════════════════════════════════════════════════════════════════
@@ -28199,6 +28551,7 @@ tr.total-row td{padding:8px;border-top:2px solid #e5e7eb;}
 ${paginasUnidades}
 </body></html>`;
 }
+
 
 async function montarDadosFechamentoRegional(chaveMes, semIdSel) {
   const mesesNum = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
@@ -31548,7 +31901,7 @@ function pulsoRegLembrete(unidId,nome){
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Tipo de relatório</div>
         <div onclick="selRelTipo('socio')" id="optRelSocio" style="display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid #e01f2d;border-radius:10px;cursor:pointer;margin-bottom:8px;background:rgba(224,31,45,.04);">
           <div style="font-size:20px;">📊</div>
-          <div><div style="font-size:12px;font-weight:600;color:var(--text);">Executivo · Visão de Rede</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">Para diretores e sócios · 3 páginas</div></div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--text);">Executivo · Visão de Rede</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">Para diretores e sócios · 4 páginas</div></div>
           <span style="margin-left:auto;font-size:10px;font-weight:500;padding:2px 8px;border-radius:16px;background:rgba(224,31,45,.1);color:#e01f2d;">Você</span>
         </div>
         <div onclick="selRelTipo('rt')" id="optRelRT" style="display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--border2);border-radius:10px;cursor:pointer;margin-bottom:8px;">
