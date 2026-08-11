@@ -981,6 +981,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button type="button" id="btnVincularPactoProfs" onclick="vincularCodigosPactoDaUnidade()" style="background:rgba(224,31,45,.08);border:1px solid rgba(224,31,45,.25);border-radius:10px;color:#e01f2d;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Casa cada professor com codigoPessoa da Pacto e grava no Firestore">Vincular Pacto</button>
+        <button type="button" id="btnSyncStatusPacto" onclick="sincronizarStatusPactoUI()" style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:10px;color:#c47d0e;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Inativa quem saiu do BI da Pacto e reativa quem voltou">Status Pacto</button>
         <button type="button" id="btnDedupProfs" onclick="limparDuplicatasProfessores()" style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:10px;color:#c47d0e;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:600;font-family:Inter,sans-serif;" title="Remove cadastros duplicados (ex.: ALEX DE vs ALEX DE SOUSA), mantendo o que tem cód. Pacto ou nome mais completo">Limpar duplicatas</button>
         <button onclick="abrirFormProfessor()" style="background:rgba(224,31,45,.12);border:1px solid rgba(224,31,45,.3);border-radius:10px;color:#e01f2d;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:Inter,sans-serif;">+ Adicionar</button>
         <button onclick="fecharModalEquipe('prof')" style="background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:#888;padding:6px 12px;cursor:pointer;font-size:12px;font-family:Inter,sans-serif;">✕ Fechar</button>
@@ -1027,6 +1028,7 @@
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_pendente')" style="color:#f5a623;border-color:rgba(245,166,35,.3);">⚠ Radar pendente</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'sem_pacto')" style="color:#e01f2d;border-color:rgba(224,31,45,.3);">Sem cód. Pacto</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'fora_treino')" style="color:#c47d0e;border-color:rgba(245,166,35,.35);">Fora do Treino Web</button>
+        <button class="btn sm" onclick="setModalProfFiltro(this,'inativos')" style="color:#888;border-color:rgba(136,136,136,.35);">Inativos</button>
         <button class="btn sm" onclick="setModalProfFiltro(this,'radar_ok')" style="color:var(--c-purple);border-color:rgba(167,139,250,.3);">✓ Radar OK</button>
       </div>
       <div id="modalProfGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
@@ -2316,6 +2318,92 @@ const UNIDADES = [
 let unidadeAtual = null;
 const _cache = {};
 const _listeners = {};
+/**
+ * Meta de inativos por unidade — usada só na leitura do histórico/relatórios.
+ * Em cada mês: oculta o professor se o mês for >= mês da exclusão (removidoEm).
+ * Meses anteriores (quando ainda estava ativo) permanecem no relatório.
+ * Formato: { keys: string[], mesRemocao: 'Agosto/26'|null }
+ */
+const _inativosHistMeta = {};
+
+function nomeMesDeDataIso(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const base = _MESES_ORD[d.getMonth()] || '';
+  if (!base) return null;
+  const label = base.charAt(0).toUpperCase() + base.slice(1);
+  return label + '/' + String(d.getFullYear()).slice(2);
+}
+
+function professorOcultoNoMesHistorico(p, mesNome, inativosList, ultimoMesNome) {
+  if (!inativosList || !inativosList.length || !p || !mesNome) return false;
+  const match = inativosList.find(inv =>
+    (p.profId && inv.keys.indexOf(String(p.profId)) >= 0) ||
+    (p.nome && inv.keys.indexOf(nomeParaId(p.nome)) >= 0)
+  );
+  if (!match) return false;
+  // Sem data de remoção: só oculta no mês mais recente do histórico
+  const corte = match.mesRemocao || ultimoMesNome;
+  if (!corte) return false;
+  return compararMeses(mesNome, corte) >= 0;
+}
+
+function historicoComRegraInativos(hist, unidId) {
+  const list = _inativosHistMeta[unidId];
+  if (!list || !list.length || !hist || !hist.length) return hist || [];
+  const ordenado = hist.slice().sort((a, b) => compararMeses(a.nome, b.nome));
+  const ultimoMesNome = ordenado.length ? ordenado[ordenado.length - 1].nome : null;
+  return hist.map(mes => ({
+    ...mes,
+    professores: (mes.professores || []).filter(p => !professorOcultoNoMesHistorico(p, mes.nome, list, ultimoMesNome))
+  }));
+}
+
+async function atualizarCacheInativosProfessores(unidId) {
+  if (!unidId) return [];
+  try {
+    const snap = await professoresRef(unidId).get();
+    const list = [];
+    snap.docs.forEach(doc => {
+      const d = doc.data() || {};
+      if (typeof professorEstaAtivo === 'function' ? professorEstaAtivo(d) : d.ativo !== false) return;
+      const keys = [String(doc.id)];
+      if (d.nome) keys.push(nomeParaId(d.nome));
+      list.push({ keys, mesRemocao: nomeMesDeDataIso(d.removidoEm) });
+    });
+    _inativosHistMeta[unidId] = list;
+    return list;
+  } catch (e) {
+    console.warn('[inativosHist] cache:', e);
+    return _inativosHistMeta[unidId] || [];
+  }
+}
+
+function marcarProfessorInativoNoCache(unidId, profId, nome, removidoEm) {
+  if (!unidId) return;
+  if (!_inativosHistMeta[unidId]) _inativosHistMeta[unidId] = [];
+  const keys = [];
+  if (profId) keys.push(String(profId));
+  if (nome) keys.push(nomeParaId(nome));
+  _inativosHistMeta[unidId] = _inativosHistMeta[unidId].filter(inv =>
+    !keys.some(k => inv.keys.indexOf(k) >= 0)
+  );
+  _inativosHistMeta[unidId].push({
+    keys,
+    mesRemocao: nomeMesDeDataIso(removidoEm || new Date().toISOString())
+  });
+}
+
+function desmarcarProfessorInativoNoCache(unidId, profId, nome) {
+  if (!unidId || !_inativosHistMeta[unidId]) return;
+  const keys = [];
+  if (profId) keys.push(String(profId));
+  if (nome) keys.push(nomeParaId(nome));
+  _inativosHistMeta[unidId] = _inativosHistMeta[unidId].filter(inv =>
+    !keys.some(k => inv.keys.indexOf(k) >= 0)
+  );
+}
 
 function ativarListenerTempoReal(unidId) {
   if(_listeners[unidId]) return;
@@ -2323,8 +2411,15 @@ function ativarListenerTempoReal(unidId) {
   _listeners[unidId] = ref.onSnapshot(snap => {
     const hist = snap.docs.map(d => d.data()).sort((a,b)=>compararMeses(a.nome,b.nome));
     _cache[unidId] = hist;
-    if(unidadeAtual && unidadeAtual.id === unidId) { atualizarHeader(); atualizarSelects(); renderHistorico(); mostrarBadgeSync(); }
-    if(document.getElementById('screen-home').style.display !== 'none') { renderHomeCockpit(); }
+    const refreshUi = () => {
+      if(unidadeAtual && unidadeAtual.id === unidId) { atualizarHeader(); atualizarSelects(); renderHistorico(); mostrarBadgeSync(); }
+      if(document.getElementById('screen-home') && document.getElementById('screen-home').style.display !== 'none') { renderHomeCockpit(); }
+    };
+    if (!_inativosHistMeta[unidId]) {
+      atualizarCacheInativosProfessores(unidId).then(refreshUi).catch(refreshUi);
+    } else {
+      refreshUi();
+    }
   }, err => console.warn('Listener error:', err));
 }
 
@@ -2339,16 +2434,22 @@ function mostrarBadgeSync() {
 async function getHistoricoAsync(unidId) {
   const uid=unidId||(unidadeAtual&&unidadeAtual.id)||'premium24';
   ativarListenerTempoReal(uid);
-  if(_cache[uid]) return _cache[uid];
+  const keysP = atualizarCacheInativosProfessores(uid);
+  if(_cache[uid]) {
+    await keysP.catch(()=>{});
+    return getHistorico(uid);
+  }
   try {
     const snap=await db.collection('unidades').doc(uid).collection('meses').orderBy('nome').get();
-    _cache[uid]=snap.docs.map(d=>d.data()).sort((a,b)=>compararMeses(a.nome,b.nome)); return _cache[uid];
+    _cache[uid]=snap.docs.map(d=>d.data()).sort((a,b)=>compararMeses(a.nome,b.nome));
+    await keysP.catch(()=>{});
+    return getHistorico(uid);
   } catch(e){ console.warn('Firebase read error:',e); return []; }
 }
 
 function getHistorico(unidId) {
   const uid=unidId||(unidadeAtual&&unidadeAtual.id)||'premium24';
-  return _cache[uid]||[];
+  return historicoComRegraInativos(_cache[uid]||[], uid);
 }
 
 async function adicionarMes(mesObj, unidId) {
@@ -3364,6 +3465,11 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
     // enquanto esta função rodava, descarta o resultado em vez de sobrescrever
     // a grade com dados de uma unidade diferente da que está sendo exibida agora.
     if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+    // Quem saiu do BI Pacto deixa de aparecer na grade (só quem tem codigoPacto)
+    if (typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof sincronizarStatusPactoProfessores === 'function') {
+      try { await sincronizarStatusPactoProfessores(unidId, { silent: true }); } catch (e) { console.warn('[grade] syncStatusPacto:', e); }
+      if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+    }
     const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
 
@@ -3493,6 +3599,23 @@ async function preencherGradeComPacto(opts) {
       return;
     }
     let normalizados = lista.map(pactoNormalizarProfessor).filter(Boolean);
+
+    // Alinha ativo/inativo com o BI (reusa a mesma lista — sem hit extra)
+    try {
+      const syncR = await sincronizarStatusPactoProfessores(unidId, { biNorm: normalizados, silent: true });
+      if (syncR && syncR.nomesInativados && syncR.nomesInativados.length) {
+        syncR.nomesInativados.forEach(nome => {
+          const linha = Array.from(rowsEl.querySelectorAll('.prof-row')).find(row => {
+            const input = row.querySelector('[data-f="0"]');
+            return input && nomeParaId(input.value) === nomeParaId(nome);
+          });
+          if (linha) linha.remove();
+        });
+        if (typeof feedbackGrade === 'function') feedbackGrade();
+      }
+    } catch (e) { console.warn('[PACTO GRADE] syncStatusPacto:', e); }
+    if (!unidadeAtual || unidadeAtual.id !== unidId) return;
+    if (seq != null && seq !== _gradePactoSeq) return;
 
     // ADM só no refresh manual (1 hit a mais) — no auto o BI + codigoPacto bastam
     let admNorm = [];
@@ -13879,10 +14002,177 @@ async function reativarProfessorCadastro(unidId, profId, patch){
   if(!unidId || !profId) return;
   await professoresRef(unidId).doc(profId).set({
     ativo: true,
+    inativadoPorPacto: false,
     reativadoEm: new Date().toISOString(),
     reativadoPor: usuarioLogado?.nome || 'RT',
     ...(patch || {})
   }, { merge: true });
+  desmarcarProfessorInativoNoCache(unidId, profId, (patch && patch.nome) || null);
+}
+
+/**
+ * Compara cadastro local com BI da Pacto (só por codigoPacto):
+ * - código sumiu do BI → inativa (ativo:false, inativadoPorPacto:true)
+ * - código voltou e foi inativado pela Pacto → reativa
+ * Professores sem código Pacto NÃO são alterados.
+ * @returns {{ inativados:number, reativados:number, nomesInativados:string[], nomesReativados:string[] }}
+ */
+async function sincronizarStatusPactoProfessores(unidId, opts){
+  const silent = !!(opts && opts.silent);
+  const empty = { inativados:0, reativados:0, nomesInativados:[], nomesReativados:[] };
+  if(!unidId) return empty;
+
+  let biNorm = opts && opts.biNorm;
+  if(!biNorm){
+    const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+    if(!empresaId) return empty;
+    if(typeof pactoBuscarProfessoresBI !== 'function') return empty;
+    try {
+      const lista = await pactoBuscarProfessoresBI(empresaId, unidId);
+      biNorm = (lista || []).map(pactoNormalizarProfessor).filter(Boolean);
+    } catch(e) {
+      console.warn('[syncStatusPacto]', e);
+      return empty;
+    }
+  }
+
+  const codigosBi = new Set(
+    (biNorm || [])
+      .filter(p => p && p.codigo != null && p.codigo !== '')
+      .map(p => String(p.codigo))
+  );
+  // Sem retorno do BI: não inativa ninguém (evita zerar equipe se API falhar)
+  if(!codigosBi.size){
+    if(!silent) mostrarToast('Pacto BI sem códigos — status da equipe não alterado.');
+    return empty;
+  }
+
+  let snap;
+  try {
+    snap = await professoresRef(unidId).get();
+  } catch(e) {
+    console.warn('[syncStatusPacto] leitura:', e);
+    return empty;
+  }
+
+  const writes = [];
+  const nomesInativados = [];
+  const nomesReativados = [];
+
+  snap.docs.forEach(doc => {
+    const d = doc.data() || {};
+    const cod = d.codigoPacto;
+    if(cod == null || cod === '') return; // sem código: não mexe
+    const noBi = codigosBi.has(String(cod));
+    const ativo = professorEstaAtivo(d);
+
+    if(!noBi && ativo){
+      writes.push(
+        professoresRef(unidId).doc(doc.id).set({
+          ativo: false,
+          inativadoPorPacto: true,
+          foraTreinoWeb: true,
+          removidoEm: new Date().toISOString(),
+          removidoPor: 'Pacto BI (ausente no Treino Web)',
+        }, { merge: true })
+      );
+      nomesInativados.push(d.nome || doc.id);
+    } else if(noBi && !ativo && d.inativadoPorPacto === true){
+      writes.push(
+        reativarProfessorCadastro(unidId, doc.id, { foraTreinoWeb: false })
+      );
+      nomesReativados.push(d.nome || doc.id);
+    } else if(noBi && ativo && d.foraTreinoWeb){
+      writes.push(marcarForaTreinoWebFirestore(unidId, doc.id, false));
+    }
+  });
+
+  if(writes.length){
+    try { await Promise.all(writes); } catch(e) {
+      console.warn('[syncStatusPacto] writes:', e);
+    }
+  }
+
+  const result = {
+    inativados: nomesInativados.length,
+    reativados: nomesReativados.length,
+    nomesInativados,
+    nomesReativados,
+  };
+
+  if(!silent && (result.inativados || result.reativados)){
+    let msg = '';
+    if(result.inativados) msg += `${result.inativados} inativado(s) (fora da Pacto)`;
+    if(result.reativados) msg += (msg ? ' · ' : '') + `${result.reativados} reativado(s)`;
+    mostrarToast(msg);
+  }
+  if(result.inativados) console.warn('[syncStatusPacto] Inativados:', nomesInativados);
+  if(result.reativados) console.log('[syncStatusPacto] Reativados:', nomesReativados);
+
+  if(result.inativados || result.reativados){
+    try { await atualizarCacheInativosProfessores(unidId); } catch(e) {}
+  }
+
+  return result;
+}
+
+async function sincronizarStatusPactoUI(){
+  if(!unidadeAtual){ mostrarToast('Nenhuma unidade selecionada.'); return; }
+  const unidId = unidadeAtual.id;
+  const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+  if(!empresaId){
+    mostrarToast('Esta unidade ainda não tem action Pacto configurada.');
+    return;
+  }
+  const btn = document.getElementById('btnSyncStatusPacto');
+  const labelOriginal = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Sincronizando…'; }
+  try {
+    const r = await sincronizarStatusPactoProfessores(unidId, { silent: false });
+    if(!r.inativados && !r.reativados){
+      mostrarToast('Nenhuma alteração de status — equipe alinhada com o BI.');
+    }
+    if(unidadeAtual && unidadeAtual.id === unidId){
+      renderModalProf({ skipDedup: true, skipPactoSync: true });
+      const tabDados = document.getElementById('tab-dados');
+      if(tabDados && tabDados.classList.contains('active')){
+        inicializarGradeComProfessoresDaUnidade(unidId);
+      }
+    }
+  } catch(e) {
+    console.error('[syncStatusPacto UI]', e);
+    mostrarToast('Erro ao sincronizar status: '+(e.message||'falha'));
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = labelOriginal || 'Sincronizar status Pacto'; }
+  }
+}
+
+async function reativarProfessorUI(profId, nome){
+  if(!unidadeAtual || !profId) return;
+  const unidId = unidadeAtual.id;
+  const ok = await confirmDialog(
+    `Reativar "${nome}" na equipe ativa?\n\nO professor volta a aparecer na grade de Registrar mês.`,
+    'Reativar professor',
+    'info'
+  );
+  if(!ok) return;
+  try {
+    await reativarProfessorCadastro(unidId, profId, { nome });
+    mostrarToast(`✓ ${nome} reativado`);
+    if(unidadeAtual && unidadeAtual.id === unidId){
+      if(typeof atualizarHeader === 'function') atualizarHeader();
+      if(typeof renderHistorico === 'function') renderHistorico();
+      renderModalProf({ skipDedup: true, skipPactoSync: true });
+      const tabDados = document.getElementById('tab-dados');
+      const gradeRows = document.getElementById('gradeRows');
+      if(tabDados && tabDados.classList.contains('active') && gradeRows){
+        const jaNaGrade = Array.from(gradeRows.querySelectorAll('[data-f="0"]')).some(el => nomeParaId(el.value) === nomeParaId(nome));
+        if(!jaNaGrade) addGradeRow([nome, ...Array(12).fill('')], null, true);
+      }
+    }
+  } catch(e) {
+    mostrarToast('Erro ao reativar: '+(e.message||'falha'));
+  }
 }
 
 // Busca o profId de um professor pelo nome, tentando casar via nomeParaId
@@ -14070,6 +14360,7 @@ function fecharModalEquipe(tipo) {
 async function renderModalProf(opts) {
   if(!unidadeAtual) return;
   const skipDedup = !!(opts && opts.skipDedup);
+  const skipPactoSync = !!(opts && opts.skipPactoSync);
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante o carregamento
   const grid = document.getElementById('modalProfGrid');
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px 0;"><div style="font-size:11px;color:var(--muted);">Carregando...</div></div>';
@@ -14079,13 +14370,19 @@ async function renderModalProf(opts) {
   await sincronizarCadastroProfessoresComHistorico(unidId);
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — descarta o resultado
 
+  // Alinha ativo/inativo com o BI da Pacto (quem saiu some da lista ativa)
+  if (!skipPactoSync && typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof sincronizarStatusPactoProfessores === 'function') {
+    try { await sincronizarStatusPactoProfessores(unidId, { silent: true }); } catch (e) { console.warn('[renderModalProf] syncStatusPacto:', e); }
+    if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+  }
+
   // Remove duplicatas (ALMADA ALMADA vs cadastro Pacto) automaticamente
   if (!skipDedup && typeof _aplicarDeduplicataProfessores === 'function') {
     try {
       const n = await _aplicarDeduplicataProfessores(unidId, { auto: true });
       if (n > 0) {
         mostrarToast(`Removido(s) ${n} cadastro(s) duplicado(s). Mantido o da Pacto.`);
-        return renderModalProf({ skipDedup: true });
+        return renderModalProf({ skipDedup: true, skipPactoSync: true });
       }
     } catch (e) {
       console.warn('[renderModalProf] dedup:', e);
@@ -14094,10 +14391,10 @@ async function renderModalProf(opts) {
 
   const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
-  const profsBase = snap.docs
-    .map(d=>({profId:d.id,...d.data()}))
-    .filter(professorEstaAtivo);
-  if(!profsBase.length) {
+  const todosBase = snap.docs.map(d=>({profId:d.id,...d.data()}));
+  const ativosCount = todosBase.filter(professorEstaAtivo).length;
+  const inativosCount = todosBase.length - ativosCount;
+  if(!todosBase.length) {
     document.getElementById('modalProfSub').textContent = '0 professores cadastrados';
     document.getElementById('equipeCardProfCount').textContent = '0';
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px 0;">
@@ -14112,7 +14409,7 @@ async function renderModalProf(opts) {
 
 
   // Cruza cada professor cadastrado com seu histórico de meses (se houver)
-  const profs = profsBase.map(prof => {
+  const profs = todosBase.map(prof => {
     const meses = [];
     hist.forEach(mes => {
       const m = (mes.professores||[]).find(p =>
@@ -14122,7 +14419,15 @@ async function renderModalProf(opts) {
       );
       if(m) meses.push({mesNome:mes.nome, ...m});
     });
-    return {nome: prof.nome, profId: prof.profId, codigoPacto: prof.codigoPacto != null ? prof.codigoPacto : null, foraTreinoWeb: !!prof.foraTreinoWeb, meses};
+    return {
+      nome: prof.nome,
+      profId: prof.profId,
+      codigoPacto: prof.codigoPacto != null ? prof.codigoPacto : null,
+      foraTreinoWeb: !!prof.foraTreinoWeb,
+      ativo: professorEstaAtivo(prof),
+      inativadoPorPacto: !!prof.inativadoPorPacto,
+      meses
+    };
   });
 
   const colabs = await Promise.all(profs.map(async prof => {
@@ -14132,9 +14437,12 @@ async function renderModalProf(opts) {
   }));
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checagem final antes de atualizar a tela
   _modalProfCards = colabs;
-  const comPacto = colabs.filter(p => p.codigoPacto != null).length;
-  document.getElementById('modalProfSub').textContent = `${colabs.length} professores · ${comPacto} com cód. Pacto · ${unidadeAtual.nome}`;
-  document.getElementById('equipeCardProfCount').textContent = colabs.length;
+  const comPacto = colabs.filter(p => p.ativo && p.codigoPacto != null).length;
+  let sub = `${ativosCount} ativos`;
+  if (inativosCount) sub += ` · ${inativosCount} inativo(s)`;
+  sub += ` · ${comPacto} com cód. Pacto · ${unidadeAtual.nome}`;
+  document.getElementById('modalProfSub').textContent = sub;
+  document.getElementById('equipeCardProfCount').textContent = String(ativosCount);
   filtrarModalProf();
 }
 
@@ -14236,6 +14544,8 @@ function filtrarModalProf() {
     const diasDesde = ciclo ? Math.floor((Date.now()-new Date(ciclo.criadoEm).getTime())/(1000*60*60*24)) : null;
     const radarOk = ciclo && diasDesde !== null && diasDesde < 76;
     if(busca && !prof.nome.toLowerCase().includes(busca)) return false;
+    if(_modalProfFiltro === 'inativos') return !professorEstaAtivo(prof);
+    if(!professorEstaAtivo(prof)) return false; // demais filtros: só ativos
     if(_modalProfFiltro === 'destaque') return ul ? pe >= 70 : false;
     if(_modalProfFiltro === 'atencao') return ul ? pe < 70 : true; // sem mês ainda conta como "atenção"
     if(_modalProfFiltro === 'radar_pendente') return !radarOk;
@@ -14286,7 +14596,14 @@ function filtrarModalProf() {
     const badgeForaExtra = (prof.foraTreinoWeb && prof.codigoPacto != null)
       ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(245,166,35,.12);color:#c47d0e;border:1px solid rgba(245,166,35,.35);">Fora do Treino Web</span>`
       : '';
-    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">
+    const estaAtivo = professorEstaAtivo(prof);
+    const badgeInativo = !estaAtivo
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(136,136,136,.15);color:#888;border:1px solid rgba(136,136,136,.35);">${prof.inativadoPorPacto ? 'Inativo (Pacto)' : 'Inativo'}</span>`
+      : '';
+    const acaoFooter = estaAtivo
+      ? `<button onclick="excluirProfessorCadastro('${prof.profId}','${esc(prof.nome)}')" style="background:none;border:none;color:#e01f2d;cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✕ Remover</button>`
+      : `<button onclick="reativarProfessorUI('${prof.profId}','${esc(prof.nome)}')" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">↺ Reativar</button>`;
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;${estaAtivo ? '' : 'opacity:.72;'}" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">
       <div style="height:3px;background:${cor};width:100%;"></div>
       <div style="padding:12px 14px;flex:1;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -14306,10 +14623,10 @@ function filtrarModalProf() {
             <div style="font-size:9px;color:var(--muted);margin-top:1px;">vencidos</div>
           </div>
         </div>` : ''}
-        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgePacto}${badgeForaExtra}${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${badgeInativo}${badgePacto}${badgeForaExtra}${badgeSemMes}${badgeRadar}${badgeRt}${badgeColab}${badgeMedia}</div>
       </div>
       <div style="padding:7px 14px;border-top:1px solid rgba(255,255,255,.06);font-size:10px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);" onclick="event.stopPropagation()">
-        <button onclick="excluirProfessorCadastro('${prof.profId}','${esc(prof.nome)}')" style="background:none;border:none;color:#e01f2d;cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✕ Remover</button>
+        ${acaoFooter}
         <button type="button" onclick="editarCodigoPactoUI('${prof.profId}','${esc(prof.nome)}',${prof.codigoPacto != null ? String(prof.codigoPacto) : 'null'})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;font-family:Inter,sans-serif;">✎ Cód. Pacto</button>
         <span style="cursor:pointer;color:${cor};" onclick="fecharModalEquipe('prof');abrirPerfilProfessor('${esc(prof.nome)}','${prof.profId||''}')">Ver perfil →</span>
       </div>
@@ -14325,11 +14642,14 @@ async function excluirProfessorCadastro(profId, nome) {
   try {
     // Soft-delete: mantém o doc com ativo:false para a sync com histórico
     // NÃO recriar o professor ao abrir Equipe / Registrar mês.
+    const removidoEm = new Date().toISOString();
     await professoresRef(unidId).doc(profId).set({
       ativo: false,
-      removidoEm: new Date().toISOString(),
+      inativadoPorPacto: false, // remoção manual — sync Pacto não deve reativar
+      removidoEm,
       removidoPor: usuarioLogado?.nome || 'RT'
     }, { merge: true });
+    marcarProfessorInativoNoCache(unidId, profId, nome, removidoEm);
     mostrarToast(`${nome} removido do cadastro ativo.`);
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — não mexe na tela errada
     // Remove da grade imediatamente (mesmo se a aba Dados não estiver ativa)
@@ -14339,7 +14659,9 @@ async function excluirProfessorCadastro(profId, nome) {
     });
     if(linha) linha.remove();
     if(typeof feedbackGrade === 'function') feedbackGrade();
-    renderModalProf();
+    if(typeof atualizarHeader === 'function') atualizarHeader();
+    if(typeof renderHistorico === 'function') renderHistorico();
+    renderModalProf({ skipDedup: true, skipPactoSync: true });
   } catch(e) { mostrarToast('Erro ao remover: '+e.message); }
 }
 
@@ -14653,10 +14975,17 @@ async function vincularCodigosPactoDaUnidade() {
       try { await Promise.all(persistFora); } catch (e) {}
     }
 
+    // Após vincular: inativa quem tem código e sumiu do BI
+    let syncR = { inativados: 0, reativados: 0 };
+    try {
+      syncR = await sincronizarStatusPactoProfessores(unidId, { biNorm, silent: true }) || syncR;
+    } catch (e) { console.warn('[PACTO VÍNCULO] syncStatus:', e); }
+
     console.group('[PACTO VÍNCULO]');
-    console.log({ vinculados, jaTinham, foraTreinoWeb: semMatch.length, ambiguos: ambiguos.length, conflitoUsado: conflitoUsado.length });
+    console.log({ vinculados, jaTinham, foraTreinoWeb: semMatch.length, ambiguos: ambiguos.length, conflitoUsado: conflitoUsado.length, inativadosPacto: syncR.inativados, reativadosPacto: syncR.reativados });
     if (semMatch.length) console.warn('Fora do Treino Web:', semMatch);
     if (ambiguos.length) console.warn('Ambíguos:', ambiguos);
+    if (syncR.nomesInativados && syncR.nomesInativados.length) console.warn('Inativados (fora da Pacto):', syncR.nomesInativados);
     console.groupEnd();
 
     let msg = `Pacto: ${vinculados} vinculado(s)`;
@@ -14664,9 +14993,11 @@ async function vincularCodigosPactoDaUnidade() {
     if (semMatch.length) msg += ` · ${semMatch.length} fora do Treino Web`;
     if (ambiguos.length) msg += ` · ${ambiguos.length} ambíguo(s)`;
     if (conflitoUsado.length) msg += ` · ${conflitoUsado.length} código já em uso`;
+    if (syncR.inativados) msg += ` · ${syncR.inativados} inativado(s)`;
+    if (syncR.reativados) msg += ` · ${syncR.reativados} reativado(s)`;
     mostrarToast(msg);
 
-    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf();
+    if (unidadeAtual && unidadeAtual.id === unidId) renderModalProf({ skipDedup: true, skipPactoSync: true });
   } catch (e) {
     console.error('[PACTO VÍNCULO]', e);
     mostrarToast('Erro ao vincular Pacto: ' + (e.message || 'falha'));
