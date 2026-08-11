@@ -26317,11 +26317,13 @@ function abrirModalRelatorio(){
   const _selMes = document.getElementById('relMesSelect');
   if(_selMes) {
     _selMes.onchange = relMesChanged;
+    _selMes.addEventListener('change', relMesChanged);
+    console.log('[MODAL] listener registrado em relMesSelect');
   }
   modal.style.display='block';
 }
 function relMesChanged() {
-  if(_relTipo !== 'semanal' && _relTipo !== 'regional-semanal') return;
+  if(_relTipo !== 'semanal' && _relTipo !== 'regional-semanal') return;  // mensal não precisa
   const chave = (document.getElementById('relMesSelect')||{}).value || '';
   const sel = document.getElementById('relSemanaSelect');
   if(!sel) return;
@@ -26352,11 +26354,11 @@ function selRelTipo(tipo){
   _relTipo=tipo;
   const ids=['optRelSocio','optRelRT','optRelCarteira','optRelIndividual','optRelSemanal','optRelRegionalSemanal'];
   const cors={'optRelSocio':'#e01f2d','optRelRT':'#2ecc71','optRelCarteira':'#4f8ef7','optRelIndividual':'#4f8ef7','optRelSemanal':'#6d28d9','optRelRegionalSemanal':'#CE002E'};
-  const tipoMap={'socio':'optRelSocio','rt':'optRelRT','carteira':'optRelCarteira','individual':'optRelIndividual','semanal':'optRelSemanal','regional-semanal':'optRelRegionalSemanal'};
+  const tipoMap={'socio':'optRelSocio','rt':'optRelRT','carteira':'optRelCarteira','individual':'optRelIndividual','semanal':'optRelSemanal','regional-semanal':'optRelRegionalSemanal','mensal-regional':'optRelMensalRegional'};
   ids.forEach(id=>{const el=document.getElementById(id);if(el)el.style.borderColor=tipoMap[tipo]===id?cors[id]:'rgba(255,255,255,.1)';});
   const us=document.getElementById('relUnidSel');
   if(us) us.style.display=(tipo==='rt'||tipo==='carteira'||tipo==='individual'||tipo==='semanal')?'block':'none';
-  if(us && tipo==='regional-semanal') us.style.display='none';
+  if(us && (tipo==='regional-semanal'||tipo==='mensal-regional')) us.style.display='none';
   const isAdmin=usuarioLogado&&usuarioLogado.papel==='admin';
   const rs=document.getElementById('relRTSel');
   if(rs) rs.style.display=(tipo==='rt'&&isAdmin)?'block':'none';
@@ -26367,6 +26369,8 @@ function selRelTipo(tipo){
   // Mostrar/ocultar select de semana
   const semWrap = document.getElementById('relSemanaWrap');
   if(semWrap) semWrap.style.display = (tipo==='semanal'||tipo==='regional-semanal') ? 'block' : 'none';
+  // Mensal não precisa de seletor de semana
+  if(tipo==='mensal-regional' && semWrap) semWrap.style.display='none';
   const analWrap = document.getElementById('relAnaliseWrap');
   if(analWrap) analWrap.style.display = tipo==='semanal' ? 'block' : 'none';
   if(tipo==='semanal'||tipo==='regional-semanal') relMesChanged();
@@ -26491,15 +26495,59 @@ async function montarDadosRelatorio(chave){
         treinoAnterior:pct(eA,cA),
         vencidosAnterior:pct(vA,tA),
         scoreAnterior:scA?scA.total:null,
+        emDiaAnterior:eA,
+        vencidosAbsAnterior:vA,
         alunosAnterior:tA
       };
     }
+    // ── Destaques por professor ──────────────────────────────────────────
+    const profsAnt=anterior?anterior.professores||[]:[];
+    const profComPct=p=>pct(p.emDia,p.comTreino);
+    const profDelta=p=>{
+      const pa=profsAnt.find(x=>x.nome===p.nome);
+      return pa!==null&&pa!==undefined?profComPct(p)-profComPct(pa):null;
+    };
+    let destaques=null;
+    if(profs.length){
+      const comAnterior=profs.filter(p=>profsAnt.find(x=>x.nome===p.nome));
+      const ordenadosPct=[...profs].sort((a,b)=>profComPct(b)-profComPct(a));
+      const ordenadosDelta=comAnterior.slice().sort((a,b)=>(profDelta(b)||0)-(profDelta(a)||0));
+      const melhor=ordenadosPct[0]||null;
+      const pior=ordenadosPct[ordenadosPct.length-1]||null;
+      const maisEvoluiu=ordenadosDelta[0]||null;
+      const maisRegrediu=ordenadosDelta[ordenadosDelta.length-1]||null;
+      const _profInfo=(p)=>{
+        if(!p) return null;
+        const pa=profsAnt.find(x=>x.nome===p.nome)||null;
+        const pePct=profComPct(p);
+        const peAnt=pa?profComPct(pa):null;
+        const delta=peAnt!==null?pePct-peAnt:null;
+        return{
+          nome:p.nome,
+          emDia:p.emDia, comTreino:p.comTreino, vencido:p.vencido, total:p.total,
+          pct:pePct,
+          emDiaAnt:pa?pa.emDia:null,
+          comTreinoAnt:pa?pa.comTreino:null,
+          vencidoAnt:pa?pa.vencido:null,
+          totalAnt:pa?pa.total:null,
+          pctAnt:peAnt,
+          delta
+        };
+      };
+      destaques={
+        melhorCarteira:_profInfo(melhor),
+        piorCarteira:_profInfo(pior),
+        maisEvoluiu:_profInfo(maisEvoluiu),
+        maisRegrediu:_profInfo(maisRegrediu)
+      };
+    }
+
     return{
       nome:u.nome, unidId:u.id, cor:u.cor, rts:getRTs(u.id),
       alunos:tot, treinoEmDia, meta:meta.metaTreino, gap,
       vencidos:venc, percentVencidos, scoreRT:score?score.total:null,
       duracaoMedia, duracaoOk:duracaoMedia?duracaoOk(duracaoMedia):null,
-      status, evolucao
+      status, evolucao, destaques
     };
   }).filter(Boolean);
 
@@ -26561,6 +26609,20 @@ async function montarDadosRelatorio(chave){
     acc.diasPreenchidos += t.diasPreenchidos || 0;
     return acc;
   }, { bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0, diasPreenchidos:0 });
+  // ── Comparativos da rede (mês anterior) ─────────────────────────────
+  let redeAnt={totalAlunos:null,emDia:null,vencidos:null,unidadesNaMeta:null,scoreMedio:null};
+  const unidsComAnt2=unidades.filter(u=>u.evolucao);
+  if(unidsComAnt2.length){
+    redeAnt.totalAlunos=unidsComAnt2.reduce((s,u)=>s+(u.evolucao.alunosAnterior||0),0);
+    redeAnt.emDia=unidsComAnt2.reduce((s,u)=>s+(u.evolucao.emDiaAnterior||0),0);
+    redeAnt.vencidos=unidsComAnt2.reduce((s,u)=>s+(u.evolucao.vencidosAbsAnterior||0),0);
+    redeAnt.unidadesNaMeta=unidsComAnt2.filter(u=>{
+      const ant=u.evolucao.treinoAnterior;
+      return ant!==null&&ant>=u.meta;
+    }).length;
+    const scoresAnt=unidsComAnt2.filter(u=>u.evolucao.scoreAnterior!==null).map(u=>u.evolucao.scoreAnterior);
+    redeAnt.scoreMedio=scoresAnt.length?Math.round(scoresAnt.reduce((a,b)=>a+b)/scoresAnt.length):null;
+  }
 
   return{
     mesReferencia:labelMes, dataGeracao,
@@ -26568,9 +26630,11 @@ async function montarDadosRelatorio(chave){
     rede:{
       totalAlunos:totAlunos,
       percentTreinoEmDia:pct(totEmDia,totCom),
+      emDiaAbs:totEmDia,
       variacaoTreino, totalVencidos:totVenc,
       unidadesNaMeta:unidades.filter(u=>u.gap>=0).length,
-      scoreMedioRT
+      scoreMedioRT,
+      anterior:redeAnt
     },
     pulsoRede,
     pulsoRedeAnt,
@@ -26581,13 +26645,12 @@ async function montarDadosRelatorio(chave){
 // Retorna a string HTML completa do relatório com as 4 páginas e CSS inline.
 function gerarHTMLRelatorio(dados){
   const R='#CE002E', BOM='#1a7a42', AMB='#c07800', CIN='#6b7280';
-  const corStatus=s=>s==='critico'?R:s==='meta'?BOM:AMB;
-  const labelStatus=s=>s==='critico'?'Crítico':s==='meta'?'Na meta':'Regular';
-  const seta=n=>n>=0?'↑':'↓';
-  const corDelta=(n,bomSeSobe)=>n===0?CIN:(bomSeSobe?n>0?BOM:R:n<0?BOM:R);
-  const fmt=n=>n!==null&&n!==undefined?String(n):'—';
+  const corU=u=>u.status==='critico'?R:u.status==='meta'?BOM:AMB;
+  const seta=n=>n>=0?'▲':'▼';
+  const corD=(n,bomSeSobe)=>n===0?CIN:(bomSeSobe?n>0?BOM:R:n<0?BOM:R);
+  const fmt=n=>n!==null&&n!==undefined?n.toLocaleString('pt-BR'):'—';
+  const fmtP=n=>n!==null&&n!==undefined?n+'%':'—';
 
-  // Prazo calculado a partir da data de geração
   function prazo(diasApos){
     const partes=dados.dataGeracao.split('/');
     const base=new Date(+partes[2],+partes[1]-1,+partes[0]);
@@ -26595,446 +26658,311 @@ function gerarHTMLRelatorio(dados){
     return base.toLocaleDateString('pt-BR');
   }
 
-  // Diagnóstico resumido
-  const pior=[...dados.unidades].sort((a,b)=>a.gap-b.gap)[0];
-  const melhor=[...dados.unidades].sort((a,b)=>b.gap-a.gap)[0];
-  const varStr=dados.rede.variacaoTreino!==null
-    ?` (${dados.rede.variacaoTreino>=0?'+':''}${dados.rede.variacaoTreino}pts vs mês anterior)`:'';
-  const diagnostico=`A rede encerrou ${dados.mesReferencia} com ${dados.rede.percentTreinoEmDia}% de treino em dia${varStr}, `+
-    `${dados.rede.unidadesNaMeta} de ${dados.unidades.length} unidades dentro da meta. `+
-    (pior&&pior.gap<0?`Maior atenção: ${pior.nome} (${pior.gap}pts abaixo da meta). `:'')  +
-    (melhor&&melhor.gap>=0?`Referência positiva: ${melhor.nome} (+${melhor.gap}pts).`:'');
-
-  // Agenda de decisões — 4 itens automáticos
+  // ── Agenda de decisões (igual ao original) ────────────────────────────
   const agenda=[];
-  // Ordena críticos pela maior queda de score (pior primeiro)
   const criticos=[...dados.unidades].filter(u=>u.status==='critico')
     .sort((a,b)=>{
       const da=a.evolucao&&a.evolucao.scoreAnterior!==null?a.scoreRT-a.evolucao.scoreAnterior:0;
-      const db2=b.evolucao&&b.evolucao.scoreAnterior!==null?b.scoreRT-b.evolucao.scoreAnterior:0;
-      return da-db2; // menor delta (mais negativo) primeiro
+      const db=b.evolucao&&b.evolucao.scoreAnterior!==null?b.scoreRT-b.evolucao.scoreAnterior:0;
+      return da-db;
     });
-  // Item 1 — intervenção presencial: pior unidade crítica
   if(criticos.length>0){
     const u=criticos[0];
-    agenda.push({num:'01',cor:R,
-      titulo:`Intervenção presencial — ${u.nome}`,
+    agenda.push({num:'01',titulo:`Intervenção presencial — ${u.nome}`,
       desc:`Unidade em nível crítico (score ${u.scoreRT}). Visita do Regional para diagnóstico operacional e alinhamento imediato com os RTs.`,
       resp:'Regional',prazo:prazo(5)});
   }
-  // Item 2 — plano de contenção: segunda unidade com queda ≥15pts (crítica ou regular)
-  const todasComQueda=[...dados.unidades]
-    .filter(u=>u.evolucao&&u.evolucao.scoreAnterior!==null&&(u.scoreRT-u.evolucao.scoreAnterior)<=-15)
+  const queda=[...dados.unidades].filter(u=>u.evolucao&&u.evolucao.scoreAnterior!==null&&(u.scoreRT-u.evolucao.scoreAnterior)<=-15)
     .sort((a,b)=>(a.scoreRT-a.evolucao.scoreAnterior)-(b.scoreRT-b.evolucao.scoreAnterior));
-  // ignora a unidade já usada no item 1
-  const u2=todasComQueda.find(u=>!criticos[0]||u.nome!==criticos[0].nome);
-  if(u2){
-    const queda=Math.abs(u2.scoreRT-u2.evolucao.scoreAnterior);
-    agenda.push({num:'02',cor:R,
-      titulo:`Plano de contenção — ${u2.nome}`,
-      desc:`Queda de ${queda}pts no score RT (${u2.evolucao.scoreAnterior} → ${u2.scoreRT}). Definir plano de ação com o RT até o prazo.`,
-      resp:'Regional',prazo:prazo(7)});
+  if(queda.length>0){
+    const u2=queda[0];
+    const q=Math.abs(u2.scoreRT-u2.evolucao.scoreAnterior);
+    agenda.push({num:'02',titulo:`Plano de contenção — ${u2.nome}`,
+      desc:`Queda de ${q}pts no score RT (${u2.evolucao.scoreAnterior} → ${u2.scoreRT}). Definir plano de ação com o RT até o prazo.`,
+      resp:'Regional',prazo:prazo(10)});
   }
-  // Item 3 — alerta preventivo: unidade com duração média >70d
-  const durAlta=dados.unidades.find(u=>u.duracaoMedia&&u.duracaoMedia>70);
-  if(durAlta){
-    const rt=durAlta.rts.length?durAlta.rts[0]:'RT';
-    agenda.push({num:'03',cor:AMB,
-      titulo:`Alerta preventivo de engajamento — ${durAlta.nome}`,
-      desc:`Duração média de treino em ${durAlta.duracaoMedia} dias (fora da faixa recomendada de 35-45d). RT deve acionar estratégia de reengajamento ativo.`,
-      resp:rt,prazo:prazo(10)});
-  }
-  // Item 4 — formalizar modelo: unidade com score em alta
   const emAlta=dados.unidades.find(u=>u.evolucao&&u.evolucao.scoreAnterior!==null&&u.scoreRT>u.evolucao.scoreAnterior);
   if(emAlta){
-    agenda.push({num:'04',cor:BOM,
-      titulo:`Formalizar como modelo de rede — ${emAlta.nome}`,
+    agenda.push({num:'03',titulo:`Formalizar como modelo — ${emAlta.nome}`,
       desc:`Score RT em alta (${emAlta.evolucao.scoreAnterior} → ${emAlta.scoreRT}, +${emAlta.scoreRT-emAlta.evolucao.scoreAnterior}pts). Documentar práticas e replicar para as demais unidades.`,
       resp:'Regional',prazo:prazo(15)});
   }
-  // Completar até 4 se algum critério não foi atendido — usa unidades reais
+  const comDurRisco=dados.unidades.filter(u=>u.duracaoMedia&&!u.duracaoOk);
+  comDurRisco.forEach(u=>{
+    if(agenda.length<4)
+      agenda.push({num:'04',titulo:`Alerta de duração — ${u.nome}`,
+        desc:`Duração média de ${u.duracaoMedia} dias (fora da faixa 35-45d). RT deve acionar estratégia de reengajamento.`,
+        resp:u.rts[0]||'RT',prazo:prazo(10)});
+  });
   if(agenda.length<4){
-    dados.unidades.filter(u=>!agenda.some(a=>a.titulo.includes(u.nome))).forEach(u=>{
-      if(agenda.length>=4) return;
-      agenda.push({num:String(agenda.length+1).padStart(2,'0'),cor:CIN,
-        titulo:`Monitoramento contínuo — ${u.nome}`,
-        desc:`Acompanhar evolução dos indicadores e registrar evidências no sistema.`,
-        resp:u.rts.length?u.rts[0]:'Regional',prazo:prazo(10)});
-    });
+    const monitor=dados.unidades.find(u=>u.status==='regular');
+    if(monitor) agenda.push({num:'04',titulo:`Monitoramento contínuo — ${monitor.nome}`,
+      desc:`Acompanhar evolução dos indicadores e registrar evidências no sistema.`,
+      resp:monitor.rts[0]||'RT',prazo:prazo(10)});
   }
 
-  // ── Barra de progresso inline ───────────────────────────────────────────
-  function barra(val,meta,cor,w='120px'){
-    const pVal=Math.min(100,Math.max(0,val));
-    const pMeta=Math.min(100,meta);
-    return `<div style="display:flex;align-items:center;gap:8px;">
-      <div style="width:${w};height:6px;background:#e5e7eb;border-radius:3px;position:relative;flex-shrink:0;">
-        <div style="width:${pVal}%;height:100%;background:${cor};border-radius:3px;"></div>
-        <div style="position:absolute;top:-3px;bottom:-3px;left:${pMeta}%;width:2px;background:#374151;"></div>
-      </div>
-      <span style="font-size:11px;font-weight:600;color:${cor}">${val}%</span>
-    </div>`;
-  }
-
-  // ── CSS ──────────────────────────────────────────────────────────────────
   const css=`
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    @media print{
-      @page{size:A4;margin:0}
-      body{margin:0}
-      .page-break{page-break-after:always}
-    }
-    .page{width:210mm;background:#fff;overflow:hidden;position:relative;padding-bottom:40px}
-    /* Header */
-    .hd{background:var(--surface2);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
-    .hd-logo{display:flex;align-items:center;gap:10px}
-    .hd-mf{width:34px;height:34px;background:${R};border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
-    .hd-nome{font-size:13px;font-weight:600;color:#fff;letter-spacing:.03em}
-    .hd-sub{font-size:9px;color:#9ca3af;margin-top:1px}
-    .hd-right{text-align:right}
-    .hd-tipo{font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}
-    .hd-periodo{font-size:11px;font-weight:600;color:#e5e7eb;margin-top:2px}
-    /* Faixa diagnóstico */
-    .diag{background:#161616;color:#d1d5db;font-size:8.5pt;padding:9px 20px;line-height:1.5}
-    /* Barra de seção */
-    .sec-bar{background:${R};color:#fff;padding:6px 20px;display:flex;justify-content:space-between;align-items:center}
-    .sec-bar-titulo{font-size:9pt;font-weight:600;letter-spacing:.03em}
-    .sec-bar-pag{font-size:8pt;opacity:.85}
-    /* KPIs */
-    .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-bottom:1px solid #e5e7eb}
-    .kpi{padding:12px 14px;border-right:1px solid #e5e7eb}
-    .kpi:last-child{border-right:none}
-    .kpi-label{font-size:7.5pt;color:${CIN};margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
-    .kpi-valor{font-size:16pt;font-weight:700;color:#111;line-height:1}
-    .kpi-delta{font-size:8pt;margin-top:3px}
-    /* Bloco crítico */
-    .bloco-critico{margin:12px 16px;background:#1a0505;border:1.5px solid #5a1010;border-radius:6px;padding:12px 14px}
-    .bc-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-    .bc-tag{background:${R};color:#fff;font-size:7pt;font-weight:700;padding:2px 8px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em}
-    .bc-titulo{font-size:10.5pt;font-weight:700;color:#fef2f2;margin-bottom:4px}
-    .bc-desc{font-size:8.5pt;color:#fca5a5;margin-bottom:10px;line-height:1.5}
-    .bc-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-    .bc-stat-label{font-size:7pt;color:#f87171;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
-    .bc-stat-valor{font-size:13pt;font-weight:700;color:#fef2f2}
-    /* Tabela de unidades */
-    .wrap{padding:0 16px}
-    table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-top:10px}
-    th{background:#f3f4f6;color:#374151;font-weight:600;font-size:7.5pt;padding:7px 8px;text-align:left;border-bottom:2px solid #d1d5db;white-space:nowrap}
-    td{padding:7px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;white-space:nowrap}
-    tr:last-child td{border-bottom:none}
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:7.5pt;font-weight:600}
-    /* Rodapé */
-    .rodape{border-top:1px solid #e5e7eb;padding:8px 20px;display:flex;justify-content:space-between;font-size:7.5pt;color:${CIN};margin-top:12px}
-    /* Página 2 */
-    .cards-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:12px 16px}
-    .card-unidade{border-radius:6px;border:1px solid #e5e7eb;overflow:hidden}
-    .card-header{padding:10px 12px;background:#f9fafb;display:flex;justify-content:space-between;align-items:flex-start}
-    .card-nome{font-size:9.5pt;font-weight:700}
-    .card-rt{font-size:7.5pt;color:${CIN};margin-top:2px}
-    .card-indicadores{padding:10px 12px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-    .ind-label{font-size:7pt;color:${CIN};text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
-    .ind-valor{font-size:9pt;font-weight:600}
-    .ind-evolucao{font-size:7.5pt;margin-top:1px}
-    .dois-blocos{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px;margin-top:10px}
-    .bloco-atencao{background:#fff1f2;border:1px solid #fecaca;border-radius:6px;padding:12px}
-    .bloco-positivo{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px}
-    .bloco-titulo{font-size:8.5pt;font-weight:700;margin-bottom:8px}
-    .bullet{font-size:8pt;line-height:1.6;padding-left:12px;position:relative}
-    .bullet::before{content:"•";position:absolute;left:0;color:inherit}
-    /* Página 3 */
-    .ranking-item{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #f0f0f0}
-    .rank-num{font-size:22pt;font-weight:700;line-height:1;width:32px;flex-shrink:0;text-align:center}
-    .rank-body{flex:1}
-    .rank-nome{font-size:10.5pt;font-weight:700}
-    .rank-rt{font-size:8pt;color:${CIN};margin-top:1px;margin-bottom:6px}
-    .rank-score{font-size:20pt;font-weight:700;line-height:1;margin-bottom:4px}
-    .rank-inds{font-size:7.5pt;color:#4b5563;line-height:1.8}
-    .agenda{margin:12px 16px}
-    .agenda-header{background:var(--surface2);color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;font-size:9pt;font-weight:600}
-    .agenda-item{display:grid;grid-template-columns:40px 1fr 100px;gap:0;border-bottom:1px solid #f0f0f0}
-    .agenda-item:last-child{border-bottom:none;border-radius:0 0 6px 6px}
-    .ag-num{display:flex;align-items:center;justify-content:center;font-size:14pt;font-weight:700;padding:10px 0;border-right:1px solid #f0f0f0}
-    .ag-corpo{padding:10px 12px;border-right:1px solid #f0f0f0}
-    .ag-titulo{font-size:8.5pt;font-weight:700;margin-bottom:3px}
-    .ag-desc{font-size:7.5pt;color:#4b5563;line-height:1.5}
-    .ag-resp{padding:10px 12px;text-align:center;display:flex;flex-direction:column;justify-content:center}
-    .ag-resp-nome{font-size:8pt;font-weight:600;color:#111}
-    .ag-prazo{font-size:7pt;color:${CIN};margin-top:3px}
-    .nota-met{padding:8px 16px;font-size:7pt;color:${CIN};line-height:1.6;border-top:1px solid #e5e7eb;margin-top:8px}
-    .hd-compact{background:var(--surface2);color:#fff;padding:8px 20px;display:flex;align-items:center;justify-content:space-between}
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Inter,sans-serif;font-size:10pt;color:#111;background:#fff;}
+    .page{width:210mm;min-height:297mm;padding:14mm 16mm;page-break-after:always;position:relative;}
+    .page:last-child{page-break-after:auto;}
+    @media print{.page{page-break-after:always;}.page:last-child{page-break-after:auto;}}
+    .titulo-mov{color:#CE002E;font-weight:700;font-size:13pt;}
+    .titulo-txt{font-weight:700;font-size:13pt;color:#111;}
+    .subtitulo{font-size:7.5pt;color:#9ca3af;margin-top:1pt;margin-bottom:12pt;}
+    .sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;background:#f9f9f9;padding:3pt 7pt;border-radius:3pt;margin-bottom:7pt;margin-top:12pt;}
+    .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:0.5pt solid #e5e7eb;border-radius:5pt;overflow:hidden;margin-bottom:0;}
+    .kpi{background:#fff;padding:8pt 9pt 7pt;border-right:0.5pt solid #e5e7eb;}
+    .kpi:last-child{border-right:none;}
+    .kpi-l{font-size:6pt;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;font-weight:600;margin-bottom:3pt;}
+    .kpi-v{font-size:17pt;font-weight:700;line-height:1;}
+    .kpi-sub{font-size:6.5pt;color:#6b7280;margin-top:1pt;}
+    .kpi-sep{border-top:0.5pt solid #f3f4f6;margin-top:4pt;padding-top:3pt;}
+    .kpi-ant{font-size:6pt;color:#9ca3af;}
+    .kpi-diff{font-size:6.5pt;font-weight:700;margin-top:1pt;}
+    .tbl{width:100%;border-collapse:collapse;font-size:8pt;}
+    .tbl thead tr{background:#f9f9f9;}
+    .tbl th{text-align:left;font-size:6pt;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;font-weight:600;padding:4pt 7pt 5pt;border-bottom:1pt solid #e5e7eb;border-right:0.5pt solid #f3f4f6;}
+    .tbl th:last-child{border-right:none;}
+    .tbl td{padding:7pt 7pt;border-bottom:0.5pt solid #f3f4f6;border-right:0.5pt solid #f9f9f9;vertical-align:top;}
+    .tbl td:last-child{border-right:none;}
+    .tbl tr:last-child td{border-bottom:none;font-weight:700;background:#f9f9f9;}
+    .un-nome{font-weight:700;font-size:8.5pt;}
+    .un-rt{font-size:6.5pt;color:#9ca3af;margin-top:1pt;}
+    .nb{font-size:12pt;font-weight:700;line-height:1;}
+    .np{font-size:6.5pt;color:#6b7280;margin-top:1pt;}
+    .na{font-size:6pt;color:#9ca3af;margin-top:2pt;}
+    .nd{font-size:6.5pt;font-weight:700;margin-top:1pt;}
+    .bar{width:55pt;height:3pt;background:#f3f4f6;border-radius:2pt;position:relative;display:block;margin-top:2pt;}
+    .bf{height:3pt;border-radius:2pt;display:block;}
+    .bm{position:absolute;top:-3pt;height:9pt;width:.7pt;background:#9ca3af;}
+    .dois{display:grid;grid-template-columns:1fr 1fr;gap:0;border:0.5pt solid #e5e7eb;border-radius:5pt;overflow:hidden;margin-top:10pt;}
+    .bloco{background:#fff;padding:8pt 10pt;border-right:0.5pt solid #e5e7eb;}
+    .bloco:last-child{border-right:none;}
+    .bloco-t{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4pt;}
+    .blt{font-size:7pt;color:#374151;padding:2pt 0;border-bottom:0.5pt solid #f9f9f9;line-height:1.4;}
+    .blt:last-child{border-bottom:none;}
+    .unid-bloco{border:0.5pt solid #e5e7eb;border-radius:5pt;overflow:hidden;margin-bottom:7pt;}
+    .unid-hdr{display:flex;justify-content:space-between;align-items:center;padding:7pt 10pt;background:#f9f9f9;border-bottom:0.5pt solid #e5e7eb;}
+    .unid-titulo{font-size:9.5pt;font-weight:700;}
+    .unid-sub{font-size:6.5pt;color:#9ca3af;margin-top:1pt;}
+    .prof-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+    .prof-card{background:#fff;padding:7pt 9pt;border-right:0.5pt solid #e5e7eb;border-top:0.5pt solid #e5e7eb;}
+    .prof-card:nth-child(2n){border-right:none;}
+    .prof-card:nth-child(1),.prof-card:nth-child(2){border-top:none;}
+    .prof-tag{font-size:5.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2pt;}
+    .prof-nome{font-size:8pt;font-weight:700;color:#111;}
+    .prof-stats{font-size:6.5pt;color:#6b7280;margin-top:2pt;line-height:1.5;}
+    .prof-diff{font-size:6.5pt;font-weight:700;margin-top:1pt;}
+    .rank-box{border:0.5pt solid #e5e7eb;border-radius:5pt;overflow:hidden;}
+    .rank-item{display:flex;align-items:flex-start;gap:9pt;padding:8pt 10pt;border-bottom:0.5pt solid #f3f4f6;background:#fff;}
+    .rank-item:nth-child(odd){background:#fafafa;}
+    .rank-item:last-child{border-bottom:none;}
+    .rank-n{font-size:15pt;font-weight:700;min-width:15pt;color:#e5e7eb;}
+    .rank-body{flex:1;}
+    .rank-nome{font-size:9.5pt;font-weight:700;}
+    .rank-rt{font-size:6.5pt;color:#9ca3af;margin-bottom:2pt;}
+    .rank-bar{height:3pt;background:#f3f4f6;border-radius:2pt;margin:3pt 0;width:120pt;}
+    .rank-det{font-size:6.5pt;color:#6b7280;}
+    .rank-sc{font-size:15pt;font-weight:700;}
+    .nota{font-size:6.5pt;color:#9ca3af;line-height:1.6;margin-top:10pt;padding-top:7pt;border-top:0.5pt solid #f3f4f6;}
+    .green{color:#1a7a42;} .amber{color:#c07800;} .red{color:#CE002E;} .gray{color:#6b7280;}
   `;
 
-  // ── PÁGINA 1 ─────────────────────────────────────────────────────────────
-  const unitPrincipal=dados.unidades.find(u=>u.status==='critico')||dados.unidades[0];
-  const p1=`
-  <div class="page page-break">
-    <div class="hd">
-      <div class="hd-logo">
-        <div class="hd-mf">MF</div>
-        <div>
-          <div class="hd-nome">MOV FIT</div>
-          <div class="hd-sub">Central de Gestão</div>
-        </div>
-      </div>
-      <div class="hd-right">
-        <div class="hd-tipo">Relatório Executivo de Rede</div>
-        <div class="hd-periodo">${dados.mesReferencia}</div>
-        <div class="hd-sub">Gerado em ${dados.dataGeracao}</div>
-      </div>
-    </div>
-    <div class="diag">${diagnostico}</div>
-    <div class="sec-bar"><span class="sec-bar-titulo">Visão geral da rede</span><span class="sec-bar-pag">Página 1 de 4</span></div>
+  const rede=dados.rede;
+  const ant=rede.anterior||{};
+  const dAlunos=ant.totalAlunos!==null?rede.totalAlunos-ant.totalAlunos:null;
+  const dEmDia=ant.emDia!==null?rede.emDiaAbs-ant.emDia:null;
+  const dVenc=ant.vencidos!==null?rede.totalVencidos-ant.vencidos:null;
+  const dMeta=ant.unidadesNaMeta!==null?rede.unidadesNaMeta-ant.unidadesNaMeta:null;
+  const dScore=ant.scoreMedio!==null?rede.scoreMedioRT-ant.scoreMedio:null;
 
-    <div class="kpis">
-      <div class="kpi">
-        <div class="kpi-label">Alunos na rede</div>
-        <div class="kpi-valor">${dados.rede.totalAlunos.toLocaleString('pt-BR')}</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">% treino em dia</div>
-        <div class="kpi-valor" style="color:${dados.rede.percentTreinoEmDia<60?R:BOM}">${dados.rede.percentTreinoEmDia}%</div>
-        ${dados.rede.variacaoTreino!==null?`<div class="kpi-delta" style="color:${corDelta(dados.rede.variacaoTreino,true)}">${seta(dados.rede.variacaoTreino)} ${Math.abs(dados.rede.variacaoTreino)}pts vs mês ant.</div>`:''}
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Treino vencido</div>
-        <div class="kpi-valor" style="color:${R}">${dados.rede.totalVencidos.toLocaleString('pt-BR')}</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Unidades na meta</div>
-        <div class="kpi-valor">${dados.rede.unidadesNaMeta}<span style="font-size:11pt;color:${CIN}">/${dados.unidades.length}</span></div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Score médio RT</div>
-        <div class="kpi-valor" style="color:${dados.rede.scoreMedioRT>=60?BOM:R}">${dados.rede.scoreMedioRT}</div>
-      </div>
-    </div>
+  // ── PÁGINA 1 ──────────────────────────────────────────────────────────
+  const p1=`<div class="page">
+    <div><span class="titulo-mov">MOV</span><span class="titulo-txt">FIT · Relatório Executivo de Rede</span></div>
+    <div class="subtitulo">Todas as unidades · ${dados.mesReferencia} · Maicon Oliveira · Gerado em ${dados.dataGeracao}</div>
 
-    ${unitPrincipal&&unitPrincipal.status==='critico'?`
-    <div class="bloco-critico">
-      <div class="bc-header">
-        <span class="bc-tag">Alerta crítico</span>
-        <span class="bc-tag" style="background:#3d0a0a">${unitPrincipal.nome}</span>
+    <div class="sec">Consolidado da rede</div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-l">Alunos na rede</div>
+        <div class="kpi-v" style="color:#111;">${fmt(rede.totalAlunos)}</div>
+        <div class="kpi-sub">alunos ativos</div>
+        ${dAlunos!==null?`<div class="kpi-ant">ant: ${fmt(ant.totalAlunos)} alunos</div><div class="kpi-diff" style="color:${corD(dAlunos,true)}">${seta(dAlunos)} ${dAlunos>=0?'+':''}${fmt(dAlunos)} alunos</div>`:'<div class="kpi-ant">sem mês anterior</div>'}
       </div>
-      <div class="bc-titulo">Ruptura operacional em ${unitPrincipal.nome}</div>
-      <div class="bc-desc">Unidade abaixo da meta em ${Math.abs(unitPrincipal.gap)} pontos com ${unitPrincipal.percentVencidos}% da base com treino vencido. Exige intervenção imediata do Regional.</div>
-      <div class="bc-stats">
-        <div><div class="bc-stat-label">% treino em dia</div><div class="bc-stat-valor">${unitPrincipal.treinoEmDia}%</div></div>
-        <div><div class="bc-stat-label">% base vencida</div><div class="bc-stat-valor">${unitPrincipal.percentVencidos}%</div></div>
-        <div><div class="bc-stat-label">Alunos vencidos</div><div class="bc-stat-valor">${unitPrincipal.vencidos.toLocaleString('pt-BR')}</div></div>
-        <div><div class="bc-stat-label">Score RT</div><div class="bc-stat-valor">${fmt(unitPrincipal.scoreRT)}</div></div>
-        <div><div class="bc-stat-label">Queda score</div><div class="bc-stat-valor">${unitPrincipal.evolucao&&unitPrincipal.evolucao.scoreAnterior!==null?unitPrincipal.scoreRT-unitPrincipal.evolucao.scoreAnterior:'—'}</div></div>
+      <div class="kpi">
+        <div class="kpi-l">% treino em dia</div>
+        <div class="kpi-v" style="color:${rede.percentTreinoEmDia>=60?BOM:R}">${fmtP(rede.percentTreinoEmDia)}</div>
+        <div class="kpi-sub" style="color:#6b7280;">${fmt(rede.emDiaAbs)} alunos em dia</div>
+        ${dEmDia!==null?`<div class="kpi-ant">ant: ${fmt(ant.emDia)} alunos (${fmtP(rede.variacaoTreino!==null?rede.percentTreinoEmDia-rede.variacaoTreino:null)})</div><div class="kpi-diff" style="color:${corD(dEmDia,true)}">${seta(dEmDia)} ${dEmDia>=0?'+':''}${fmt(dEmDia)} alunos</div>`:'<div class="kpi-ant">sem mês anterior</div>'}
       </div>
-    </div>`:''}
-
-    <div class="wrap">
-      <table>
-        <thead><tr>
-          <th>Unidade</th>
-          <th>Treino em dia</th>
-          <th style="text-align:center">Meta</th>
-          <th style="text-align:center">Gap</th>
-          <th style="text-align:center">Vencidos</th>
-          <th style="text-align:center">% Bio</th>
-          <th style="text-align:center">Status</th>
-        </tr></thead>
-        <tbody>
-          ${dados.unidades.map(u=>`<tr>
-            <td style="font-weight:600">${u.nome}</td>
-            <td>${barra(u.treinoEmDia,u.meta,corStatus(u.status),'100px')}</td>
-            <td style="text-align:center;color:${CIN}">${u.meta}%</td>
-            <td style="text-align:center;font-weight:700;color:${u.gap>=0?BOM:R}">${u.gap>=0?'+':''}${u.gap}pts</td>
-            <td style="text-align:center">${u.vencidos.toLocaleString('pt-BR')} <span style="color:${CIN};font-size:8pt">(${u.percentVencidos}%)</span></td>
-            <td style="text-align:center"><span style="background:#fef9c3;color:#854d0e;font-size:7.5pt;padding:2px 7px;border-radius:16px;font-weight:600">Jul/26</span></td>
-            <td style="text-align:center"><span class="badge" style="background:${corStatus(u.status)}22;color:${corStatus(u.status)}">${labelStatus(u.status)}</span></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      <div style="font-size:7pt;color:${CIN};margin-top:6px;display:flex;gap:16px;">
-        <span>■ <span style="color:${R}">Vermelho</span> = crítico</span>
-        <span>■ <span style="color:${AMB}">Âmbar</span> = regular</span>
-        <span>■ <span style="color:${BOM}">Verde</span> = na meta</span>
-        <span>| Traço vertical = meta definida por unidade</span>
+      <div class="kpi">
+        <div class="kpi-l">Treino vencido</div>
+        <div class="kpi-v" style="color:#111;">${fmt(rede.totalVencidos)}</div>
+        <div class="kpi-sub">alunos com treino vencido</div>
+        ${dVenc!==null?`<div class="kpi-ant">ant: ${fmt(ant.vencidos)} alunos</div><div class="kpi-diff" style="color:${corD(dVenc,false)}">${seta(dVenc)} ${dVenc>=0?'+':''}${fmt(dVenc)} alunos</div>`:'<div class="kpi-ant">sem mês anterior</div>'}
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Unidades na meta</div>
+        <div class="kpi-v" style="color:#111;">${rede.unidadesNaMeta}/${dados.unidades.length}</div>
+        <div class="kpi-sub">${rede.unidadesNaMeta===0?'nenhuma atingiu a meta':rede.unidadesNaMeta===dados.unidades.length?'todas na meta':rede.unidadesNaMeta+' unidade(s) na meta'}</div>
+        ${dMeta!==null?`<div class="kpi-ant">ant: ${ant.unidadesNaMeta}/${dados.unidades.length}</div><div class="kpi-diff" style="color:${corD(dMeta,true)}">${seta(dMeta)} ${dMeta>=0?'+':''}${dMeta} unidade(s)</div>`:'<div class="kpi-ant">sem mês anterior</div>'}
+      </div>
+      <div class="kpi">
+        <div class="kpi-l">Score médio RT</div>
+        <div class="kpi-v" style="color:${rede.scoreMedioRT>=80?BOM:rede.scoreMedioRT>=60?AMB:R}">${rede.scoreMedioRT}</div>
+        <div class="kpi-sub">média das ${dados.unidades.length} unidades</div>
+        ${dScore!==null?`<div class="kpi-ant">ant: ${ant.scoreMedio} pts</div><div class="kpi-diff" style="color:${corD(dScore,true)}">${seta(dScore)} ${dScore>=0?'+':''}${dScore}pts</div>`:'<div class="kpi-ant">sem mês anterior</div>'}
       </div>
     </div>
 
-    <div class="wrap" style="margin-top:12px;">
-      <div style="background:#f9f9f7;border:0.5px solid #e4e4de;border-radius:6px;padding:14px 16px;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#999;font-weight:700;margin-bottom:8px;">Diagnóstico da rede — ${dados.mesReferencia}</div>
-        ${(()=>{
-          const bullets=[];
-          const piorU=[...dados.unidades].sort((a,b)=>a.gap-b.gap)[0];
-          if(piorU&&piorU.status==='critico') bullets.push({cor:R,txt:`<strong>Colapso operacional em ${piorU.nome}:</strong> unidade ${Math.abs(piorU.gap)}pts abaixo da meta com score RT em ${piorU.scoreRT}. ${piorU.evolucao&&piorU.evolucao.scoreAnterior!==null?`Queda de ${piorU.scoreRT-piorU.evolucao.scoreAnterior}pts vs. mês anterior.`:''}`});
-          const totalVenc=dados.rede.totalVencidos;
-          bullets.push({cor:R,txt:`<strong>Risco de base:</strong> ${totalVenc.toLocaleString('pt-BR')} alunos com treino vencido na rede — equivale a ${pct(totalVenc,dados.rede.totalAlunos)}% do total de alunos cadastrados.`});
-          const foraDur=dados.unidades.filter(u=>u.duracaoMedia&&!u.duracaoOk);
-          if(foraDur.length>0) bullets.push({cor:AMB,txt:`<strong>Duração de treino fora da faixa em ${foraDur.length} unidade${foraDur.length>1?'s':''}:</strong> ${foraDur.map(u=>`${u.nome} (${u.duracaoMedia}d)`).join(', ')}. Faixa recomendada: 35–45 dias.`});
-          const melhorU=dados.unidades.find(u=>u.gap>=0&&u.evolucao&&u.evolucao.scoreAnterior!==null&&u.scoreRT>u.evolucao.scoreAnterior);
-          const melhorRef=melhorU||dados.unidades.find(u=>u.gap>=0);
-          if(melhorRef) bullets.push({cor:BOM,txt:`<strong>Referência positiva — ${melhorRef.nome}:</strong> ${melhorRef.treinoEmDia}% de treino em dia (meta ${melhorRef.meta}%, gap +${melhorRef.gap}pts).${melhorU?` Score RT em alta: ${melhorU.evolucao.scoreAnterior} → ${melhorU.scoreRT}.`:''}`});
-          return bullets.map((b,i)=>`<div style="display:flex;gap:8pt;align-items:flex-start;${i<bullets.length-1?'padding-bottom:7pt;margin-bottom:7pt;border-bottom:0.5pt solid #eeeee8;':''}">
-            <div style="width:6pt;height:6pt;border-radius:50%;background:${b.cor};flex-shrink:0;margin-top:3pt;"></div>
-            <span style="font-size:8pt;line-height:1.5;color:#222">${b.txt}</span>
-          </div>`).join('');
-        })()}
+    <div class="sec">Por unidade — consolidado do mês</div>
+    <table class="tbl">
+      <thead><tr>
+        <th style="width:130pt;">Unidade / RT</th>
+        <th>Treino em dia</th>
+        <th>Treino vencido</th>
+        <th>Score RT</th>
+        <th>Duração média</th>
+      </tr></thead>
+      <tbody>
+        ${dados.unidades.map(u=>{
+          const ev=u.evolucao;
+          const dTr=ev&&ev.treinoAnterior!==null?u.treinoEmDia-ev.treinoAnterior:null;
+          const dEd=ev&&ev.emDiaAnterior!==null?u.vencidos*0+Math.round((u.treinoEmDia/100*(u.alunos||1)))-(ev.emDiaAnterior||0):null;
+          const dVu=ev&&ev.vencidosAnterior!==null?u.percentVencidos-ev.vencidosAnterior:null;
+          const dSc=ev&&ev.scoreAnterior!==null?u.scoreRT-ev.scoreAnterior:null;
+          const dEdAbs=ev&&ev.emDiaAnterior!==null?(Math.round(u.treinoEmDia/100*(u.alunos||1)))-(ev.emDiaAnterior||0):null;
+          const emDiaAbs=Math.round(u.treinoEmDia/100*(u.alunos||1));
+          return`<tr>
+            <td><div class="un-nome" style="color:${corU(u)}">${u.nome}</div>
+              <div class="un-rt">${u.rts.join(' · ')}</div>
+              <div class="un-rt" style="margin-top:1pt;">Total: ${fmt(u.alunos)} alunos</div></td>
+            <td>
+              <div class="nb" style="color:${corU(u)}">${fmt(emDiaAbs)}</div>
+              <div class="np">${u.treinoEmDia}% da base</div>
+              <div class="bar"><span class="bf" style="width:${u.treinoEmDia}%;background:${corU(u)};"></span><span class="bm" style="left:${u.meta}%;"></span></div>
+              ${ev&&ev.emDiaAnterior!==null?`<div class="na">ant: ${fmt(ev.emDiaAnterior)} alunos (${fmtP(ev.treinoAnterior)})</div><div class="nd" style="color:${corD(dEdAbs,true)}">${seta(dEdAbs||0)} ${dEdAbs>=0?'+':''}${fmt(dEdAbs)} alunos (${dTr>=0?'+':''}${dTr}pts)</div>`:'<div class="na">sem anterior</div>'}
+            </td>
+            <td>
+              <div class="nb" style="color:#111;">${fmt(u.vencidos)}</div>
+              <div class="np">${u.percentVencidos}% da base</div>
+              ${ev&&ev.vencidosAbsAnterior!==null?`<div class="na">ant: ${fmt(ev.vencidosAbsAnterior)} alunos (${fmtP(ev.vencidosAnterior)})</div><div class="nd" style="color:${corD(dVu,false)}">${seta(dVu||0)} ${u.vencidos-ev.vencidosAbsAnterior>=0?'+':''}${fmt(u.vencidos-ev.vencidosAbsAnterior)} alunos (${dVu>=0?'+':''}${dVu}pts)</div>`:'<div class="na">sem anterior</div>'}
+            </td>
+            <td>
+              <div class="nb" style="color:${u.scoreRT>=80?BOM:u.scoreRT>=60?AMB:R}">${u.scoreRT!==null?u.scoreRT:'—'}</div>
+              ${ev&&ev.scoreAnterior!==null?`<div class="na">ant: ${ev.scoreAnterior}</div><div class="nd" style="color:${corD(dSc,true)}">${seta(dSc||0)} ${dSc>=0?'+':''}${dSc}pts</div>`:'<div class="na">sem anterior</div>'}
+            </td>
+            <td>
+              <div class="nb" style="color:${u.duracaoOk?BOM:(u.duracaoMedia?R:CIN)}">${u.duracaoMedia!==null?u.duracaoMedia+'d':'—'}</div>
+              <div class="nd" style="color:${u.duracaoOk?BOM:R}">${u.duracaoOk===null?'—':u.duracaoOk?'Na faixa':'Fora da faixa'}</div>
+            </td>
+          </tr>`;
+        }).join('')}
+        <tr>
+          <td>Rede total</td>
+          <td><span style="font-weight:700;">${fmt(rede.emDiaAbs)}</span> <span style="font-size:7pt;color:#6b7280;">(${rede.percentTreinoEmDia}%)</span></td>
+          <td><span style="font-weight:700;">${fmt(rede.totalVencidos)}</span></td>
+          <td style="font-weight:700;">${rede.scoreMedioRT}</td>
+          <td>—</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="dois">
+      <div class="bloco">
+        <div class="bloco-t" style="color:#b91c1c;">Pontos de atenção</div>
+        ${(()=>{const b=[];dados.unidades.forEach(u=>{if(u.status==='critico')b.push(`${u.nome}: ${Math.abs(u.gap)}pts abaixo da meta, score RT em ${u.scoreRT}.`);if(u.duracaoMedia&&!u.duracaoOk)b.push(`${u.nome}: duração média de ${u.duracaoMedia} dias — risco de perda de base.`);});if(!b.length)b.push('Nenhum alerta crítico neste período.');return b.slice(0,4).map(t=>`<div class="blt">${t}</div>`).join('');})()}
+      </div>
+      <div class="bloco">
+        <div class="bloco-t" style="color:#166534;">Referência positiva</div>
+        ${(()=>{const b=[];dados.unidades.forEach(u=>{if(u.evolucao&&u.evolucao.scoreAnterior!==null&&u.scoreRT>u.evolucao.scoreAnterior)b.push(`${u.nome}: score RT subiu ${u.scoreRT-u.evolucao.scoreAnterior}pts no período.`);if(u.gap>=0)b.push(`${u.nome}: dentro da meta de treino em dia.`);});if(!b.length)b.push('Nenhuma referência positiva neste período.');return b.slice(0,4).map(t=>`<div class="blt">${t}</div>`).join('');})()}
       </div>
     </div>
 
-    <div class="rodape">
-      <span>MOV FIT — Relatório Executivo · ${dados.mesReferencia}</span>
-      <span>Página 1 de 4</span>
-    </div>
   </div>`;
 
-  // ── PÁGINA 2 ─────────────────────────────────────────────────────────────
-  const atencoes=[];
-  const positivos=[];
-  dados.unidades.forEach(u=>{
-    if(u.status==='critico') atencoes.push(`${u.nome}: ${Math.abs(u.gap)}pts abaixo da meta com score RT em ${u.scoreRT}.`);
-    if(u.duracaoMedia&&u.duracaoMedia>70) atencoes.push(`${u.nome}: duração média de ${u.duracaoMedia} dias — risco de perda de base.`);
-    if(u.evolucao&&u.evolucao.scoreAnterior!==null&&(u.scoreRT-u.evolucao.scoreAnterior)>0) positivos.push(`${u.nome}: score RT subiu ${u.scoreRT-u.evolucao.scoreAnterior}pts no período.`);
-    if(u.gap>=0) positivos.push(`${u.nome}: dentro da meta de treino em dia (${u.treinoEmDia}% vs meta ${u.meta}%).`);
-  });
-  if(atencoes.length===0) atencoes.push('Nenhum alerta crítico identificado neste período.');
-  if(positivos.length===0) positivos.push('Nenhuma referência positiva identificada neste período.');
+  // ── PÁGINA 2 — Destaques por professor ───────────────────────────────
+  const _profCard=(p,tag,corBorda,corTag)=>{
+    if(!p) return`<div class="prof-card" style="border-left:2pt solid #e5e7eb;"><div class="prof-tag" style="color:#9ca3af;">${tag}</div><div class="prof-nome" style="color:#9ca3af;">Sem dados</div></div>`;
+    const peAbs=p.emDia;
+    const comAbs=p.comTreino;
+    const vencAbs=p.vencido;
+    const pePct=p.pct;
+    return`<div class="prof-card" style="border-left:2pt solid ${corBorda};">
+      <div class="prof-tag" style="color:${corTag};">${tag}</div>
+      <div class="prof-nome">${p.nome}</div>
+      <div class="prof-stats">${fmt(peAbs)} em dia (${fmtP(pePct)}) · ${fmt(vencAbs)} vencidos</div>
+      ${p.pctAnt!==null?`<div class="prof-diff" style="color:${corD(p.delta,true)}">${seta(p.delta||0)} ant: ${fmt(p.emDiaAnt)} em dia (${fmtP(p.pctAnt)}) · ${p.delta>=0?'+':''}${p.delta}pts</div>`:'<div class="prof-diff" style="color:#9ca3af;">sem mês anterior</div>'}
+    </div>`;
+  };
 
-  const p2=`
-  <div class="page page-break">
-    <div class="hd-compact">
-      <div class="hd-logo">
-        <div class="hd-mf">MF</div>
-        <div><div class="hd-nome">MOV FIT</div><div class="hd-sub">Evolução mensal por unidade</div></div>
-      </div>
-      <div class="hd-right">
-        <div class="hd-periodo">${dados.mesReferencia}</div>
-        <div class="hd-sub">${dados.dataGeracao}</div>
-      </div>
-    </div>
-    <div class="sec-bar"><span class="sec-bar-titulo">Evolução mensal por unidade</span><span class="sec-bar-pag">Página 2 de 4</span></div>
+  const p2=`<div class="page">
+    <div><span class="titulo-mov">MOV</span><span class="titulo-txt">FIT · Relatório Executivo</span></div>
+    <div class="subtitulo">Destaques por professor · ${dados.mesReferencia} · Maicon Oliveira</div>
 
-    <div class="cards-grid">
-      ${dados.unidades.map(u=>{
-        const ev=u.evolucao;
-        const dTreino=ev&&ev.treinoAnterior!==null?u.treinoEmDia-ev.treinoAnterior:null;
-        const dVenc=ev&&ev.vencidosAnterior!==null?u.percentVencidos-ev.vencidosAnterior:null;
-        const dScore=ev&&ev.scoreAnterior!==null?u.scoreRT-ev.scoreAnterior:null;
-        return `<div class="card-unidade" style="border-top:3px solid ${corStatus(u.status)}">
-          <div class="card-header">
-            <div>
-              <div class="card-nome">${u.nome}</div>
-              <div class="card-rt">${u.rts.join(' · ')}</div>
-            </div>
-            <span class="badge" style="background:${corStatus(u.status)}22;color:${corStatus(u.status)}">${labelStatus(u.status)}</span>
-          </div>
-          <div class="card-indicadores">
-            <div>
-              <div class="ind-label">Treino em dia</div>
-              <div class="ind-valor" style="color:${corStatus(u.status)}">${u.treinoEmDia}%</div>
-              ${ev&&ev.treinoAnterior!==null?`<div class="ind-evolucao" style="color:${corDelta(dTreino,true)}">${ev.treinoAnterior}% ${seta(dTreino)} ${u.treinoEmDia}% (${dTreino>=0?'+':''}${dTreino}pts)</div>`:'<div class="ind-evolucao" style="color:${CIN}">sem mês anterior</div>'}
-            </div>
-            <div>
-              <div class="ind-label">Treino vencido</div>
-              <div class="ind-valor">${u.percentVencidos}%</div>
-              ${ev&&ev.vencidosAnterior!==null?`<div class="ind-evolucao" style="color:${corDelta(dVenc,false)}">${ev.vencidosAnterior}% ${seta(dVenc)} ${u.percentVencidos}% (${dVenc>=0?'+':''}${dVenc}pts)</div>`:''}
-            </div>
-            <div>
-              <div class="ind-label">Score RT</div>
-              <div class="ind-valor" style="color:${u.scoreRT!==null?(u.scoreRT>=60?BOM:R):CIN}">${fmt(u.scoreRT)}</div>
-              ${ev&&ev.scoreAnterior!==null?(()=>{const ds=u.scoreRT-ev.scoreAnterior;return`<div class="ind-evolucao" style="color:${corDelta(ds,true)}">${ev.scoreAnterior} → ${u.scoreRT} ${seta(ds)} ${ds>=0?'+':''}${ds}pts</div>`;})():''}
-            </div>
-            <div>
-              <div class="ind-label">Duração média</div>
-              <div class="ind-valor" style="color:${u.duracaoOk?BOM:(u.duracaoMedia?R:CIN)}">${u.duracaoMedia!==null?u.duracaoMedia+'d':'—'}</div>
-              <div class="ind-evolucao" style="color:${CIN}">${u.duracaoOk===null?'—':u.duracaoOk?'Na faixa (35-45d)':'Fora da faixa'}</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+    <div class="sec">Destaques por unidade — professores</div>
 
-    <div class="dois-blocos">
-      <div class="bloco-atencao">
-        <div class="bloco-titulo" style="color:#b91c1c">Pontos de atenção</div>
-        ${atencoes.slice(0,4).map(b=>`<div class="bullet" style="color:#7f1d1d">${b}</div>`).join('')}
-      </div>
-      <div class="bloco-positivo">
-        <div class="bloco-titulo" style="color:#166534">Referência positiva</div>
-        ${positivos.slice(0,4).map(b=>`<div class="bullet" style="color:#14532d">${b}</div>`).join('')}
-      </div>
-    </div>
-
-    <div class="rodape">
-      <span>MOV FIT — Relatório Executivo · ${dados.mesReferencia}</span>
-      <span>Página 2 de 4</span>
-    </div>
-  </div>`;
-
-  // ── PÁGINA 3 ─────────────────────────────────────────────────────────────
-  const ranking=[...dados.unidades].sort((a,b)=>(b.scoreRT||0)-(a.scoreRT||0));
-  const numCores=['#CE002E','#374151','#374151','#374151'];
-
-  const p3=`
-  <div class="page page-break">
-    <div class="hd-compact">
-      <div class="hd-logo">
-        <div class="hd-mf">MF</div>
-        <div><div class="hd-nome">MOV FIT</div><div class="hd-sub">Ranking e decisões</div></div>
-      </div>
-      <div class="hd-right">
-        <div class="hd-periodo">${dados.mesReferencia}</div>
-        <div class="hd-sub">${dados.dataGeracao}</div>
-      </div>
-    </div>
-    <div class="sec-bar"><span class="sec-bar-titulo">Ranking de unidades e agenda de decisões</span><span class="sec-bar-pag">Página 3 de 4</span></div>
-
-    ${ranking.map((u,i)=>`
-    <div class="ranking-item">
-      <div class="rank-num" style="color:${numCores[i]||CIN}">${i+1}</div>
-      <div class="rank-body">
-        <div class="rank-nome">${u.nome}</div>
-        <div class="rank-rt">${u.rts.join(' · ')}</div>
-        <div style="display:flex;align-items:center;gap:12px;">
+    ${dados.unidades.map(u=>{
+      const d=u.destaques;
+      const ev=u.evolucao;
+      const dSc=ev&&ev.scoreAnterior!==null?u.scoreRT-ev.scoreAnterior:null;
+      return`<div class="unid-bloco">
+        <div class="unid-hdr">
           <div>
-            <div class="rank-score" style="color:${u.scoreRT!==null?(u.scoreRT>=60?BOM:R):CIN}">${fmt(u.scoreRT)}</div>
-            <div style="font-size:7pt;color:${CIN}">Score RT</div>
+            <div class="unid-titulo" style="color:${corU(u)}">${u.nome}</div>
+            <div class="unid-sub">${u.rts.join(' · ')} · ${fmt(u.alunos)} alunos</div>
           </div>
-          <div style="flex:1">${u.scoreRT!==null?barra(u.scoreRT,80,u.scoreRT>=60?BOM:R,'140px'):''}</div>
-          <span class="badge" style="background:${corStatus(u.status)}22;color:${corStatus(u.status)}">${labelStatus(u.status)}</span>
+          <div style="text-align:right;">
+            <div style="font-size:16pt;font-weight:700;color:${u.scoreRT>=80?BOM:u.scoreRT>=60?AMB:R}">${u.scoreRT!==null?u.scoreRT:'—'}</div>
+            <div style="font-size:7pt;color:#9ca3af;">Score RT${dSc!==null?` · ant: ${ev.scoreAnterior} <span style="color:${corD(dSc,true)};font-weight:700;">${seta(dSc)}${dSc>=0?'+':''}${dSc}pts</span>`:''}</div>
+          </div>
         </div>
-        <div class="rank-inds">
-          Treino: ${u.treinoEmDia}% (meta ${u.meta}%) &nbsp;|&nbsp; Vencidos: ${u.vencidos.toLocaleString('pt-BR')} (${u.percentVencidos}%) &nbsp;|&nbsp; Duração: ${u.duracaoMedia!==null?u.duracaoMedia+'d':'—'}
+        <div class="prof-grid">
+          ${d?_profCard(d.melhorCarteira,'Melhor carteira',BOM,BOM):`<div class="prof-card"><div class="prof-tag" style="color:#9ca3af;">Sem dados de professor</div></div>`}
+          ${d?_profCard(d.maisEvoluiu,'Mais evoluiu',BOM,BOM):''}
+          ${d?_profCard(d.maisRegrediu,'Mais regrediu',R,R):''}
+          ${d?_profCard(d.piorCarteira,'Pior carteira',R,R):''}
         </div>
-      </div>
-    </div>`).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
 
-    <div class="agenda">
-      <div class="agenda-header">Agenda de decisões — próximas ações</div>
-      ${agenda.map(a=>`
-      <div class="agenda-item" style="background:#fafafa">
-        <div class="ag-num" style="color:${a.cor}">${a.num}</div>
-        <div class="ag-corpo">
-          <div class="ag-titulo">${a.titulo}</div>
-          <div class="ag-desc">${a.desc}</div>
+  // ── PÁGINA 3 — Ranking ───────────────────────────────────────────────
+  const ranking=[...dados.unidades].sort((a,b)=>(b.scoreRT||0)-(a.scoreRT||0));
+  const p3=`<div class="page">
+    <div><span class="titulo-mov">MOV</span><span class="titulo-txt">FIT · Relatório Executivo</span></div>
+    <div class="subtitulo">Ranking de unidades · ${dados.mesReferencia} · Maicon Oliveira</div>
+
+    <div class="sec">Ranking de unidades</div>
+    <div class="rank-box">
+    ${ranking.map((u,i)=>{
+      const ev=u.evolucao;
+      const dSc=ev&&ev.scoreAnterior!==null?u.scoreRT-ev.scoreAnterior:null;
+      const emDiaAbs=Math.round(u.treinoEmDia/100*(u.alunos||1));
+      return`<div class="rank-item">
+        <div class="rank-n">${i+1}</div>
+        <div class="rank-body">
+          <div class="rank-nome">${u.nome}</div>
+          <div class="rank-rt">${u.rts.join(' · ')}</div>
+          <div class="rank-bar"><div style="width:${Math.min(u.scoreRT||0,100)}%;height:3pt;background:${u.scoreRT>=80?BOM:u.scoreRT>=60?AMB:R};border-radius:2pt;"></div></div>
+          <div class="rank-det">${fmt(emDiaAbs)} em dia (${u.treinoEmDia}% · meta ${u.meta}%) · ${fmt(u.vencidos)} vencidos (${u.percentVencidos}%) · Duração: ${u.duracaoMedia!==null?u.duracaoMedia+'d':'—'}</div>
         </div>
-        <div class="ag-resp">
-          <div class="ag-resp-nome">${a.resp}</div>
-          <div class="ag-prazo">Prazo: ${a.prazo}</div>
+        <div style="text-align:right;">
+          <div class="rank-sc" style="color:${u.scoreRT>=80?BOM:u.scoreRT>=60?AMB:R}">${u.scoreRT!==null?u.scoreRT:'—'}</div>
+          <div style="font-size:6.5pt;color:#9ca3af;">Score RT</div>
+          ${dSc!==null?`<div style="font-size:6.5pt;font-weight:700;color:${corD(dSc,true)}">${seta(dSc)} ${dSc>=0?'+':''}${dSc}pts</div>`:''}
         </div>
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
     </div>
 
-    <div class="nota-met">
-      Score RT: Resultado até 40pts (% treino em dia vs meta + tendência) + Acompanhamento até 35pts (evidência sobre casos críticos) + Execução até 25pts (sem treino e duração na faixa). Faixas: 80 ou mais = Bom · 60–79 = Regular · abaixo de 60 = Crítico.
-    </div>
-
-    <div class="rodape">
-      <span>MOV FIT — Relatório Executivo · ${dados.mesReferencia}</span>
-      <span>Página 3 de 4</span>
-    </div>
+    <div class="nota">Score RT: Resultado até 40pts (% treino em dia vs meta + tendência) + Acompanhamento até 35pts (evidência sobre casos críticos) + Execução até 25pts (sem treino e duração na faixa). Faixas: 80 ou mais = Bom · 60–79 = Regular · abaixo de 60 = Crítico.</div>
   </div>`;
 
   // ── PÁGINA 4 — Consolidado operacional do mês (Pulso) vs mês anterior ─────
-  const PR = dados.pulsoRede || {};
+const PR = dados.pulsoRede || {};
   const PRa = dados.pulsoRedeAnt || {};
   const labelMesAnt = dados.nomeMesAnteriorPulso || 'mês anterior';
 
@@ -27126,99 +27054,69 @@ function gerarHTMLRelatorio(dados){
     }).join('');
   })();
 
-  const p4 = `
+    const p4 = `
   <div class="page">
-    <div class="hd-compact">
-      <div class="hd-logo">
-        <div class="hd-mf">MF</div>
-        <div><div class="hd-nome">MOV FIT</div><div class="hd-sub">Consolidado operacional do mês</div></div>
-      </div>
-      <div class="hd-right">
-        <div class="hd-periodo">${dados.mesReferencia}</div>
-        <div class="hd-sub">vs ${labelMesAnt}</div>
-      </div>
-    </div>
-    <div class="sec-bar"><span class="sec-bar-titulo">Por unidade — consolidado do mês</span><span class="sec-bar-pag">Página 4 de 4</span></div>
+    <div><span class="titulo-mov">MOV</span><span class="titulo-txt">FIT · Relatório Executivo</span></div>
+    <div class="subtitulo">Consolidado operacional do mês · ${dados.mesReferencia} · vs ${labelMesAnt}</div>
 
-    <div class="kpis" style="grid-template-columns:repeat(5,1fr)">
+    <div class="sec">Consolidado operacional (Pulso)</div>
+    <div class="kpi-grid">
       <div class="kpi">
-        <div class="kpi-label">Unidades ativas</div>
-        <div class="kpi-valor" style="color:${BOM}">${unidsAtivasPulso}<span style="font-size:11pt;color:${CIN}">/${dados.unidades.length}</span></div>
+        <div class="kpi-l">Unidades ativas</div>
+        <div class="kpi-v" style="color:${BOM}">${unidsAtivasPulso}/${dados.unidades.length}</div>
       </div>
       <div class="kpi">
-        <div class="kpi-label">Bio novas</div>
-        <div class="kpi-valor" style="color:${BOM}">${PR.bioNovas || 0}</div>
+        <div class="kpi-l">Bio novas</div>
+        <div class="kpi-v" style="color:${BOM}">${PR.bioNovas || 0}</div>
         ${deltaAbsPct(PR.bioNovas, PRa.bioNovas, true)}
       </div>
       <div class="kpi">
-        <div class="kpi-label">Reavaliações</div>
-        <div class="kpi-valor" style="color:${AMB}">${PR.reavaliacoes || 0}</div>
+        <div class="kpi-l">Reavaliações</div>
+        <div class="kpi-v" style="color:${AMB}">${PR.reavaliacoes || 0}</div>
         ${deltaAbsPct(PR.reavaliacoes, PRa.reavaliacoes, true)}
       </div>
       <div class="kpi">
-        <div class="kpi-label">Renovados</div>
-        <div class="kpi-valor">${PR.treinosRenovados || 0}</div>
+        <div class="kpi-l">Renovados</div>
+        <div class="kpi-v">${PR.treinosRenovados || 0}</div>
         ${deltaAbsPct(PR.treinosRenovados, PRa.treinosRenovados, true)}
       </div>
       <div class="kpi">
-        <div class="kpi-label">Total avaliações</div>
-        <div class="kpi-valor">${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}</div>
+        <div class="kpi-l">Total avaliações</div>
+        <div class="kpi-v">${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}</div>
         ${deltaAbsPct((PR.bioNovas || 0) + (PR.reavaliacoes || 0), (PRa.bioNovas || 0) + (PRa.reavaliacoes || 0), true)}
       </div>
     </div>
 
-    <div class="wrap" style="margin-top:8px;">
-      <table>
-        <thead><tr>
-          <th>Unidade / RT</th>
-          <th style="text-align:center">Dias</th>
-          <th style="text-align:center">Bio</th>
-          <th style="text-align:center">Reav</th>
-          <th style="text-align:center">Treinos</th>
-          <th style="text-align:center">Total aval.</th>
-          <th style="text-align:center">Fechamentos</th>
-        </tr></thead>
-        <tbody>${rowsPulso}</tbody>
-        <tfoot>
-          <tr style="font-weight:700;background:#f3f4f6;">
-            <td>Rede total</td>
-            <td style="text-align:center">${PR.diasPreenchidos || 0}</td>
-            <td style="text-align:center">
-              <div>${PR.bioNovas || 0}</div>
-              ${deltaAbsPct(PR.bioNovas, PRa.bioNovas, true)}
-            </td>
-            <td style="text-align:center">
-              <div>${PR.reavaliacoes || 0}</div>
-              ${deltaAbsPct(PR.reavaliacoes, PRa.reavaliacoes, true)}
-            </td>
-            <td style="text-align:center;font-size:8.5pt">
-              R:${PR.treinosRenovados || 0} · V:${PR.treinosRevisados || 0}
-            </td>
-            <td style="text-align:center">
-              <div>${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}</div>
-              ${deltaAbsPct((PR.bioNovas || 0) + (PR.reavaliacoes || 0), (PRa.bioNovas || 0) + (PRa.reavaliacoes || 0), true)}
-            </td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
-      <div style="font-size:7pt;color:${CIN};margin-top:6px;">
-        Comparativo vs ${labelMesAnt}: ▲ aumento · ▼ queda · percentual relativo ao mês anterior. Treinos: R = renovados · V = revisados. Fechamentos = semanas concluídas no mês.
-      </div>
-    </div>
+    <div class="sec">Por unidade — vs ${labelMesAnt}</div>
+    <table class="tbl">
+      <thead><tr>
+        <th>Unidade / RT</th>
+        <th style="text-align:center">Dias</th>
+        <th style="text-align:center">Bio</th>
+        <th style="text-align:center">Reav</th>
+        <th style="text-align:center">Treinos</th>
+        <th style="text-align:center">Total aval.</th>
+        <th style="text-align:center">Fechamentos</th>
+      </tr></thead>
+      <tbody>${rowsPulso}</tbody>
+      <tfoot>
+        <tr>
+          <td>Rede total</td>
+          <td style="text-align:center">${PR.diasPreenchidos || 0}</td>
+          <td style="text-align:center">${PR.bioNovas || 0}${deltaAbsPct(PR.bioNovas, PRa.bioNovas, true)}</td>
+          <td style="text-align:center">${PR.reavaliacoes || 0}${deltaAbsPct(PR.reavaliacoes, PRa.reavaliacoes, true)}</td>
+          <td style="text-align:center;font-size:8.5pt">R:${PR.treinosRenovados || 0} · V:${PR.treinosRevisados || 0}</td>
+          <td style="text-align:center">${(PR.bioNovas || 0) + (PR.reavaliacoes || 0)}${deltaAbsPct((PR.bioNovas || 0) + (PR.reavaliacoes || 0), (PRa.bioNovas || 0) + (PRa.reavaliacoes || 0), true)}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="nota">Comparativo vs ${labelMesAnt}: ▲ aumento · ▼ queda. Treinos: R = renovados · V = revisados. Fechamentos = semanas concluídas no mês.</div>
 
-    <div class="wrap" style="margin-top:14px;">
-      <div style="background:#f9f9f7;border:0.5px solid #e4e4de;border-radius:6px;padding:14px 16px;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#999;font-weight:700;margin-bottom:10px;">Participação no total de avaliações</div>
-        ${participacaoHtml}
-      </div>
-    </div>
-
-    <div class="rodape">
-      <span>MOV FIT — Relatório Executivo · ${dados.mesReferencia}</span>
-      <span>Página 4 de 4</span>
-    </div>
+    <div class="sec">Participação no total de avaliações</div>
+    ${participacaoHtml}
   </div>`;
+
 
   return`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>MOV FIT — Relatório Executivo ${dados.mesReferencia}</title><style>${css}<\/style></head><body>${p1}${p2}${p3}${p4}</body></html>`;
 }
@@ -27771,8 +27669,21 @@ async function gerarRelatorioBtn(){
       if(st) st.textContent='✓ Relatório individual pronto.';
       mostrarToast('Relatório individual '+labelDeChaveMes(chave)+' ✓');
       setTimeout(()=>{ document.getElementById('relatorioModal').style.display='none'; },3000);
+    } else if(_relTipo==='mensal-regional'){
+      if(st) st.textContent='Consolidando dados do mês...';
+      const dados=await montarDadosFechamentoMensal(chave);
+      const html=gerarHTMLFechamentoMensal(dados);
+      const _blob=new Blob([html],{type:'text/html'});
+      const _blobUrl=URL.createObjectURL(_blob);
+      const win=window.open(_blobUrl,'_blank');
+      if(!win){ if(st) st.textContent='Pop-up bloqueado.'; btn.textContent='📥 Gerar e baixar PDF';btn.disabled=false; URL.revokeObjectURL(_blobUrl); return; }
+      setTimeout(()=>{ win.print(); setTimeout(()=>URL.revokeObjectURL(_blobUrl),60000); },1200);
+      if(st) st.textContent='✓ Fechamento Mensal pronto — salve como PDF no diálogo de impressão.';
+      mostrarToast('Fechamento Mensal ✓');
+      setTimeout(()=>{ document.getElementById('relatorioModal').style.display='none'; },3000);
     } else if(_relTipo==='regional-semanal'){
       const semIdSel=(document.getElementById('relSemanaSelect')||{}).value||null;
+      console.log('[REGIONAL] chave=',chave,' semIdSel=',semIdSel,' mesSelect.value=',(document.getElementById('relMesSelect')||{}).value);
       if(st) st.textContent='Coletando dados de todas as unidades...';
       const dados=await montarDadosFechamentoRegional(chave, semIdSel);
       const html=gerarHTMLFechamentoRegional(dados);
@@ -28387,11 +28298,266 @@ function pulsoSomarTotaisMes(historicoMes) {
   return acc;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// FECHAMENTO MENSAL — consolida todas as semanas do mês para todas as unidades
+// ══════════════════════════════════════════════════════════════════════════════
+async function montarDadosFechamentoMensal(chaveMes) {
+  const mesesNum = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
+  const [mesStr, anoStr] = chaveMes.split('/');
+  const ano = 2000 + parseInt(anoStr);
+  const mes = mesesNum[mesStr.trim().toUpperCase().slice(0,3)] ?? new Date().getMonth();
+  const nomeMes = new Date(ano, mes, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const semanasDoMes = pulsoSemanasDoMes(ano, mes);
+
+  // RTs por unidade
+  const rtsPorUnid = {};
+  Object.entries(USUARIOS_CONFIG).forEach(([,cfg]) => {
+    if(cfg.papel==='rt'&&cfg.unidade){
+      if(!rtsPorUnid[cfg.unidade]) rtsPorUnid[cfg.unidade]=[];
+      rtsPorUnid[cfg.unidade].push(cfg.nome);
+    }
+  });
+
+  // Mês anterior para delta
+  const mesAnterior = mes === 0 ? 11 : mes - 1;
+  const anoAnterior = mes === 0 ? ano - 1 : ano;
+  const semanasAnt = pulsoSemanasDoMes(anoAnterior, mesAnterior);
+
+  // Coletar dados de cada unidade
+  const unidadesData = await Promise.all(UNIDADES.map(async u => {
+    const nomeRT = (rtsPorUnid[u.id]||[]).join(' + ') || '—';
+
+    // Buscar todas as semanas do mês atual
+    const snaps = await Promise.all(semanasDoMes.map(s => _pulsoRef(u.id, s.semanaId).get().catch(()=>null)));
+    const semanas = semanasDoMes.map((s,i) => {
+      const snap = snaps[i];
+      const pulso = snap?.exists ? snap.data() : null;
+      const totais = pulso ? pulsoCalcTotais(pulso) : null;
+      const [,m,d] = s.semanaId.split('-');
+      const [,m2,d2] = s.sabado.split('-');
+      const mesesN = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      const label = parseInt(m)===parseInt(m2)
+        ? `${parseInt(d)} a ${parseInt(d2)} de ${mesesN[parseInt(m)-1]}`
+        : `${parseInt(d)}/${mesesN[parseInt(m)-1]} a ${parseInt(d2)}/${mesesN[parseInt(m2)-1]}`;
+      return { semId: s.semanaId, label, totais, status: pulsoStatus(pulso), obs: pulso?.observacoesSemana||'' };
+    });
+
+    // Agregar totais do mês
+    const totaisMes = semanas.reduce((acc, s) => {
+      const t = s.totais || {};
+      acc.bioNovas += t.bioNovas||0;
+      acc.reavaliacoes += t.reavaliacoes||0;
+      acc.treinosRenovados += t.treinosRenovados||0;
+      acc.treinosRevisados += t.treinosRevisados||0;
+      acc.diasPreenchidos += t.diasPreenchidos||0;
+      return acc;
+    }, {bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0, diasPreenchidos:0});
+
+    // Mês anterior
+    const snapsAnt = await Promise.all(semanasAnt.map(s => _pulsoRef(u.id, s.semanaId).get().catch(()=>null)));
+    const totaisMesAnt = snapsAnt.reduce((acc, snap) => {
+      if(!snap?.exists) return acc;
+      const t = pulsoCalcTotais(snap.data());
+      acc.bioNovas += t.bioNovas||0;
+      acc.reavaliacoes += t.reavaliacoes||0;
+      return acc;
+    }, {bioNovas:0, reavaliacoes:0});
+
+    const semanasConc = semanas.filter(s=>s.status==='concluido').length;
+    return { unidade: u.nome, nomeRT, cor: u.cor, semanas, totaisMes, totaisMesAnt, semanasConc, totalSemanas: semanas.length };
+  }));
+
+  // Consolidado da rede
+  const totaisRede = unidadesData.reduce((acc,u) => {
+    acc.bioNovas += u.totaisMes.bioNovas;
+    acc.reavaliacoes += u.totaisMes.reavaliacoes;
+    acc.treinosRenovados += u.totaisMes.treinosRenovados;
+    acc.treinosRevisados += u.totaisMes.treinosRevisados;
+    acc.diasPreenchidos += u.totaisMes.diasPreenchidos;
+    return acc;
+  }, {bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0, diasPreenchidos:0});
+
+  const totaisRedeAnt = unidadesData.reduce((acc,u) => {
+    acc.bioNovas += u.totaisMesAnt.bioNovas;
+    acc.reavaliacoes += u.totaisMesAnt.reavaliacoes;
+    return acc;
+  }, {bioNovas:0, reavaliacoes:0});
+
+  return { chaveMes, nomeMes, nomeRegional: usuarioLogado?.nome||'Regional', unidadesData, totaisRede, totaisRedeAnt, semanasDoMes };
+}
+
+function gerarHTMLFechamentoMensal(d) {
+  const R='#CE002E', BOM='#1a7a42', AMB='#c07800', CIN='#6b7280';
+  const dataGeracao = new Date().toLocaleString('pt-BR');
+  const delta = (a,b) => {
+    if(b==null||b===0) return '';
+    const v=a-b;
+    if(v===0) return '';
+    return v>0?`<span style="color:${BOM};font-size:8px;">▲ +${v}</span>`:`<span style="color:${R};font-size:8px;">▼ ${v}</span>`;
+  };
+  const T = d.totaisRede;
+  const Tant = d.totaisRedeAnt;
+  const totalAval = T.bioNovas + T.reavaliacoes;
+  const totalAvalAnt = Tant.bioNovas + Tant.reavaliacoes;
+
+  // Linhas da tabela regional
+  const redeRows = d.unidadesData.map(u => {
+    const t = u.totaisMes;
+    const ta = u.totaisMesAnt;
+    const total = t.bioNovas + t.reavaliacoes;
+    const semStatus = u.semanasConc === u.totalSemanas
+      ? `<span style="background:rgba(21,128,61,.1);color:${BOM};padding:2px 7px;border-radius:20px;font-size:9px;font-weight:600;">✓ ${u.semanasConc}/${u.totalSemanas}</span>`
+      : `<span style="background:rgba(206,0,46,.1);color:${R};padding:2px 7px;border-radius:20px;font-size:9px;font-weight:600;">${u.semanasConc}/${u.totalSemanas} sem.</span>`;
+    return `<tr>
+      <td><strong style="color:${u.cor}">${u.unidade}</strong><br><span style="font-size:8px;color:${CIN}">${u.nomeRT}</span></td>
+      <td style="text-align:center">${t.diasPreenchidos}</td>
+      <td style="text-align:center"><strong>${t.bioNovas}</strong>${delta(t.bioNovas,ta.bioNovas)}</td>
+      <td style="text-align:center"><strong>${t.reavaliacoes}</strong>${delta(t.reavaliacoes,ta.reavaliacoes)}</td>
+      <td style="text-align:center;font-size:9px">R:${t.treinosRenovados} V:${t.treinosRevisados}</td>
+      <td style="text-align:center"><strong>${total}</strong>${delta(total,ta.bioNovas+ta.reavaliacoes)}</td>
+      <td style="text-align:center">${semStatus}</td>
+    </tr>`;
+  }).join('');
+
+  // Páginas por unidade
+  const paginasUnidades = d.unidadesData.map(u => {
+    const t = u.totaisMes;
+    const linhasSemanas = u.semanas.map(s => {
+      const st = s.status==='concluido'
+        ? `<span style="color:${BOM};font-weight:600">✓ Concluído</span>`
+        : (s.status==='atraso'&&(!s.totais||s.totais.diasPreenchidos===0))
+        ? `<span style="color:${CIN}">Sem dados</span>`
+        : s.status==='atraso'
+        ? `<span style="color:${R}">Em atraso</span>`
+        : s.status==='andamento'
+        ? `<span style="color:${AMB}">Em andamento</span>`
+        : `<span style="color:${CIN}">Sem dados</span>`;
+      const tot = s.totais ? (s.totais.bioNovas||0)+(s.totais.reavaliacoes||0) : null;
+      return `<tr>
+        <td>${s.label}</td>
+        <td style="text-align:center">${s.totais?.bioNovas??'—'}</td>
+        <td style="text-align:center">${s.totais?.reavaliacoes??'—'}</td>
+        <td style="text-align:center">${s.totais?.treinosRenovados??'—'}</td>
+        <td style="text-align:center">${s.totais?.treinosRevisados??'—'}</td>
+        <td style="text-align:center"><strong>${tot!=null?tot:'—'}</strong></td>
+        <td style="text-align:center">${st}</td>
+      </tr>
+      ${s.obs?`<tr><td colspan="7" style="font-size:8px;color:${CIN};padding:2px 8px 8px;font-style:italic">Obs: ${s.obs}</td></tr>`:''}`;
+    }).join('');
+    return `<div class="page" style="page-break-before:always;">
+  <div class="hd">
+    <div>
+      <div class="hd-logo"><span>MOV</span>FIT · Fechamento Mensal</div>
+      <div class="hd-sub">${u.unidade} · ${u.nomeRT} · ${d.nomeMes}</div>
+    </div>
+    <div style="text-align:right;font-size:9px;color:#aaa">${d.nomeMes}</div>
+  </div>
+  <div class="faixa-rede" style="background:${u.cor}"></div>
+  <div class="sec" style="margin-top:14px">
+    <div class="sec-title">Totais do mês</div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-val" style="color:${BOM}">${t.bioNovas}</div><div class="kpi-lbl">Bio novas</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:${AMB}">${t.reavaliacoes}</div><div class="kpi-lbl">Reavaliações</div></div>
+      <div class="kpi"><div class="kpi-val">${t.treinosRenovados}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val">${t.treinosRevisados}</div><div class="kpi-lbl">Revisados</div></div>
+      <div class="kpi"><div class="kpi-val"><strong>${t.bioNovas+t.reavaliacoes}</strong></div><div class="kpi-lbl">Total avaliações</div></div>
+    </div>
+  </div>
+  <div class="sec" style="margin-top:12px">
+    <div class="sec-title">Detalhamento por semana</div>
+    <table class="tbl">
+      <thead><tr><th>Semana</th><th style="text-align:center">Bio</th><th style="text-align:center">Reav</th><th style="text-align:center">Renov</th><th style="text-align:center">Revis</th><th style="text-align:center">Total</th><th style="text-align:center">Status</th></tr></thead>
+      <tbody>${linhasSemanas}</tbody>
+      <tfoot><tr class="total-row"><td>Total do mês</td><td></td><td style="text-align:center">${t.bioNovas}</td><td style="text-align:center">${t.reavaliacoes}</td><td style="text-align:center">${t.treinosRenovados}</td><td style="text-align:center">${t.treinosRevisados}</td><td style="text-align:center"><strong>${t.bioNovas+t.reavaliacoes}</strong></td></tr></tfoot>
+    </table>
+  </div>
+  <div class="rodape"><span>MOV FIT · ${u.unidade}</span><span>Gerado em ${dataGeracao}</span></div>
+</div>`;
+  }).join('');
+
+  const css = `*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Inter',Arial,sans-serif;font-size:10pt;color:#111;background:#fff;}@page{margin:1cm;size:A4;}@media print{a[href]:after{content:'';}.page{padding:10px 14px;}}
+.page{max-width:800px;margin:0 auto;padding:24px 28px;}
+@media print{.page{padding:14px 18px;max-width:100%;}}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+.hd-logo{font-size:15px;font-weight:700;color:#111;} .hd-logo span{color:${R};}
+.hd-sub{font-size:10px;color:#666;margin-top:2px;}
+.faixa-rede{height:3px;background:${R};border-radius:2px;margin-bottom:12px;}
+.sec-title{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${CIN};margin-bottom:8px;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:4px;}
+.kpi{background:#f8f9fa;border-radius:8px;padding:10px 8px;text-align:center;}
+.kpi-val{font-size:20px;font-weight:700;color:#111;line-height:1.1;}
+.kpi-delta{font-size:8px;min-height:12px;}
+.kpi-lbl{font-size:8px;color:${CIN};margin-top:3px;}
+.tbl{width:100%;border-collapse:collapse;font-size:9pt;}
+.tbl th{background:#f3f4f6;font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:${CIN};padding:6px 8px;border-bottom:1px solid #e5e7eb;}
+.tbl td{padding:7px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+.tbl tbody tr:hover{background:#fafafa;}
+tr.total-row{background:#f8f9fa;font-weight:700;}
+tr.total-row td{padding:8px;border-top:2px solid #e5e7eb;}
+.rodape{display:flex;justify-content:space-between;font-size:8px;color:#aaa;margin-top:20px;padding-top:8px;border-top:1px solid #eee;}`;
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Fechamento Mensal · ${d.nomeMes}</title>
+<style>${css}</style></head><body>
+
+<div class="page">
+  <div class="hd">
+    <div>
+      <div class="hd-logo"><span>MOV</span>FIT · Fechamento Mensal — Visão Regional</div>
+      <div class="hd-sub">Todas as unidades · ${d.nomeMes} · ${d.nomeRegional}</div>
+    </div>
+    <div style="text-align:right;font-size:9px;color:#aaa">${d.nomeMes}</div>
+  </div>
+  <div class="faixa-rede"></div>
+  <div class="sec" style="margin-top:14px">
+    <div class="sec-title">Consolidado da rede</div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="kpi-val" style="color:${BOM}">${d.unidadesData.filter(u=>(u.totaisMes.bioNovas+u.totaisMes.reavaliacoes)>0).length}/${d.unidadesData.length}</div>
+        <div class="kpi-lbl">Unidades ativas</div>
+        ${(()=>{const aus=d.unidadesData.filter(u=>(u.totaisMes.bioNovas+u.totaisMes.reavaliacoes)===0);return aus.length?'<div style="font-size:7px;color:'+R+';margin-top:3px;">Sem dados: '+aus.map(u=>u.unidade.split(' ')[0]).join(', ')+'</div>':''})()}
+      </div>
+      <div class="kpi"><div class="kpi-val" style="color:${BOM}">${T.bioNovas}</div><div class="kpi-delta">${delta(T.bioNovas,Tant.bioNovas)}</div><div class="kpi-lbl">Bio novas</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:${AMB}">${T.reavaliacoes}</div><div class="kpi-delta">${delta(T.reavaliacoes,Tant.reavaliacoes)}</div><div class="kpi-lbl">Reavaliações</div></div>
+      <div class="kpi"><div class="kpi-val">${T.treinosRenovados}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val"><strong>${totalAval}</strong></div><div class="kpi-delta">${delta(totalAval,totalAvalAnt)}</div><div class="kpi-lbl">Total avaliações</div></div>
+    </div>
+  </div>
+  <div class="sec" style="margin-top:12px">
+    <div class="sec-title">Por unidade — consolidado do mês</div>
+    <table class="tbl">
+      <thead><tr><th>Unidade / RT</th><th style="text-align:center">Dias</th><th style="text-align:center">Bio</th><th style="text-align:center">Reav</th><th style="text-align:center">Treinos</th><th style="text-align:center">Total aval.</th><th style="text-align:center">Fechamentos</th></tr></thead>
+      <tbody>${redeRows}</tbody>
+      <tfoot><tr class="total-row"><td>Rede total</td><td style="text-align:center">${T.diasPreenchidos}</td><td style="text-align:center">${T.bioNovas}${delta(T.bioNovas,Tant.bioNovas)}</td><td style="text-align:center">${T.reavaliacoes}${delta(T.reavaliacoes,Tant.reavaliacoes)}</td><td style="text-align:center;font-size:9px">R:${T.treinosRenovados} V:${T.treinosRevisados}</td><td style="text-align:center"><strong>${totalAval}</strong></td><td></td></tr></tfoot>
+    </table>
+  </div>
+  <div class="sec" style="margin-top:14px">
+    <div class="sec-title">Participação no total de avaliações</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+      ${d.unidadesData.map(u => {
+        const tot = u.totaisMes.bioNovas + u.totaisMes.reavaliacoes;
+        const pct = totalAval>0 ? Math.round(tot/totalAval*100) : 0;
+        return `<div style="display:grid;grid-template-columns:130px 1fr 40px;gap:6px;align-items:center;font-size:9px;">
+          <span style="color:${u.cor};font-weight:600">${u.unidade.split(' ')[0]}</span>
+          <div style="background:#f0f0f0;border-radius:4px;height:8px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${u.cor};border-radius:4px;"></div></div>
+          <span>${tot} (${pct}%)</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+  <div class="rodape"><span>MOV FIT · Central de Gestão · ${d.nomeRegional}</span><span>Gerado em ${dataGeracao}</span></div>
+</div>
+
+${paginasUnidades}
+</body></html>`;
+}
+
+
 async function montarDadosFechamentoRegional(chaveMes, semIdSel) {
   const mesesNum = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
   const [mesStr, anoStr] = chaveMes.split('/');
   const anoAtual = 2000 + parseInt(anoStr);
-  const mesAtual = mesesNum[mesStr.toUpperCase()] ?? new Date().getMonth();
+  const mesAtual = mesesNum[mesStr.trim().toUpperCase().slice(0,3)] ?? new Date().getMonth();
 
   // Nome do Regional
   const nomeRegional = usuarioLogado?.nome || 'Regional';
@@ -28715,10 +28881,10 @@ async function montarDadosFechamentoSemanal(unidId, nomeRT, chaveMes, semIdSel) 
   const mesesNomes = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const mesesNumeros = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
 
-  // Derivar ano e mês da chave selecionada (ex: "JUN/26")
+  // Derivar ano e mês da chave selecionada (ex: "JUN/26" ou "JUNHO/26")
   const [mesStr, anoStr] = chaveMes.split('/');
   const anoAtual = 2000 + parseInt(anoStr);
-  const mesAtual = mesesNumeros[mesStr.toUpperCase()] ?? new Date().getMonth();
+  const mesAtual = mesesNumeros[mesStr.trim().toUpperCase().slice(0,3)] ?? new Date().getMonth();
 
   // Todas as semanas do mês selecionado
   const semanasDoMes = pulsoSemanasDoMes(anoAtual, mesAtual);
@@ -30574,7 +30740,7 @@ async function pulsoConfirmarConclusao(obsOverride){
 async function pulsoAtualizarBadgeInicio(){
   try{
     if(!unidadeAtual||!usuarioLogado||usuarioLogado.papel!=='rt')return;
-    const semId=semIdOverride||_pSemIdPendente||pulsoSemanaId();
+    const semId=_pSemIdPendente||pulsoSemanaId();
     _pSemIdPendente=null; // consumir o override pendente
     const snap=await _pulsoRef(unidadeAtual.id,semId).get().catch(()=>null);
     const pulso=snap?.exists?snap.data():null;
@@ -30609,7 +30775,7 @@ async function renderPainelPulsoRegional(containerEl){
   if(!containerEl)return;
   containerEl.innerHTML='<div style="color:var(--muted);font-size:11px;padding:8px 0;">Carregando…</div>';
   try{
-    const semId=semIdOverride||_pSemIdPendente||pulsoSemanaId();
+    const semId=_pSemIdPendente||pulsoSemanaId();
     _pSemIdPendente=null; // consumir o override pendente
     const unids=UNIDADES;
     const meses=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
@@ -31761,6 +31927,11 @@ function pulsoRegLembrete(unidId,nome){
         <div onclick="selRelTipo('regional-semanal')" id="optRelRegionalSemanal" style="display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--border2);border-radius:10px;cursor:pointer;margin-top:8px;">
           <div style="font-size:20px;">🌐</div>
           <div><div style="font-size:12px;font-weight:600;color:var(--text);">Fechamento Regional</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">Visão de rede + 4 unidades · 5 páginas</div></div>
+          <span style="margin-left:auto;font-size:10px;font-weight:500;padding:2px 8px;border-radius:16px;background:rgba(206,0,46,.1);color:#CE002E;">Regional</span>
+        </div>
+        <div onclick="selRelTipo('mensal-regional')" id="optRelMensalRegional" style="display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--border2);border-radius:10px;cursor:pointer;margin-top:8px;">
+          <div style="font-size:20px;">📅</div>
+          <div><div style="font-size:12px;font-weight:600;color:var(--text);">Fechamento Mensal</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">Consolidado do mês · visão regional + por unidade</div></div>
           <span style="margin-left:auto;font-size:10px;font-weight:500;padding:2px 8px;border-radius:16px;background:rgba(206,0,46,.1);color:#CE002E;">Regional</span>
         </div>
       </div>
