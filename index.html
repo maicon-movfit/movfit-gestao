@@ -87,6 +87,22 @@
   </div>
 </div>
 
+<!-- Modal seletor de mês — FORA das abas (.page) para funcionar no Histórico e no Novo mês -->
+<div id="seletorMesGradeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px;width:320px;max-width:90vw;">
+    <div data-sel-titulo style="font-size:15px;font-weight:700;margin-bottom:8px;">Qual mês você está fechando?</div>
+    <div data-sel-sub style="font-size:12px;color:var(--muted);margin-bottom:16px;">Confirme antes de salvar — evita registrar fechamento atrasado no mês errado.</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <select id="selMesGradeMes" style="flex:2;background:var(--bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Inter,sans-serif;font-size:13px;padding:9px 10px;outline:none;"></select>
+      <select id="selMesGradeAno" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Inter,sans-serif;font-size:13px;padding:9px 10px;outline:none;"></select>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" onclick="fecharSeletorMesGrade()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;font-family:Inter,sans-serif;">Cancelar</button>
+      <button type="button" onclick="confirmarSeletorMesGrade()" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:white;font-weight:600;font-size:13px;cursor:pointer;font-family:Inter,sans-serif;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 
 <div class="header">
   <div class="header-left">
@@ -603,21 +619,6 @@
   </div>
   <!-- campo oculto mantido para compatibilidade com salvarMes() -->
   <input type="text" id="mesAtual" value="" style="display:none">
-  <!-- Modal seletor de mês — impede fechamento atrasado sair com rótulo errado -->
-  <div id="seletorMesGradeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px;width:320px;max-width:90vw;">
-      <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Qual mês você está fechando?</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">Confirme antes de salvar — evita registrar fechamento atrasado no mês errado.</div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <select id="selMesGradeMes" style="flex:2;background:var(--bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Inter,sans-serif;font-size:13px;padding:9px 10px;outline:none;"></select>
-        <select id="selMesGradeAno" style="flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Inter,sans-serif;font-size:13px;padding:9px 10px;outline:none;"></select>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button onclick="fecharSeletorMesGrade()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:13px;cursor:pointer;font-family:Inter,sans-serif;">Cancelar</button>
-        <button onclick="confirmarSeletorMesGrade()" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:white;font-weight:600;font-size:13px;cursor:pointer;font-family:Inter,sans-serif;">Confirmar</button>
-      </div>
-    </div>
-  </div>
   <div class="grade-wrap">
     <div class="grade-header">
       <div class="grade-title"><span class="gbadge atu" id="gradeTitle">Dados do novo mês</span></div>
@@ -3071,8 +3072,12 @@ function inicializarMesChip() {
   if(chip) chip.textContent=val;
   if(title) title.textContent=val;
 }
-function abrirSeletorMesGrade(nomeBase){
-  _seletorMesContexto={modo:'grade',nomeAntigo:null};
+function abrirSeletorMesGrade(nomeBase, opts){
+  // Só redefine o contexto se NÃO veio do fluxo de renomear
+  // (renomearMes seta modo:'renomear' antes de abrir — não pode ser apagado aqui)
+  if(!(opts && opts.manterContexto)) {
+    _seletorMesContexto={modo:'grade',nomeAntigo:null};
+  }
   const inp=document.getElementById('mesAtual');
   const atual=nomeBase||(inp&&inp.value)||gerarNomeMesAtual();
   const [mesNome,anoStr]=atual.split('/');
@@ -3083,24 +3088,37 @@ function abrirSeletorMesGrade(nomeBase){
     const anoBase=new Date().getFullYear();
     selAno.innerHTML=[anoBase-1,anoBase,anoBase+1].map(a=>{const a2=String(a).slice(2);return `<option value="${a2}" ${a2===(anoStr||String(anoBase).slice(2))?'selected':''}>${a}</option>`;}).join('');
   }
+  const titulo=document.querySelector('#seletorMesGradeModal [data-sel-titulo]');
+  const sub=document.querySelector('#seletorMesGradeModal [data-sel-sub]');
+  const isRename=_seletorMesContexto.modo==='renomear';
+  if(titulo) titulo.textContent=isRename?'Renomear mês do histórico':'Qual mês você está fechando?';
+  if(sub) sub.textContent=isRename
+    ?`Escolha o nome correto para "${_seletorMesContexto.nomeAntigo||''}". Os dados do mês são mantidos.`
+    :'Confirme antes de salvar — evita registrar fechamento atrasado no mês errado.';
   const modal=document.getElementById('seletorMesGradeModal');
-  if(modal) modal.style.display='flex';
+  if(modal){
+    // Garante que o modal não fique preso dentro de uma .page oculta
+    if(modal.parentElement!==document.body) document.body.appendChild(modal);
+    modal.style.display='flex';
+  }
 }
 function renomearMes(nomeAntigo){
   _seletorMesContexto={modo:'renomear',nomeAntigo};
-  abrirSeletorMesGrade(nomeAntigo);
+  abrirSeletorMesGrade(nomeAntigo, {manterContexto:true});
 }
 function fecharSeletorMesGrade(){
   const modal=document.getElementById('seletorMesGradeModal');
   if(modal) modal.style.display='none';
+  _seletorMesContexto={modo:'grade',nomeAntigo:null};
 }
 async function confirmarSeletorMesGrade(){
   const mes=document.getElementById('selMesGradeMes').value;
   const ano=document.getElementById('selMesGradeAno').value;
   const nome=mes+'/'+ano;
   if(_seletorMesContexto.modo==='renomear'){
+    const nomeAntigo=_seletorMesContexto.nomeAntigo;
     fecharSeletorMesGrade();
-    await executarRenomeacaoMes(_seletorMesContexto.nomeAntigo,nome);
+    await executarRenomeacaoMes(nomeAntigo,nome);
     return;
   }
   const inp=document.getElementById('mesAtual');
@@ -3111,32 +3129,80 @@ async function confirmarSeletorMesGrade(){
   if(title) title.textContent=nome;
   fecharSeletorMesGrade();
 }
+
+/** ID canônico do doc em meses — mesmo padrão de adicionarMes/deletarMes. */
+function mesDocId(nome){
+  return String(nome||'').replace(/[^a-zA-Z0-9]/g,'_');
+}
+
 async function executarRenomeacaoMes(nomeAntigo,nomeNovo){
+  if(!nomeAntigo){mostrarToast('Não foi possível renomear: mês de origem ausente.');return;}
   if(nomeAntigo===nomeNovo){mostrarToast('Nenhuma alteração.');return;}
   if(!unidadeAtual){mostrarToast('Nenhuma unidade selecionada.');return;}
   const uid=unidadeAtual.id;
-  const hist=getHistorico(uid);
-  const mesObj=hist.find(m=>m.nome===nomeAntigo);
-  if(!mesObj){mostrarToast('Mês não encontrado.');return;}
-  if(hist.some(m=>m.nome===nomeNovo)){
-    if(!(await confirmDialog(`Já existe "${nomeNovo}" nesta unidade. Sobrescrever?`, 'Sobrescrever mês existente', 'danger'))) return;
+  const col=db.collection('unidades').doc(uid).collection('meses');
+
+  // Busca o documento real pelo campo `nome` (não assume o ID) —
+  // evita falha se o ID histórico divergir da sanitização atual.
+  let snap;
+  try {
+    snap=await col.get();
+  } catch(e) {
+    console.warn('[RENOMEAR MÊS] leitura:', e);
+    mostrarToast('Erro ao ler meses no servidor. Tente novamente.');
+    return;
   }
-  if(!(await confirmDialog(`Renomear "${nomeAntigo}" para "${nomeNovo}"?`, 'Renomear mês', 'info'))) return;
+
+  const docPorNome=snap.docs.find(d=>(d.data().nome||'')===nomeAntigo);
+  const docPorId=snap.docs.find(d=>d.id===mesDocId(nomeAntigo));
+  const origem=docPorNome||docPorId;
+  if(!origem){
+    mostrarToast(`Mês "${nomeAntigo}" não encontrado no servidor.`);
+    return;
+  }
+  const dataOrigem=origem.data()||{};
+
+  const conflito=snap.docs.find(d=>d.id!==origem.id&&(d.data().nome||'')===nomeNovo);
+  if(conflito){
+    if(!(await confirmDialog(
+      `Já existe "${nomeNovo}" nesta unidade. Ao continuar, ele será substituído pelos dados de "${nomeAntigo}".`,
+      'Sobrescrever mês existente',
+      'danger'
+    ))) return;
+  }
+
+  if(!(await confirmDialog(
+    `Renomear "${nomeAntigo}" para "${nomeNovo}"?\n\nOs dados (professores e números) são mantidos — só o nome do mês muda.`,
+    'Renomear mês',
+    'info'
+  ))) return;
+
+  const idNovo=mesDocId(nomeNovo);
+  const novoObj={...dataOrigem, nome:nomeNovo};
+  // Firestore rejeita undefined
+  Object.keys(novoObj).forEach(k=>{ if(novoObj[k]===undefined) delete novoObj[k]; });
+
   try{
-    const novoObj={...mesObj,nome:nomeNovo};
-    await db.collection('unidades').doc(uid).collection('meses').doc(nomeNovo.replace(/[^a-zA-Z0-9]/g,'_')).set(novoObj);
-    await db.collection('unidades').doc(uid).collection('meses').doc(nomeAntigo.replace(/[^a-zA-Z0-9]/g,'_')).delete();
+    const batch=db.batch();
+    batch.set(col.doc(idNovo), novoObj);
+    // Apaga a origem se o ID mudou
+    if(origem.id!==idNovo) batch.delete(origem.ref);
+    // Se havia outro doc com o nome-alvo (ID diferente), remove
+    if(conflito&&conflito.id!==idNovo) batch.delete(conflito.ref);
+    await batch.commit();
+
+    // Força refresh do cache (não depende só do onSnapshot)
+    delete _cache[uid];
+    const snap2=await col.get();
+    _cache[uid]=snap2.docs.map(d=>d.data()).sort((a,b)=>compararMeses(a.nome,b.nome));
+    renderHistorico();
+    atualizarSelects();
+    atualizarHeader();
     mostrarToast(`✓ "${nomeAntigo}" renomeado para "${nomeNovo}"`);
   }catch(e){
-    console.warn('[RENOMEAR MÊS]',e);
-    const idx=hist.findIndex(m=>m.nome===nomeAntigo);
-    if(idx>=0) hist[idx]={...hist[idx],nome:nomeNovo};
-    _cache[uid]=hist.sort((a,b)=>compararMeses(a.nome,b.nome));
-    mostrarToast(`✓ "${nomeAntigo}" renomeado para "${nomeNovo}" (local)`);
+    console.warn('[RENOMEAR MÊS]', e);
+    mostrarToast('Erro ao renomear: '+(e.message||'falha de permissão/rede')+'. Tente novamente.');
   }
-  await getHistoricoAsync(uid);
-  renderHistorico();
-  atualizarSelects();
 }
 
 function goTab(id) {
@@ -8462,7 +8528,7 @@ async function renderHistorico(){
     const bioED=profs.reduce((s,p)=>s+(p.bioEmDia||0),0);
     const bioTot=bioED+profs.reduce((s,p)=>s+(p.bioVencida||0),0)+profs.reduce((s,p)=>s+(p.bioSemAval||0),0);
     const peBio=bioTot>0?pct(bioED,bioTot):null;
-    return`<div class="hcard${sel?' selected':''}" id="hc-${esc(m.nome)}" onclick="toggleSel('${esc(m.nome)}')">
+    return`<div class="hcard${sel?' selected':''}" id="hc-${esc(m.nome)}" data-mes-nome="${esc(m.nome)}" onclick="toggleSel(this.getAttribute('data-mes-nome'))">
       <div class="hcard-top">
         <div class="hcard-month">${m.nome}${badgeHtml}</div>
         <div class="hcard-check">${sel?'✓':''}</div>
@@ -8498,10 +8564,10 @@ async function renderHistorico(){
       <div class="hcard-stats">
         <div class="hstat-lbl">${profs.length} prof. · ${tot.toLocaleString('pt-BR')} alunos</div>
         <div class="hcard-actions">
-          <span class="hcard-act hcard-act-panel" onclick="event.stopPropagation();verPainelMes('${esc(m.nome)}')">Ver painel</span>
-          <span class="hcard-act hcard-act-edit" onclick="event.stopPropagation();editarMes('${esc(m.nome)}')">✎ Editar</span>
-          <span class="hcard-act hcard-act-rename" onclick="event.stopPropagation();renomearMes('${esc(m.nome)}')">🏷 Renomear</span>
-          <span class="hcard-act hcard-act-del" onclick="event.stopPropagation();deletarMes('${esc(m.nome)}')" title="Excluir mês do histórico">🗑 Excluir</span>
+          <span class="hcard-act hcard-act-panel" data-mes-nome="${esc(m.nome)}" onclick="event.stopPropagation();verPainelMes(this.getAttribute('data-mes-nome'))">Ver painel</span>
+          <span class="hcard-act hcard-act-edit" data-mes-nome="${esc(m.nome)}" onclick="event.stopPropagation();editarMes(this.getAttribute('data-mes-nome'))">✎ Editar</span>
+          <span class="hcard-act hcard-act-rename" data-mes-nome="${esc(m.nome)}" onclick="event.stopPropagation();renomearMes(this.getAttribute('data-mes-nome'))">🏷 Renomear</span>
+          <span class="hcard-act hcard-act-del" data-mes-nome="${esc(m.nome)}" onclick="event.stopPropagation();deletarMes(this.getAttribute('data-mes-nome'))" title="Excluir mês do histórico">🗑 Excluir</span>
         </div>
       </div>
     </div>`;
@@ -28270,23 +28336,31 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
   let acBio=0, acReav=0, acRenov=0, acRevis=0;
   const compRows = d.historicoMes.map(s=>{
     const t = s.totais;
-    if(t){ acBio+=t.bioNovas; acReav+=t.reavaliacoes; acRenov+=t.treinosRenovados; acRevis+=t.treinosRevisados; }
+    const bio = t ? (Number(t.bioNovas)||0) : 0;
+    const reav = t ? (Number(t.reavaliacoes)||0) : 0;
+    const renov = t ? (Number(t.treinosRenovados)||0) : 0;
+    const revis = t ? (Number(t.treinosRevisados)||0) : 0;
+    if(t){ acBio+=bio; acReav+=reav; acRenov+=renov; acRevis+=revis; }
+    const temDados = bio+reav+renov+revis > 0;
     const statusBadge = s.status==='concluido'
       ? `<span class="badge badge-ok">Concluído</span>`
-      : s.status==='andamento'
+      : temDados || s.status==='andamento'
         ? `<span class="badge badge-inc">Em andamento</span>`
-        : `<span class="badge badge-nop">Não iniciado</span>`;
+        : `<span class="badge badge-nop">Sem dados</span>`;
+    const totalSem = bio + reav;
     return `<tr class="${s.isCurrent?'cur':''}">
       <td>${s.diasLabel}${s.isCurrent?' <strong>(esta semana)</strong>':''}</td>
-      <td style="text-align:center">${t?t.bioNovas:'—'}</td>
-      <td style="text-align:center">${t?t.reavaliacoes:'—'}</td>
-      <td style="text-align:center">${t?t.treinosRenovados:'—'}</td>
-      <td style="text-align:center">${t?t.treinosRevisados:'—'}</td>
+      <td style="text-align:center">${t?bio:'—'}</td>
+      <td style="text-align:center">${t?reav:'—'}</td>
+      <td style="text-align:center">${t?renov:'—'}</td>
+      <td style="text-align:center">${t?revis:'—'}</td>
+      <td style="text-align:center"><strong>${t?totalSem:'—'}</strong></td>
       <td style="text-align:center">${statusBadge}</td>
     </tr>`;
   }).join('');
 
   const dataGeracao = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const acTotalAval = acBio + acReav;
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Fechamento Semanal · ${d.unidade}</title>
@@ -28366,14 +28440,25 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
 <div class="page">
   <div class="hd">
     <div>
-      <div class="hd-logo"><span>MOV</span>FIT · Comparativo do Mês</div>
+      <div class="hd-logo"><span>MOV</span>FIT · Fechamento Mensal</div>
       <div class="hd-sub">${d.unidade} · ${d.nomeRT} · ${d.nomeMes}</div>
     </div>
   </div>
   <div class="faixa"></div>
 
   <div class="sec" style="margin-top:16px">
-    <div class="sec-title">Evolução semanal — ${d.nomeMes}</div>
+    <div class="sec-title">Totais do mês</div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-val" style="color:${BOM}">${acBio}</div><div class="kpi-lbl">Bio novas</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:${AMB}">${acReav}</div><div class="kpi-lbl">Reavaliações</div></div>
+      <div class="kpi"><div class="kpi-val">${acRenov}</div><div class="kpi-lbl">Renovados</div></div>
+      <div class="kpi"><div class="kpi-val">${acRevis}</div><div class="kpi-lbl">Revisados</div></div>
+      <div class="kpi"><div class="kpi-val">${acTotalAval}</div><div class="kpi-lbl">Total avaliações</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Detalhamento por semana — ${d.nomeMes}</div>
     <table class="tbl comp-tbl">
       <thead><tr>
         <th>Semana</th>
@@ -28381,22 +28466,24 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
         <th style="text-align:center">Reav</th>
         <th style="text-align:center">Renov</th>
         <th style="text-align:center">Revis</th>
+        <th style="text-align:center">Total</th>
         <th style="text-align:center">Status</th>
       </tr></thead>
       <tbody>${compRows}</tbody>
       <tfoot><tr class="total-row">
-        <td>Acumulado do mês</td>
+        <td>Total do mês</td>
         <td style="text-align:center">${acBio}</td>
         <td style="text-align:center">${acReav}</td>
         <td style="text-align:center">${acRenov}</td>
         <td style="text-align:center">${acRevis}</td>
-        <td style="text-align:center">${acBio+acReav} avaliações</td>
+        <td style="text-align:center"><strong>${acTotalAval}</strong></td>
+        <td style="text-align:center">—</td>
       </tr></tfoot>
     </table>
   </div>
 
   <div class="rodape">
-    <span>MOV FIT · Central de Gestão · Comparativo Mensal</span>
+    <span>MOV FIT · Central de Gestão · Fechamento Mensal</span>
     <span>Gerado em ${dataGeracao}</span>
   </div>
 </div>
