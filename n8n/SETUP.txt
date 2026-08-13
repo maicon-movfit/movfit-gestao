@@ -61,7 +61,20 @@ Body:
   action    → academia / key no n8n (ex.: stmpremium24 = Premium 24h)
   tipo      → bi | professores | carteira
   empresaId → sempre "1" (todas as academias MOV FIT)
+  unidade   → slug do cache Postgres (ex.: stm_24h). O front envia; o Check
+              proxy também deriva do action se faltar.
+  unidId    → id da unidade no app (ex.: premium24)
   codigoPessoa (só carteira)
+
+Mapeamento action → unidade (cache):
+  stmpremium24  → stm_24h
+  nrexpress     → stm_nova_republica
+  itaituba      → stm_itaituba
+  medicilandia  → stm_medicilandia
+
+No Select do cache: WHERE unidade = {{ $json.unidade }}
+No Respond (após Select): devolver o array inteiro, ex. Code:
+  return [{ json: { professores: items.map(i => i.json) } }];
 
 A key diferente por academia é escolhida no n8n pelo action, não pelo empresaId.
 

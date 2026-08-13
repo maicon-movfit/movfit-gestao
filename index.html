@@ -2336,12 +2336,21 @@ function nomeMesDeDataIso(iso) {
   return label + '/' + String(d.getFullYear()).slice(2);
 }
 
+/** Casa linha do mês com cadastro inativo: profId, nome normalizado ou nome parecido. */
+function professorBateInativo(p, inv) {
+  if (!p || !inv) return false;
+  if (p.profId && (inv.keys || []).indexOf(String(p.profId)) >= 0) return true;
+  const pid = p.nome && typeof nomeParaId === 'function' ? nomeParaId(p.nome) : null;
+  if (pid && pid !== '_' && (inv.keys || []).indexOf(pid) >= 0) return true;
+  if (p.nome && typeof nomesProvavelmenteMesmoProfessor === 'function') {
+    if ((inv.nomes || []).some(n => n && nomesProvavelmenteMesmoProfessor(n, p.nome))) return true;
+  }
+  return false;
+}
+
 function professorOcultoNoMesHistorico(p, mesNome, inativosList, ultimoMesNome) {
   if (!inativosList || !inativosList.length || !p || !mesNome) return false;
-  const match = inativosList.find(inv =>
-    (p.profId && inv.keys.indexOf(String(p.profId)) >= 0) ||
-    (p.nome && inv.keys.indexOf(nomeParaId(p.nome)) >= 0)
-  );
+  const match = inativosList.find(inv => professorBateInativo(p, inv));
   if (!match) return false;
   // Sem data de remoção: usa o mês calendário atual (ou o último do histórico)
   const corte = match.mesRemocao
@@ -2349,6 +2358,13 @@ function professorOcultoNoMesHistorico(p, mesNome, inativosList, ultimoMesNome) 
     || ultimoMesNome;
   if (!corte) return false;
   return compararMeses(mesNome, corte) >= 0;
+}
+
+/** Relatório: inativo/excluído não entra em nenhum mês (totais, destaques, score). */
+function filtrarProfessoresInativosDoRelatorio(profs, unidId) {
+  const list = _inativosHistMeta[unidId];
+  if (!list || !list.length || !profs || !profs.length) return profs || [];
+  return profs.filter(p => !list.some(inv => professorBateInativo(p, inv)));
 }
 
 function historicoComRegraInativos(hist, unidId) {
@@ -2372,7 +2388,12 @@ async function atualizarCacheInativosProfessores(unidId) {
       if (typeof professorEstaAtivo === 'function' ? professorEstaAtivo(d) : d.ativo !== false) return;
       const keys = [String(doc.id)];
       if (d.nome) keys.push(nomeParaId(d.nome));
-      list.push({ keys, mesRemocao: nomeMesDeDataIso(d.removidoEm) });
+      if (d.profId) keys.push(String(d.profId));
+      list.push({
+        keys,
+        nomes: d.nome ? [d.nome] : [],
+        mesRemocao: nomeMesDeDataIso(d.removidoEm)
+      });
     });
     _inativosHistMeta[unidId] = list;
     return list;
@@ -2393,6 +2414,7 @@ function marcarProfessorInativoNoCache(unidId, profId, nome, removidoEm) {
   );
   _inativosHistMeta[unidId].push({
     keys,
+    nomes: nome ? [nome] : [],
     mesRemocao: nomeMesDeDataIso(removidoEm || new Date().toISOString())
   });
 }
@@ -2428,10 +2450,14 @@ async function removerProfessorDosMesesAPartirDe(unidId, opts) {
     return 0;
   }
 
+  const nomesAlvo = (opts.nomes || []).concat(opts.nome ? [opts.nome] : []).filter(Boolean);
   const matchProf = (p) => {
     if (!p) return false;
     if (p.profId && keySet.has(String(p.profId))) return true;
     if (p.nome && keySet.has(nomeParaId(p.nome))) return true;
+    if (p.nome && typeof nomesProvavelmenteMesmoProfessor === 'function') {
+      if (nomesAlvo.some(n => nomesProvavelmenteMesmoProfessor(n, p.nome))) return true;
+    }
     return false;
   };
 
@@ -2474,7 +2500,7 @@ async function limparInativosDosMesesHistorico(unidId) {
   for (const inv of list) {
     const mesCorte = inv.mesRemocao || fallbackCorte;
     if (!mesCorte) continue;
-    n += await removerProfessorDosMesesAPartirDe(unidId, { keys: inv.keys, mesCorte });
+    n += await removerProfessorDosMesesAPartirDe(unidId, { keys: inv.keys, nomes: inv.nomes, mesCorte });
   }
   return n;
 }
@@ -3544,13 +3570,42 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
       try { await sincronizarStatusPactoProfessores(unidId, { silent: true }); } catch (e) { console.warn('[grade] syncStatusPacto:', e); }
       if(!unidadeAtual || unidadeAtual.id !== unidId) return;
     }
-    const snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
+    let snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
     if(!unidadeAtual || unidadeAtual.id !== unidId) return; // checa de novo após o segundo await
 
-
-    const profs = snap.docs
+    let profs = snap.docs
       .map(d=>({profId:d.id,...d.data()}))
       .filter(professorEstaAtivo);
+
+    // Heal: sync com BI incompleto pode ter marcado todos ativo:false (inativadoPorPacto)
+    if(!profs.length) {
+      const inativadosPacto = snap.docs.filter(d => {
+        const x = d.data() || {};
+        return x.ativo === false && x.inativadoPorPacto === true;
+      });
+      if(inativadosPacto.length) {
+        console.warn('[grade] Reativando', inativadosPacto.length, 'professor(es) inativados por BI incompleto');
+        try {
+          await Promise.all(inativadosPacto.map(d =>
+            reativarProfessorCadastro(unidId, d.id, { foraTreinoWeb: false })
+          ));
+          if(typeof atualizarCacheInativosProfessores === 'function') {
+            try { await atualizarCacheInativosProfessores(unidId); } catch(_) {}
+          }
+        } catch(e) {
+          console.warn('[grade] falha ao reativar:', e);
+        }
+        if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+        snap = await professoresRef(unidId).orderBy('criadoEm','asc').get();
+        profs = snap.docs
+          .map(d=>({profId:d.id,...d.data()}))
+          .filter(professorEstaAtivo);
+        if(profs.length && typeof mostrarToast === 'function') {
+          mostrarToast(`${profs.length} professor(es) reativados (sync Pacto incompleta).`);
+        }
+      }
+    }
+
     if(!profs.length) {
       rows.innerHTML = `<div style="text-align:center;padding:30px 16px;">
         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">Nenhum professor cadastrado nesta unidade</div>
@@ -3668,8 +3723,13 @@ async function preencherGradeComPacto(opts) {
     if (!unidadeAtual || unidadeAtual.id !== unidId) return;
     if (seq != null && seq !== _gradePactoSeq) return;
     if (!lista || !lista.length) {
-      if (auto) setSaveStatus('Pacto não retornou professores. Verifique o proxy n8n e Credentials.', 'e');
-      else mostrarToast('Pacto não retornou professores. Verifique o n8n (Credentials + webhook).');
+      const msgVazio = 'Pacto/cache não retornou professores. No n8n: Check proxy deve repassar unidade; Select filtra por unidade; Respond manda o array inteiro.';
+      if (auto) setSaveStatus(msgVazio, 'e');
+      else mostrarToast(msgVazio);
+      // Não deixa badge "Fora do Treino Web" de sync falha anterior
+      rows.forEach(row => {
+        if (row.dataset.foraTreinoWeb === '1') marcarLinhaForaTreinoWeb(row, false);
+      });
       return;
     }
     let normalizados = lista.map(pactoNormalizarProfessor).filter(Boolean);
@@ -3719,6 +3779,18 @@ async function preencherGradeComPacto(opts) {
       return el ? el.value.trim() : '';
     }).filter(Boolean));
     console.groupEnd();
+
+    const nomesNaGrade = rows.map(r => {
+      const el = r.querySelector('[data-f="0"]');
+      return el ? el.value.trim() : '';
+    }).filter(Boolean);
+    // Respond n8n com {{ $json }} manda 1 item → não marcar o resto como "fora do Treino Web"
+    const biIncompleto = normalizados.length > 0
+      && nomesNaGrade.length >= 3
+      && normalizados.length < Math.max(2, Math.ceil(nomesNaGrade.length * 0.5));
+    if (biIncompleto) {
+      console.warn('[PACTO GRADE] BI incompleto:', normalizados.length, 'vs', nomesNaGrade.length, 'na grade — não marco fora do Treino Web');
+    }
 
     const codigoPorNome = new Map();
     const profIdPorNome = new Map();
@@ -3777,9 +3849,11 @@ async function preencherGradeComPacto(opts) {
       if (!bi || (bi.comTreino == null && bi.emDia == null && bi.vencidos == null && bi.semTreino == null && bi.codigo == null)) {
         falha++;
         naoEncontrados.push(nome.split(' ')[0]);
-        marcarLinhaForaTreinoWeb(row, true);
-        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
-        console.warn('[PACTO GRADE] fora do Treino Web:', nome);
+        if (!biIncompleto) {
+          marcarLinhaForaTreinoWeb(row, true);
+          if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        }
+        console.warn('[PACTO GRADE] fora do Treino Web:', nome, biIncompleto ? '(BI incompleto — sem persistir)' : '');
         return;
       }
 
@@ -3791,8 +3865,10 @@ async function preencherGradeComPacto(opts) {
       if (comTreino == null && emDia == null && vencidos == null && semTreino == null) {
         falha++;
         naoEncontrados.push(nome.split(' ')[0]);
-        marcarLinhaForaTreinoWeb(row, true);
-        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        if (!biIncompleto) {
+          marcarLinhaForaTreinoWeb(row, true);
+          if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, true));
+        }
         console.warn('[PACTO GRADE] no BI sem indicadores:', nome, bi);
         return;
       }
@@ -3826,6 +3902,14 @@ async function preencherGradeComPacto(opts) {
       okCount++;
     });
 
+    if (biIncompleto) {
+      // Remove falso-positivo "fora do Treino Web" causado por Respond incompleto
+      rows.forEach(row => marcarLinhaForaTreinoWeb(row, false));
+      profIdPorNome.forEach((profId) => {
+        if (profId) persistFora.push(marcarForaTreinoWebFirestore(unidId, profId, false));
+      });
+    }
+
     if (persistFora.length) {
       try { await Promise.all(persistFora); } catch (e) {}
     }
@@ -3834,14 +3918,22 @@ async function preencherGradeComPacto(opts) {
     _marcarGradeModificada();
 
     let msg = `Pacto: ${okCount} professor(es) preenchido(s)`;
-    if (falha) msg += ` · ${falha} fora do Treino Web (${naoEncontrados.slice(0, 3).join(', ')}${naoEncontrados.length > 3 ? '…' : ''})`;
-    msg += '. Revise e clique em Registrar mês.';
+    if (biIncompleto) {
+      msg = `BI incompleto (${normalizados.length} no webhook, ${nomesNaGrade.length} na grade). No n8n, o Respond deve devolver o array inteiro — não marquei ninguém como fora do Treino Web. Preenchidos: ${okCount}.`;
+    } else if (falha) {
+      msg += ` · ${falha} fora do Treino Web (${naoEncontrados.slice(0, 3).join(', ')}${naoEncontrados.length > 3 ? '…' : ''})`;
+      msg += '. Revise e clique em Registrar mês.';
+    } else {
+      msg += '. Revise e clique em Registrar mês.';
+    }
     if (!auto) mostrarToast(msg);
     setSaveStatus(
-      okCount
-        ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
-        : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
-      okCount ? 'ok' : 'w'
+      biIncompleto
+        ? `⚠ Webhook incompleto (${normalizados.length}/${nomesNaGrade.length}). Ajuste o Respond no n8n para enviar todos os professores.`
+        : okCount
+          ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
+          : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
+      biIncompleto ? 'w' : (okCount ? 'ok' : 'w')
     );
   } catch (e) {
     console.error('[PACTO GRADE]', e);
@@ -11031,17 +11123,18 @@ async function renderResumoSemanal() {
 
 // ── Score de Atuação do RT ────────────────────────────────────────────────────
 // Calcula score 0-100 em 3 pilares: Resultado (40%), Acompanhamento (35%), Execução (25%)
-function calcScoreRT(unidId, mesNomeAlvo) {
+function calcScoreRT(unidId, mesNomeAlvo, opts) {
   const hist=getHistorico(unidId);
   if(!hist.length) return null;
   let idx=hist.length-1;
   if(mesNomeAlvo){ const i=hist.findIndex(m=>m.nome===mesNomeAlvo); if(i>=0) idx=i; }
   const ultimo=hist[idx];
   const meta=getMeta(unidId);
+  const profsMes = (opts && opts.professores) || ultimo.professores || [];
 
   // PILAR 1 — Resultado (40pts): % em dia vs meta + tendência
-  const com=ultimo.professores.reduce((s,p)=>s+p.comTreino,0);
-  const emDia=ultimo.professores.reduce((s,p)=>s+p.emDia,0);
+  const com=profsMes.reduce((s,p)=>s+p.comTreino,0);
+  const emDia=profsMes.reduce((s,p)=>s+p.emDia,0);
   const pe=pct(emDia,com);
   const metaT=meta.metaTreino||75;
   const ratioMeta=Math.min(pe/metaT,1.2); // até 120% da meta
@@ -11050,8 +11143,9 @@ function calcScoreRT(unidId, mesNomeAlvo) {
   // Bônus tendência
   if(idx>0){
     const prev=hist[idx-1];
-    const pCom=prev.professores.reduce((s,p)=>s+p.comTreino,0);
-    const pED=prev.professores.reduce((s,p)=>s+p.emDia,0);
+    const prevProfs = (opts && opts.professoresAnterior) || prev.professores || [];
+    const pCom=prevProfs.reduce((s,p)=>s+p.comTreino,0);
+    const pED=prevProfs.reduce((s,p)=>s+p.emDia,0);
     const pePrev=pct(pED,pCom);
     if(pe>pePrev) resScore=Math.min(40,resScore+5);
     else if(pe<pePrev-10) resScore=Math.max(0,resScore-5);
@@ -11059,24 +11153,24 @@ function calcScoreRT(unidId, mesNomeAlvo) {
 
   // PILAR 2 — Acompanhamento (35pts): base fixa + dedução por sem evidência
   // Proxy: usa score crítico do Motor de Performance
-  const criticos=ultimo.professores.filter(p=>{
+  const criticos=profsMes.filter(p=>{
     const motor=calcMotorScore(p,idx>1?hist[idx-2].professores.find(x=>x.nome===p.nome):null);
     return motor.score>80;
   });
-  const totalProfs=ultimo.professores.length||1;
+  const totalProfs=profsMes.length||1;
   const taxaCriticos=criticos.length/totalProfs;
   let acompScore=Math.round(35*(1-taxaCriticos*0.8));
   acompScore=Math.max(0,Math.min(35,acompScore));
 
   // PILAR 3 — Execução (25pts): sem treino zerado + duração na faixa
-  const semTreino=ultimo.professores.reduce((s,p)=>s+p.semTreino,0);
-  const foraDuracao=ultimo.professores.filter(p=>!duracaoOk(p.duracao)).length;
+  const semTreino=profsMes.reduce((s,p)=>s+p.semTreino,0);
+  const foraDuracao=profsMes.filter(p=>!duracaoOk(p.duracao)).length;
   let execScore=25;
   execScore-=Math.min(15,semTreino*2);
   execScore-=Math.min(10,foraDuracao*3);
   execScore=Math.max(0,execScore);
 
-  const vencidos=ultimo.professores.reduce((s,p)=>s+(p.vencido||0),0);
+  const vencidos=profsMes.reduce((s,p)=>s+(p.vencido||0),0);
   const total=resScore+acompScore+execScore;
   const badge=total>=80?{label:'Bom',cls:'pg'}:total>=60?{label:'Regular',cls:'pa'}:{label:'Crítico',cls:'pr'};
   return{total,resScore,acompScore,execScore,badge,pe,metaT,vencidos};
@@ -14089,7 +14183,9 @@ async function reativarProfessorCadastro(unidId, profId, patch){
  * - código sumiu do BI → inativa (ativo:false, inativadoPorPacto:true)
  * - código voltou e foi inativado pela Pacto → reativa
  * Professores sem código Pacto NÃO são alterados.
- * @returns {{ inativados:number, reativados:number, nomesInativados:string[], nomesReativados:string[] }}
+ * Proteção: se o BI vier incompleto (ex.: Respond n8n só com 1 item), NÃO inativa
+ * em massa e reativa quem tinha sido inativado por engano.
+ * @returns {{ inativados:number, reativados:number, nomesInativados:string[], nomesReativados:string[], biIncompleto?:boolean }}
  */
 async function sincronizarStatusPactoProfessores(unidId, opts){
   const silent = !!(opts && opts.silent);
@@ -14129,6 +14225,19 @@ async function sincronizarStatusPactoProfessores(unidId, opts){
     return empty;
   }
 
+  const locaisComCodigo = snap.docs.filter(doc => {
+    const c = (doc.data() || {}).codigoPacto;
+    return c != null && c !== '';
+  }).length;
+
+  // BI incompleto (Respond só 1º item, timeout, filtro errado): não zera a equipe
+  const biIncompleto = locaisComCodigo >= 3 && codigosBi.size < Math.max(2, Math.ceil(locaisComCodigo * 0.5));
+  if(biIncompleto){
+    console.warn('[syncStatusPacto] BI incompleto — skip inativação em massa', {
+      codigosBi: codigosBi.size, locaisComCodigo
+    });
+  }
+
   const writes = [];
   const nomesInativados = [];
   const nomesReativados = [];
@@ -14140,7 +14249,7 @@ async function sincronizarStatusPactoProfessores(unidId, opts){
     const noBi = codigosBi.has(String(cod));
     const ativo = professorEstaAtivo(d);
 
-    if(!noBi && ativo){
+    if(!biIncompleto && !noBi && ativo){
       writes.push(
         professoresRef(unidId).doc(doc.id).set({
           ativo: false,
@@ -14151,7 +14260,8 @@ async function sincronizarStatusPactoProfessores(unidId, opts){
         }, { merge: true })
       );
       nomesInativados.push(d.nome || doc.id);
-    } else if(noBi && !ativo && d.inativadoPorPacto === true){
+    } else if((noBi || biIncompleto) && !ativo && d.inativadoPorPacto === true){
+      // Reativa: código voltou no BI, OU heal após BI incompleto ter zerado a equipe
       writes.push(
         reativarProfessorCadastro(unidId, doc.id, { foraTreinoWeb: false })
       );
@@ -14172,11 +14282,13 @@ async function sincronizarStatusPactoProfessores(unidId, opts){
     reativados: nomesReativados.length,
     nomesInativados,
     nomesReativados,
+    biIncompleto: !!biIncompleto,
   };
 
-  if(!silent && (result.inativados || result.reativados)){
+  if(!silent && (result.inativados || result.reativados || biIncompleto)){
     let msg = '';
-    if(result.inativados) msg += `${result.inativados} inativado(s) (fora da Pacto)`;
+    if(biIncompleto) msg += 'BI incompleto — equipe preservada/reativada';
+    if(result.inativados) msg += (msg ? ' · ' : '') + `${result.inativados} inativado(s) (fora da Pacto)`;
     if(result.reativados) msg += (msg ? ' · ' : '') + `${result.reativados} reativado(s)`;
     mostrarToast(msg);
   }
@@ -26469,7 +26581,8 @@ async function montarDadosRelatorio(chave){
     const atual=getMesHistorico(u.id,chave);
     const anterior=getMesAnterior(u.id,chave);
     if(!atual) return null;
-    const profs=atual.professores||[];
+    const profs=filtrarProfessoresInativosDoRelatorio(atual.professores||[], u.id);
+    const profsAnt=anterior?filtrarProfessoresInativosDoRelatorio(anterior.professores||[], u.id):[];
     const tot=soma(profs,p=>p.total);
     const com=soma(profs,p=>p.comTreino);
     const emDia=soma(profs,p=>p.emDia);
@@ -26480,17 +26593,17 @@ async function montarDadosRelatorio(chave){
     const gap=treinoEmDia-meta.metaTreino;
     const duracoes=profs.map(p=>p.duracao).filter(d=>d>0);
     const duracaoMedia=duracoes.length?Math.round(duracoes.reduce((a,b)=>a+b)/duracoes.length):null;
-    const score=calcScoreRT(u.id,atual.nome);
+    const score=calcScoreRT(u.id,atual.nome,{professores:profs, professoresAnterior:profsAnt});
     const status=gap>=0?'meta':score&&score.badge.cls==='pr'?'critico':'regular';
 
     let evolucao=null;
     if(anterior){
-      const pA=anterior.professores||[];
+      const pA=profsAnt;
       const cA=soma(pA,p=>p.comTreino);
       const eA=soma(pA,p=>p.emDia);
       const vA=soma(pA,p=>p.vencido);
       const tA=soma(pA,p=>p.total);
-      const scA=calcScoreRT(u.id,anterior.nome);
+      const scA=calcScoreRT(u.id,anterior.nome,{professores:pA});
       evolucao={
         treinoAnterior:pct(eA,cA),
         vencidosAnterior:pct(vA,tA),
@@ -26501,7 +26614,6 @@ async function montarDadosRelatorio(chave){
       };
     }
     // ── Destaques por professor ──────────────────────────────────────────
-    const profsAnt=anterior?anterior.professores||[]:[];
     const profComPct=p=>pct(p.emDia,p.comTreino);
     const profDelta=p=>{
       const pa=profsAnt.find(x=>x.nome===p.nome);
@@ -26575,11 +26687,13 @@ async function montarDadosRelatorio(chave){
   const totAlunos=unidades.reduce((s,u)=>s+u.alunos,0);
   const totCom=UNIDADES.reduce((s,u)=>{
     const m=getMesHistorico(u.id,chave); if(!m) return s;
-    return s+(m.professores||[]).reduce((a,p)=>a+(p.comTreino||0),0);
+    const ps=filtrarProfessoresInativosDoRelatorio(m.professores||[], u.id);
+    return s+ps.reduce((a,p)=>a+(p.comTreino||0),0);
   },0);
   const totEmDia=UNIDADES.reduce((s,u)=>{
     const m=getMesHistorico(u.id,chave); if(!m) return s;
-    return s+(m.professores||[]).reduce((a,p)=>a+(p.emDia||0),0);
+    const ps=filtrarProfessoresInativosDoRelatorio(m.professores||[], u.id);
+    return s+ps.reduce((a,p)=>a+(p.emDia||0),0);
   },0);
   const totVenc=unidades.reduce((s,u)=>s+u.vencidos,0);
   const unidsComAnt=unidades.filter(u=>u.evolucao);
@@ -27293,7 +27407,7 @@ async function montarDadosRelatorioRT(unidId, emailRT, mesNome) {
   await getHistoricoAsync(unidId);
   const hist = getHistorico(unidId);
   const mesObj = hist.find(m=>m.nome===mesNome) || hist.slice().sort((a,b)=>compararMeses(a.nome,b.nome)).pop();
-  const profs  = mesObj ? (mesObj.professores||[]) : [];
+  const profs  = mesObj ? filtrarProfessoresInativosDoRelatorio(mesObj.professores||[], unidId) : [];
   const soma   = fn => profs.reduce((s,p)=>s+(fn(p)||0),0);
   const tot    = soma(p=>p.total);
   const com    = soma(p=>p.comTreino);
@@ -27308,7 +27422,7 @@ async function montarDadosRelatorioRT(unidId, emailRT, mesNome) {
   const indicadores = { treinoEmDia, meta, gap, vencidos:venc, percentVencidos, duracaoMedia, totalAlunos:tot };
 
   // ── score RT ──────────────────────────────────────────────────────────────
-  const scoreCiclo   = calcScoreRT(unidId, mesNome);
+  const scoreCiclo   = calcScoreRT(unidId, mesNome, {professores:profs});
   const mesAntObj    = hist.slice().sort((a,b)=>compararMeses(a.nome,b.nome))
     .filter(m=>compararMeses(m.nome,mesNome)<0).pop();
   const scoreAnt     = mesAntObj ? calcScoreRT(unidId, mesAntObj.nome) : null;
