@@ -20,6 +20,7 @@ function pactoLimparCacheDados() {
 /**
  * action no webhook = academia (ex.: stmpremium24).
  * tipo = operação Pacto (bi | professores | carteira).
+ * unidade = slug do cache Postgres no n8n (ex.: stm_24h), quando houver.
  * Nunca envia nem recebe a key Pacto.
  * Cache TTL + single-flight: várias telas pedindo BI ao mesmo tempo = 1 HTTP.
  */
@@ -35,8 +36,15 @@ async function pactoViaN8n(tipo, body = {}) {
     return null;
   }
   const { unidId: _omitUnid, ...rest } = body;
-  const payload = { action, tipo, ...rest };
-  const cacheKey = action + '|' + tipo + '|' + JSON.stringify(rest);
+  const unidadeCache = typeof pactoUnidadeCache === 'function' ? pactoUnidadeCache(unidId) : null;
+  const payload = {
+    action,
+    tipo,
+    ...rest,
+    ...(unidId ? { unidId } : {}),
+    ...(unidadeCache ? { unidade: unidadeCache } : {}),
+  };
+  const cacheKey = action + '|' + tipo + '|' + JSON.stringify(rest) + '|' + (unidadeCache || unidId || '');
   const cached = _pactoCache[cacheKey];
   if (cached !== undefined && (Date.now() - (_pactoCacheAt[cacheKey] || 0)) < PACTO_CACHE_TTL_MS) {
     return cached;
@@ -73,13 +81,44 @@ async function pactoViaN8n(tipo, body = {}) {
   return _pactoInflight[cacheKey];
 }
 
-/** Extrai array de lista da resposta Pacto (array direto, content, ou [{content}]). */
+/** Linha flat do cache Postgres / Respond (snake_case ou camelCase). */
+function pactoEhFormatoCache(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+  if (p.biTreinoTreinamentoDTO || p.biTreinoTreinamento || p.professor) return false;
+  return (
+    'com_treino' in p || 'comTreino' in p ||
+    'em_dia' in p || 'emDia' in p ||
+    'sem_treino' in p || 'semTreino' in p ||
+    'unidade' in p || 'atualizado_em' in p ||
+    ('ativos' in p && p.codigo != null && p.nome)
+  );
+}
+
+/**
+ * Extrai array de professores da resposta do webhook.
+ * Aceita: array flat do cache, 1 objeto flat (Respond n8n só manda o 1º item),
+ * { professores|content: [] }, ou formato bruto Pacto.
+ */
 function pactoExtrairLista(data) {
   if (!data) return [];
+
+  // Um único professor flat (Respond to Webhook com {{ $json }} = só o 1º item)
+  if (!Array.isArray(data) && pactoEhFormatoCache(data)) {
+    console.warn('[PACTO] Webhook devolveu 1 objeto — o Respond deve enviar o array inteiro (todos os professores).');
+    return [data];
+  }
+
   if (Array.isArray(data)) {
+    if (!data.length) return [];
+    // Array já flat do cache
+    if (pactoEhFormatoCache(data[0])) return data;
     // n8n às vezes devolve [{ content: [professores...] }]
     if (data.length === 1 && data[0] && Array.isArray(data[0].content)) {
       return data[0].content;
+    }
+    // [{ professores: [...] }]
+    if (data.length === 1 && data[0] && Array.isArray(data[0].professores)) {
+      return data[0].professores;
     }
     const comContent = data.find(x => x && Array.isArray(x.content));
     if (comContent && !(data[0] && (data[0].professor || data[0].biTreinoTreinamentoDTO))) {
@@ -87,6 +126,8 @@ function pactoExtrairLista(data) {
     }
     return data;
   }
+
+  if (Array.isArray(data.professores)) return data.professores;
   if (data.content && Array.isArray(data.content)) return data.content;
   const chave = Object.keys(data).find(k => Array.isArray(data[k]));
   return chave ? data[chave] : [];
@@ -155,6 +196,29 @@ function pactoNomeProfessor(p) {
 // ── Extrai objeto normalizado de indicadores do professor BI ─────────
 function pactoNormalizarProfessor(p) {
   if (!p) return null;
+
+  // Formato cache Postgres / Respond do webhook (flat)
+  if (pactoEhFormatoCache(p)) {
+    const comTreino = p.comTreino ?? p.com_treino ?? null;
+    const semTreino = p.semTreino ?? p.sem_treino ?? null;
+    const ativosCalc = pactoCalcularAtivos(comTreino, semTreino);
+    const ativos = p.ativos != null ? Number(p.ativos) : ativosCalc;
+    const dur = p.duracao != null ? Number(p.duracao) : null;
+    return {
+      codigo:    p.codigo != null ? p.codigo : null,
+      nome:      p.nome || '?',
+      comTreino,
+      semTreino,
+      emDia:     p.emDia ?? p.em_dia ?? null,
+      vencidos:  p.vencidos ?? null,
+      aRenovar:  p.aRenovar ?? p.a_renovar ?? null,
+      ativos,
+      total:     p.total != null ? Number(p.total) : ativos,
+      duracao:   (dur != null && !Number.isNaN(dur) && dur > 0) ? Math.round(dur) : null,
+    };
+  }
+
+  // Formato bruto Pacto (professor + biTreinoTreinamentoDTO)
   const prof = p.professor || p.pessoa || p;
   const bi   = p.biTreinoTreinamentoDTO || p.biTreinoTreinamento || {};
   const nome = prof.nome || prof.nomeCompleto || pactoNomeProfessor(p);
@@ -254,6 +318,17 @@ const PACTO_ACTION_POR_UNIDADE = {
   medicilandia: 'medicilandia',
 };
 
+/**
+ * Slug da coluna `unidade` no cache Postgres (n8n).
+ * Deve bater com o que o fluxo grava/seleciona (ex.: stm_24h).
+ */
+const PACTO_CACHE_UNIDADE = {
+  premium24: 'stm_24h',
+  nrexpress: 'stm_nova_republica',
+  itaituba: 'stm_itaituba',
+  medicilandia: 'stm_medicilandia',
+};
+
 function pactoEmpresaId(unidId) {
   if (!unidId) return null;
   if (!PACTO_EMPRESA_POR_UNIDADE[unidId]) return null;
@@ -275,6 +350,12 @@ function pactoUnidadePorEmpresa(empresaId) {
 function pactoActionWebhook(unidId) {
   if (!unidId) return null;
   return PACTO_ACTION_POR_UNIDADE[unidId] || null;
+}
+
+/** Valor de `unidade` no Postgres/cache n8n para esta academia. */
+function pactoUnidadeCache(unidId) {
+  if (!unidId) return null;
+  return PACTO_CACHE_UNIDADE[unidId] || null;
 }
 
 async function pactoBuscarIndicadoresProfessor(unidId, opts = {}) {
