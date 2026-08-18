@@ -14560,7 +14560,19 @@ async function renderModalProf(opts) {
   if(!unidadeAtual || unidadeAtual.id !== unidId) return; // unidade mudou nesse meio tempo — descarta o resultado
 
   // Alinha ativo/inativo com o BI da Pacto (quem saiu some da lista ativa)
-  if (!skipPactoSync && typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof sincronizarStatusPactoProfessores === 'function') {
+  let biNormEquipe = [];
+  if (typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof pactoBuscarProfessoresBI === 'function') {
+    try {
+      const listaBi = await pactoBuscarProfessoresBI(pactoEmpresaId(unidId), unidId);
+      biNormEquipe = (listaBi || []).map(pactoNormalizarProfessor).filter(Boolean);
+    } catch (e) {
+      console.warn('[renderModalProf] BI equipe:', e);
+    }
+  }
+  if (!skipPactoSync && biNormEquipe.length && typeof sincronizarStatusPactoProfessores === 'function') {
+    try { await sincronizarStatusPactoProfessores(unidId, { biNorm: biNormEquipe, silent: true }); } catch (e) { console.warn('[renderModalProf] syncStatusPacto:', e); }
+    if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+  } else if (!skipPactoSync && typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof sincronizarStatusPactoProfessores === 'function') {
     try { await sincronizarStatusPactoProfessores(unidId, { silent: true }); } catch (e) { console.warn('[renderModalProf] syncStatusPacto:', e); }
     if(!unidadeAtual || unidadeAtual.id !== unidId) return;
   }
@@ -14615,9 +14627,31 @@ async function renderModalProf(opts) {
       foraTreinoWeb: !!prof.foraTreinoWeb,
       ativo: professorEstaAtivo(prof),
       inativadoPorPacto: !!prof.inativadoPorPacto,
-      meses
+      meses,
+      pactoLive: null
     };
   });
+
+  if (biNormEquipe.length && typeof pactoEncontrarProfessor === 'function') {
+    profs.forEach(prof => {
+      const hit = pactoEncontrarProfessor(biNormEquipe, {
+        codigoPacto: prof.codigoPacto,
+        nome: prof.nome
+      });
+      if (!hit) return;
+      const total = hit.total != null ? hit.total : hit.ativos;
+      if (hit.comTreino == null && hit.emDia == null && hit.vencidos == null && total == null) return;
+      prof.pactoLive = {
+        total: total != null ? Number(total) : Number(hit.comTreino || 0) + Number(hit.semTreino || 0),
+        comTreino: hit.comTreino,
+        emDia: hit.emDia,
+        vencido: hit.vencidos,
+        semTreino: hit.semTreino,
+        duracao: hit.duracao,
+        _fontePacto: true
+      };
+    });
+  }
 
   const colabs = await Promise.all(profs.map(async prof => {
     const docId = prof.profId;
@@ -14721,13 +14755,20 @@ function setModalProfFiltro(btn, filtro) {
   filtrarModalProf();
 }
 
+function professorIndicadoresEquipe(prof) {
+  const mes = prof.meses && prof.meses.length ? prof.meses[prof.meses.length - 1] : null;
+  if (mes) return { ul: mes, fonte: 'mes' };
+  if (prof.pactoLive) return { ul: prof.pactoLive, fonte: 'pacto' };
+  return { ul: null, fonte: null };
+}
+
 function filtrarModalProf() {
   const busca = (document.getElementById('modalProfSearch')?.value||'').toLowerCase().trim();
   const ordem = document.getElementById('modalProfOrdem')?.value || 'nome';
   let lista = [..._modalProfCards];
 
   lista = lista.filter(prof => {
-    const ul = prof.meses && prof.meses.length ? prof.meses[prof.meses.length-1] : null;
+    const { ul } = professorIndicadoresEquipe(prof);
     const pe = ul ? pct(ul.emDia, ul.comTreino) : 0;
     const ciclo = prof.ultimoCiclo;
     const diasDesde = ciclo ? Math.floor((Date.now()-new Date(ciclo.criadoEm).getTime())/(1000*60*60*24)) : null;
@@ -14745,8 +14786,8 @@ function filtrarModalProf() {
   });
 
   lista.sort((a,b) => {
-    const ua = a.meses && a.meses.length ? a.meses[a.meses.length-1] : null;
-    const ub = b.meses && b.meses.length ? b.meses[b.meses.length-1] : null;
+    const ua = professorIndicadoresEquipe(a).ul;
+    const ub = professorIndicadoresEquipe(b).ul;
     if(ordem==='perc_desc') return (ub?pct(ub.emDia,ub.comTreino):0)-(ua?pct(ua.emDia,ua.comTreino):0);
     if(ordem==='perc_asc')  return (ua?pct(ua.emDia,ua.comTreino):0)-(ub?pct(ub.emDia,ub.comTreino):0);
     if(ordem==='vencidos')  return (ub?ub.vencido:0)-(ua?ua.vencido:0);
@@ -14759,7 +14800,7 @@ function filtrarModalProf() {
   grid.innerHTML = lista.map((prof,i) => {
     const cor = RADAR_CORES[_modalProfCards.indexOf(prof) % RADAR_CORES.length];
     const ini = prof.nome.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-    const ul = prof.meses && prof.meses.length ? prof.meses[prof.meses.length-1] : null;
+    const { ul, fonte } = professorIndicadoresEquipe(prof);
     const pe = ul ? pct(ul.emDia, ul.comTreino) : 0;
     const ciclo = prof.ultimoCiclo;
     const temRt = ciclo && ciclo.notasRt;
@@ -14776,7 +14817,11 @@ function filtrarModalProf() {
     const badgeRt = temRt ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.2)">✓ RT</span>` : '';
     const badgeColab = temColab ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.2)">✓ Prof</span>` : '';
     const badgeMedia = mediaRt ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(167,139,250,.1);color:var(--c-purple);border:1px solid rgba(167,139,250,.2)">⭐ ${mediaRt}</span>` : '';
-    const badgeSemMes = !ul ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--border);color:var(--muted);">Sem mês registrado ainda</span>` : '';
+    const badgeSemMes = fonte === 'pacto'
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.25);">Pacto ao vivo</span>`
+      : !ul
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--border);color:var(--muted);">Sem mês registrado ainda</span>`
+      : '';
     const badgePacto = prof.codigoPacto != null
       ? `<span style="font-size:9px;font-weight:600;padding:2px 7px;border-radius:99px;background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.25);">Pacto #${prof.codigoPacto}</span>`
       : prof.foraTreinoWeb
@@ -14799,7 +14844,7 @@ function filtrarModalProf() {
           <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;background:${cor};flex-shrink:0;">${ini}</div>
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.4;word-break:break-word;">${esc(nomeExibir)}</div>
-            <div style="font-size:10px;color:var(--muted);">${ul ? ul.total+' alunos' : 'Aguardando primeiro mês'}</div>
+            <div style="font-size:10px;color:var(--muted);">${ul ? ul.total+' alunos'+(fonte==='pacto'?' · Pacto':'') : 'Aguardando primeiro mês'}</div>
           </div>
         </div>
         ${ul ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -26334,6 +26379,98 @@ function labelDeChaveMes(chave){
   const [mes,ano]=chave.split('/');
   return mes.charAt(0)+mes.slice(1).toLowerCase()+'/'+ano;
 }
+
+const _MESES_CHAVE_REL = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+function chaveMesDeISO(iso){
+  if(!iso) return '';
+  const [y,m] = String(iso).split('-');
+  const mi = parseInt(m,10) - 1;
+  if(!y || mi < 0 || mi > 11) return '';
+  return _MESES_CHAVE_REL[mi] + '/' + String(y).slice(-2);
+}
+function chaveMesCalendarioAtual(){
+  const d = new Date();
+  return _MESES_CHAVE_REL[d.getMonth()] + '/' + String(d.getFullYear()).slice(-2);
+}
+function _relUnidIdsParaPulso(){
+  if(_relTipo === 'regional-semanal') return UNIDADES.map(u => u.id);
+  const uSel = document.getElementById('relUnidadeSelect');
+  const unidId = (uSel && uSel.value) || usuarioLogado?.unidade || (UNIDADES[0] && UNIDADES[0].id);
+  return unidId ? [unidId] : UNIDADES.map(u => u.id);
+}
+/** Semana do Fech. Semanal (pulsos) com preenchimento manual — não exige Registrar mês. */
+function pulsoSemanaTemRegistro(pulso){
+  if(!pulso) return false;
+  const st = typeof pulsoStatus === 'function' ? pulsoStatus(pulso) : '';
+  if(st === 'concluido' || st === 'andamento' || st === 'atraso') return true;
+  if(pulso.isCompleted) return true;
+  const totais = typeof pulsoCalcTotais === 'function' ? pulsoCalcTotais(pulso) : null;
+  if(totais && ((totais.bioNovas||0)+(totais.reavaliacoes||0)+(totais.treinosRenovados||0)+(totais.treinosRevisados||0)+(totais.diasPreenchidos||0)) > 0) return true;
+  return !!(pulso.dias && Object.keys(pulso.dias).length);
+}
+async function coletarChavesMesComPulso(unidIds){
+  const chaves = new Set();
+  await Promise.all((unidIds||[]).filter(Boolean).map(async unidId => {
+    try {
+      let snap;
+      try {
+        snap = await db.collection('unidades').doc(unidId).collection('pulsos')
+          .orderBy('semanaInicio','desc').limit(80).get();
+      } catch(_) {
+        snap = await db.collection('unidades').doc(unidId).collection('pulsos').limit(80).get();
+      }
+      snap.forEach(doc => {
+        const p = doc.data() || {};
+        if(!pulsoSemanaTemRegistro(p)) return;
+        const k1 = chaveMesDeISO(p.semanaInicio || doc.id);
+        if(k1) chaves.add(k1);
+        const k2 = chaveMesDeISO(p.semanaFim);
+        if(k2) chaves.add(k2);
+      });
+    } catch(e) {
+      console.warn('[rel] meses via pulso', unidId, e);
+    }
+  }));
+  return chaves;
+}
+async function atualizarMesesDoRelatorio(){
+  const sel = document.getElementById('relMesSelect');
+  if(!sel) return;
+  const prev = sel.value;
+  const chaveParaLabel = {};
+  const soPulso = new Set();
+  const add = (chave, label, viaPulso) => {
+    if(!chave) return;
+    if(!chaveParaLabel[chave]){
+      chaveParaLabel[chave] = label || labelDeChaveMes(chave);
+    }
+    if(viaPulso) soPulso.add(chave);
+  };
+  UNIDADES.forEach(u => {
+    (typeof getHistorico === 'function' ? getHistorico(u.id) : []).forEach(m => {
+      add(normalizarChaveMes(m.nome), m.nome, false);
+    });
+  });
+  const isSemanal = _relTipo === 'semanal' || _relTipo === 'regional-semanal';
+  if(isSemanal){
+    add(chaveMesCalendarioAtual(), labelDeChaveMes(chaveMesCalendarioAtual()), false);
+    const pulsoChaves = await coletarChavesMesComPulso(_relUnidIdsParaPulso());
+    pulsoChaves.forEach(chave => {
+      const jaTinha = !!chaveParaLabel[chave];
+      add(chave, labelDeChaveMes(chave), !jaTinha);
+    });
+  }
+  const allMeses = Object.keys(chaveParaLabel).sort((a,b) => compararMeses(labelDeChaveMes(a), labelDeChaveMes(b)));
+  sel.innerHTML = '<option value="">— selecione —</option>' + allMeses.map(chave => {
+    const lab = chaveParaLabel[chave];
+    const extra = (isSemanal && soPulso.has(chave)) ? ' · fech. semanal' : '';
+    return `<option value="${chave}">${lab}${extra}</option>`;
+  }).join('');
+  const prefer = prev && chaveParaLabel[prev] ? prev
+    : (isSemanal && chaveParaLabel[chaveMesCalendarioAtual()] ? chaveMesCalendarioAtual() : '');
+  if(prefer) sel.value = prefer;
+  if(isSemanal) relMesChanged();
+}
 function getMesAnteriorPorChave(unidId, chave){
   const hist=getHistorico(unidId).slice().sort((a,b)=>compararMeses(a.nome,b.nome));
   const idx=hist.findIndex(m=>normalizarChaveMes(m.nome)===chave);
@@ -26386,16 +26523,6 @@ function abrirModalRelatorio(){
   const isAdmin=usuarioLogado&&usuarioLogado.papel==='admin';
   const isRT=usuarioLogado&&usuarioLogado.papel==='rt';
 
-  // Meses disponíveis
-  const allMeses=[];
-  const chaveParaLabel={};
-  UNIDADES.forEach(u=>{getHistorico(u.id).forEach(m=>{
-    const chave=normalizarChaveMes(m.nome);
-    if(!chaveParaLabel[chave]){ chaveParaLabel[chave]=m.nome; allMeses.push(chave); }
-  });});
-  const sel=document.getElementById('relMesSelect');
-  if(sel) sel.innerHTML='<option value="">— selecione —</option>'+allMeses.map(chave=>`<option value="${chave}">${chaveParaLabel[chave]}</option>`).join('');
-
   // Unidades
   const uSel=document.getElementById('relUnidadeSelect');
   if(uSel){
@@ -26411,6 +26538,9 @@ function abrirModalRelatorio(){
       uSel.style.cursor='';
     }
   }
+
+  // Meses: histórico; no semanal também pulsos preenchidos à mão
+  atualizarMesesDoRelatorio();
 
   // Tipos disponíveis
   const ta=document.getElementById('relTipoAdmin');
@@ -26442,7 +26572,6 @@ function relMesChanged() {
   if(!chave) { sel.innerHTML = '<option value="">— selecione o mês primeiro —</option>'; return; }
   // Parse robusto: aceita 'JUN/26', 'Junho/26', 'Junho/2026'
   const mesesNum = {JAN:0,FEV:1,MAR:2,ABR:3,MAI:4,JUN:5,JUL:6,AGO:7,SET:8,OUT:9,NOV:10,DEZ:11};
-  const mesesExtenso = {JANEIRO:0,FEVEREIRO:1,MARCO:2,ABRIL:3,MAIO:4,JUNHO:5,JULHO:6,AGOSTO:7,SETEMBRO:8,OUTUBRO:9,NOVEMBRO:10,DEZEMBRO:11};
   const partes = chave.split('/');
   const mesRaw = (partes[0]||'').trim().toUpperCase().slice(0,3);
   const anoRaw = (partes[1]||'').trim();
@@ -26451,15 +26580,54 @@ function relMesChanged() {
   const semanas = pulsoSemanasDoMes(ano, mes);
   const mesesNomes = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const hoje = pulsoHoje();
-  sel.innerHTML = semanas.map((s, i) => {
-    const [,m,d] = s.semanaId.split('-');
-    const [,m2,d2] = s.sabado.split('-');
-    const mesInicio = mesesNomes[parseInt(m)-1]; const mesFim = mesesNomes[parseInt(m2)-1]; const label = mesInicio === mesFim ? `Semana ${i+1} · ${parseInt(d)} a ${parseInt(d2)} de ${mesInicio}` : `Semana ${i+1} · ${parseInt(d)}/${mesInicio} a ${parseInt(d2)}/${mesFim}`;
-    const isCurrent = s.semanaId <= hoje && hoje <= s.sabado;
-    const isFuture = s.semanaId > hoje;
-    const suffix = isCurrent ? ' (esta semana)' : isFuture ? ' (futura)' : '';
-    return `<option value="${s.semanaId}"${isCurrent?' selected':''}>${label}${suffix}</option>`;
-  }).join('');
+  const unidIds = _relUnidIdsParaPulso();
+
+  const preencher = (statusPorSem) => {
+    let selectedId = '';
+    const current = semanas.find(s => s.semanaId <= hoje && hoje <= s.sabado);
+    const comRegistro = [...semanas].reverse().find(s => statusPorSem[s.semanaId]);
+    if (current && statusPorSem[current.semanaId]) selectedId = current.semanaId;
+    else if (comRegistro) selectedId = comRegistro.semanaId;
+    else if (current) selectedId = current.semanaId;
+    else if (semanas.length) selectedId = semanas[semanas.length-1].semanaId;
+
+    sel.innerHTML = semanas.map((s, i) => {
+      const [,m,d] = s.semanaId.split('-');
+      const [,m2,d2] = s.sabado.split('-');
+      const mesInicio = mesesNomes[parseInt(m)-1]; const mesFim = mesesNomes[parseInt(m2)-1];
+      const label = mesInicio === mesFim
+        ? `Semana ${i+1} · ${parseInt(d)} a ${parseInt(d2)} de ${mesInicio}`
+        : `Semana ${i+1} · ${parseInt(d)}/${mesInicio} a ${parseInt(d2)}/${mesFim}`;
+      const isCurrent = s.semanaId <= hoje && hoje <= s.sabado;
+      const isFuture = s.semanaId > hoje;
+      const st = statusPorSem[s.semanaId];
+      const suffix = st === 'concluido' ? ' (registrada)'
+        : st === 'andamento' || st === 'atraso' ? ' (em preenchimento)'
+        : isCurrent ? ' (esta semana)'
+        : isFuture ? ' (futura)' : '';
+      const selAttr = s.semanaId === selectedId ? ' selected' : '';
+      return `<option value="${s.semanaId}"${selAttr}>${label}${suffix}</option>`;
+    }).join('');
+  };
+
+  preencher({});
+  Promise.all(unidIds.map(unidId =>
+    Promise.all(semanas.map(s => _pulsoRef(unidId, s.semanaId).get().catch(() => null)))
+  )).then(porUnid => {
+    if((document.getElementById('relMesSelect')||{}).value !== chave) return;
+    const statusPorSem = {};
+    porUnid.forEach(snaps => {
+      semanas.forEach((s, i) => {
+        const snap = snaps[i];
+        const p = snap && snap.exists ? snap.data() : null;
+        if(pulsoSemanaTemRegistro(p)){
+          const st = pulsoStatus(p);
+          if(!statusPorSem[s.semanaId] || st === 'concluido') statusPorSem[s.semanaId] = st;
+        }
+      });
+    });
+    preencher(statusPorSem);
+  }).catch(e => console.warn('[rel] semanas pulso', e));
 }
 
 function selRelTipo(tipo){
@@ -26485,7 +26653,9 @@ function selRelTipo(tipo){
   if(tipo==='mensal-regional' && semWrap) semWrap.style.display='none';
   const analWrap = document.getElementById('relAnaliseWrap');
   if(analWrap) analWrap.style.display = tipo==='semanal' ? 'block' : 'none';
-  if(tipo==='semanal'||tipo==='regional-semanal') relMesChanged();
+  const mesHint = document.getElementById('relMesHint');
+  if(mesHint) mesHint.style.display = (tipo==='semanal'||tipo==='regional-semanal') ? 'block' : 'none';
+  if(tipo==='semanal'||tipo==='regional-semanal') atualizarMesesDoRelatorio();
 }
 
 function atualizarProfessoresDoRelatorio(){
@@ -26508,6 +26678,7 @@ function atualizarRTsDoRelatorio(){
     .filter(([,cfg])=>cfg.papel==='rt'&&cfg.unidade===unidId);
   rtSel.innerHTML=rts.map(([email,cfg])=>`<option value="${email}">${cfg.nome}</option>`).join('');
   if(_relTipo==='individual') atualizarProfessoresDoRelatorio();
+  if(_relTipo==='semanal'||_relTipo==='regional-semanal') atualizarMesesDoRelatorio();
 }
 // ══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO EXECUTIVO — geração via HTML + window.print()
@@ -27757,7 +27928,12 @@ async function _reflexaoSalvarFirestore(unidId, semId, respostas) {
 
 // ── Botão gerarRelatorioBtn — roteamento por tipo ────────────────────────────
 async function gerarRelatorioBtn(){
-  const chave=document.getElementById('relMesSelect').value;
+  let chave=document.getElementById('relMesSelect').value;
+  if(!chave && (_relTipo==='semanal'||_relTipo==='regional-semanal')){
+    chave = chaveMesCalendarioAtual();
+    const selMes=document.getElementById('relMesSelect');
+    if(selMes && [...selMes.options].some(o=>o.value===chave)) selMes.value=chave;
+  }
   if(!chave){alert('Selecione um mês.');return;}
   const btn=document.getElementById('btnGerarRel');
   const st=document.getElementById('relStatus');
@@ -32064,6 +32240,7 @@ function pulsoRegLembrete(unidId,nome){
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Mês de referência</div>
         <select id="relMesSelect" style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:Inter,sans-serif;font-size:13px;padding:9px 12px;outline:none;"><option value="">— selecione —</option></select>
+        <div id="relMesHint" style="display:none;font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4;">O fechamento semanal preenchido em Fech. Semanal aparece aqui mesmo se o mês ainda não foi registrado.</div>
       </div>
       <div id="relSemanaWrap" style="display:none;margin-bottom:16px;">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Semana</div>
