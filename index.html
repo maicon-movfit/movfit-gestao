@@ -29217,6 +29217,31 @@ async function montarDadosFechamentoSemanal(unidId, nomeRT, chaveMes, semIdSel) 
 
   const nomeMes = new Date(anoAtual, mesAtual, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
 
+  // Comparativo por mês — soma dos fechamentos semanais (pulsos), sem exigir Registrar mês
+  const comparativoMeses = [];
+  for (let i = 5; i >= 1; i--) {
+    const dt = new Date(anoAtual, mesAtual - i, 1);
+    const anoM = dt.getFullYear();
+    const mesM = dt.getMonth();
+    const semanasM = pulsoSemanasDoMes(anoM, mesM);
+    const snapsM = await Promise.all(semanasM.map(s => _pulsoRef(unidId, s.semanaId).get().catch(()=>null)));
+    const histM = semanasM.map((s, idx) => {
+      const snap = snapsM[idx];
+      const pulso = snap?.exists ? snap.data() : null;
+      return { totais: pulso ? pulsoCalcTotais(pulso) : null, status: pulsoStatus(pulso) };
+    });
+    comparativoMeses.push({
+      nomeMes: dt.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}),
+      totais: pulsoSomarTotaisMes(histM),
+      isCurrent: false
+    });
+  }
+  comparativoMeses.push({
+    nomeMes,
+    totais: pulsoSomarTotaisMes(historicoMes),
+    isCurrent: true
+  });
+
   // Buscar semana anterior para delta
   let totaisAnterior = null;
   try {
@@ -29230,7 +29255,7 @@ async function montarDadosFechamentoSemanal(unidId, nomeRT, chaveMes, semIdSel) 
   return {
     unidade: unid.nome, nomeRT, semLabel, semId: semIdAtual,
     pulsoAtual, totaisAtual, totaisAnterior, diasSemAtual,
-    historicoMes, nomeMes,
+    historicoMes, nomeMes, comparativoMeses,
     obsAtual: pulsoAtual?.observacoesSemana || '',
     statusAtual: pulsoStatus(pulsoAtual),
   };
@@ -29335,6 +29360,52 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
 
   const dataGeracao = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const acTotalAval = acBio + acReav;
+
+  const mesesCmp = d.comparativoMeses || [];
+  const maxAvalMes = Math.max(1, ...mesesCmp.map(m => (m.totais.bioNovas||0)+(m.totais.reavaliacoes||0)));
+  const mesCmpRows = mesesCmp.map((m, idx) => {
+    const t = m.totais || {};
+    const bio = Number(t.bioNovas)||0;
+    const reav = Number(t.reavaliacoes)||0;
+    const renov = Number(t.treinosRenovados)||0;
+    const revis = Number(t.treinosRevisados)||0;
+    const total = bio + reav;
+    const prev = idx > 0 ? mesesCmp[idx-1].totais : null;
+    const prevTotal = prev ? (Number(prev.bioNovas)||0)+(Number(prev.reavaliacoes)||0) : 0;
+    const dlt = prev && prevTotal > 0 ? total - prevTotal : null;
+    const dltHtml = dlt == null ? ''
+      : dlt > 0 ? `<span style="color:${BOM};font-size:8px;"> ▲ +${dlt}</span>`
+      : dlt < 0 ? `<span style="color:#e01f2d;font-size:8px;"> ▼ ${dlt}</span>`
+      : `<span style="color:#888;font-size:8px;"> = 0</span>`;
+    const barW = Math.round((total / maxAvalMes) * 100);
+    const sems = t.semanasComDados || 0;
+    return `<tr class="${m.isCurrent?'cur':''}">
+      <td>${m.nomeMes}${m.isCurrent?' <strong>(atual)</strong>':''}<div style="margin-top:4px;height:6px;background:#eef2f7;border-radius:4px;overflow:hidden;"><div style="height:100%;width:${barW}%;background:${m.isCurrent?ROXO:'#94a3b8'};border-radius:4px;"></div></div></td>
+      <td style="text-align:center">${sems}</td>
+      <td style="text-align:center">${bio}</td>
+      <td style="text-align:center">${reav}</td>
+      <td style="text-align:center">${renov}</td>
+      <td style="text-align:center">${revis}</td>
+      <td style="text-align:center"><strong>${total}</strong>${dltHtml}</td>
+    </tr>`;
+  }).join('');
+  const mesCmpHtml = mesesCmp.length ? `
+  <div class="sec" style="margin-top:18px">
+    <div class="sec-title">Comparativo por mês — fechamento semanal</div>
+    <table class="tbl comp-tbl">
+      <thead><tr>
+        <th>Mês</th>
+        <th style="text-align:center">Sem. c/ dados</th>
+        <th style="text-align:center">Bio</th>
+        <th style="text-align:center">Reav</th>
+        <th style="text-align:center">Renov</th>
+        <th style="text-align:center">Revis</th>
+        <th style="text-align:center">Total aval. vs ant.</th>
+      </tr></thead>
+      <tbody>${mesCmpRows}</tbody>
+    </table>
+    <div style="font-size:8px;color:${CIN};margin-top:8px;">Soma das semanas preenchidas em Fech. Semanal. Não depende de Registrar mês. Delta compara o total de avaliações com o mês anterior da tabela.</div>
+  </div>` : '';
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Fechamento Semanal · ${d.unidade}</title>
@@ -29455,6 +29526,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;font-size:10pt;color:#111;backg
       </tr></tfoot>
     </table>
   </div>
+
+  ${mesCmpHtml}
 
   <div class="rodape">
     <span>MOV FIT · Central de Gestão · Fechamento Mensal</span>
