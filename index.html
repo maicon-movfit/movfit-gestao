@@ -30193,8 +30193,7 @@ function pulsoDiaVazioQ(d) {
   return !d.preenchidoEm && d.bioNovas===0 && d.reavaliacoes===0 && d.treinosRenovados===0 && d.treinosRevisados===0;
 }
 function pulsoSemanaisOk(ind) {
-  return ind && ind.semSavaliacao !== null && ind.semSavaliacao !== '' &&
-    ind.avaliacoesAtrasadas !== null && ind.avaliacoesAtrasadas !== '';
+  return ind && ind.semSavaliacao !== null && ind.semSavaliacao !== '';
 }
 function pulsoCalcTotais(pulso) {
   const dias = Object.values(pulso.dias || {});
@@ -30362,7 +30361,6 @@ function pulsoValidar(pulso){
   });
   const ind=pulso.indicadoresSemana||{};
   if(ind.semSavaliacao===null||ind.semSavaliacao==='') erros.push('Alunos sem avaliação: não preenchido');
-  if(ind.avaliacoesAtrasadas===null||ind.avaliacoesAtrasadas==='') erros.push('Avaliações atrasadas: não preenchido');
   return erros;
 }
 
@@ -30649,13 +30647,9 @@ function _renderPulsoUI(container,pulso,unidId,semId){
         <div style="font-size:10px;color:var(--muted2);">— preenchidos uma vez</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="mb"><div class="mb-lbl">Alunos sem avaliação</div>
+        <div class="mb" style="grid-column:1/-1;"><div class="mb-lbl">Alunos sem avaliação</div>
           <input type="number" min="0" class="pulso-semanal-input" ${bloqInd}
             id="p_ind_semSav" value="${ind.semSavaliacao??''}" placeholder="0"
-            oninput="pulsoIndUI()" onchange="pulsoIndUI()"></div>
-        <div class="mb"><div class="mb-lbl">Avaliações atrasadas</div>
-          <input type="number" min="0" class="pulso-semanal-input" ${bloqInd}
-            id="p_ind_atsAts" value="${ind.avaliacoesAtrasadas??''}" placeholder="0"
             oninput="pulsoIndUI()" onchange="pulsoIndUI()"></div>
         <div class="mb">
           <div class="mb-lbl">Treinos renovados</div>
@@ -30905,12 +30899,10 @@ function pulsoIndUI(){
   clearTimeout(_pIndTimerUI);
   _pMarkSaving();
   const sv=document.getElementById('p_ind_semSav')?.value;
-  const av=document.getElementById('p_ind_atsAts')?.value;
   if(!_pAtual.indicadoresSemana)_pAtual.indicadoresSemana={};
   _pAtual.indicadoresSemana.semSavaliacao=sv!==''?Number(sv):null;
-  _pAtual.indicadoresSemana.avaliacoesAtrasadas=av!==''?Number(av):null;
   _pulsoAtualizarBtnConcluir();
-  _pIndTimerUI=setTimeout(()=>_pulsoSalvarIndicadores(unidadeAtual.id,_pAtual.semanaId,_pAtual.indicadoresSemana.semSavaliacao,_pAtual.indicadoresSemana.avaliacoesAtrasadas),1200);
+  _pIndTimerUI=setTimeout(()=>_pulsoSalvarIndicadores(unidadeAtual.id,_pAtual.semanaId,_pAtual.indicadoresSemana.semSavaliacao,_pAtual.indicadoresSemana.avaliacoesAtrasadas ?? null),1200);
 }
 
 function pulsoMostrarNop(data){
@@ -30977,9 +30969,8 @@ function pulsoAbrirRevisao(){
         <tfoot><tr><td><strong>Totais</strong></td><td><strong>${totais.bioNovas}</strong></td><td><strong>${totais.reavaliacoes}</strong></td><td><strong>${totais.treinosRenovados}</strong></td><td><strong>${totais.treinosRevisados}</strong></td><td><strong>${totais.totalAvaliacoes} aval.</strong></td></tr></tfoot>
       </table>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:16px;">
         <div class="mcard"><div class="ml">Sem avaliação</div><div class="mv">${ind.semSavaliacao??'—'}</div></div>
-        <div class="mcard"><div class="ml">Aval. atrasadas</div><div class="mv">${ind.avaliacoesAtrasadas??'—'}</div></div>
       </div>
 
       <div class="pulso-obs-wrap">
@@ -31287,9 +31278,8 @@ async function pulsoRegVerUnid(unidId,nomeUnidade){
         <div class="pulso-card"><div class="pulso-val">${totais.treinosRenovados}</div><div class="pulso-lbl">Renov</div></div>
         <div class="pulso-card"><div class="pulso-val">${totais.treinosRevisados}</div><div class="pulso-lbl">Revis</div></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px;">
         <div class="mcard"><div class="ml">Sem avaliação</div><div class="mv">${ind.semSavaliacao??'—'}</div></div>
-        <div class="mcard"><div class="ml">Aval. atrasadas</div><div class="mv">${ind.avaliacoesAtrasadas??'—'}</div></div>
       </div>
       <div class="tw"><table style="width:100%;">
         <thead><tr>${['Dia','Bio','Reav','Renov','Revis','Status'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
@@ -31397,7 +31387,7 @@ function gerarHTMLRelatorioFechamento(dados) {
     { label: 'Alunos na carteira', val: snap.totalAlunos != null ? snap.totalAlunos.toLocaleString('pt-BR') : '—', cor: CIN, borda: '#e4e4de', sub: 'Snapshot na abertura da semana' },
     { label: '% treino em dia', val: snap.percentualEmDia != null ? snap.percentualEmDia + '%' : '—', cor: (snap.percentualEmDia ?? 0) >= 75 ? BOM : R, borda: (snap.percentualEmDia ?? 0) >= 75 ? BOM : R, sub: `Meta 75% · gap ${snap.percentualEmDia != null ? snap.percentualEmDia - 75 : '—'}pts` },
     { label: 'Treinos vencidos', val: snap.vencidos != null ? snap.vencidos.toLocaleString('pt-BR') : '—', cor: R, borda: R, sub: snap.totalAlunos ? `${Math.round((snap.vencidos||0)/snap.totalAlunos*100)}% da base` : '—' },
-    { label: 'Sem avaliação', val: ind.semSavaliacao != null ? ind.semSavaliacao.toLocaleString('pt-BR') : '—', cor: (ind.semSavaliacao ?? 0) > 50 ? AMB : CIN, borda: (ind.semSavaliacao ?? 0) > 50 ? AMB : '#e4e4de', sub: ind.avaliacoesAtrasadas != null ? `${ind.avaliacoesAtrasadas} com avaliação atrasada` : '—' },
+    { label: 'Sem avaliação', val: ind.semSavaliacao != null ? ind.semSavaliacao.toLocaleString('pt-BR') : '—', cor: (ind.semSavaliacao ?? 0) > 50 ? AMB : CIN, borda: (ind.semSavaliacao ?? 0) > 50 ? AMB : '#e4e4de', sub: 'Alunos sem avaliação na semana' },
   ];
   const kpisHtml = kpisSnap.map(k => `<div style="background:#f9f9f7;border:0.5px solid #e4e4de;border-left:3px solid ${k.borda};border-radius:6px;padding:12px 14px;"><div style="font-size:7pt;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${k.label}</div><div style="font-size:17pt;font-weight:700;color:${k.cor};line-height:1.2;">${k.val}</div><div style="font-size:7.5pt;color:#6b7280;margin-top:3px;">${k.sub}</div></div>`).join('');
 
@@ -31421,7 +31411,6 @@ function gerarHTMLRelatorioFechamento(dados) {
   const diagBullets = [];
   if ((snap.percentualEmDia ?? 100) < 50) diagBullets.push({ cor: R, txt: `<strong>${snap.percentualEmDia ?? '—'}% de treinos em dia</strong> — unidade abaixo do mínimo operacional de 50%. Ação imediata necessária.` });
   if (totais.totalAvaliacoes === 0) diagBullets.push({ cor: R, txt: `<strong>Nenhuma avaliação realizada na semana.</strong> Verificar agenda dos professores e priorizar avaliações no próximo ciclo.` });
-  if ((ind.avaliacoesAtrasadas ?? 0) > 20) diagBullets.push({ cor: AMB, txt: `<strong>${ind.avaliacoesAtrasadas} avaliações atrasadas</strong> — volume elevado. Priorizar nos próximos dias.` });
   if (dados.diasNaoOperou.length >= 3) diagBullets.push({ cor: AMB, txt: `<strong>${dados.diasNaoOperou.length} dias sem operação</strong> nesta semana (${dados.diasNaoOperou.map(d=>d.naoOperouMotivo||'—').join(', ')}). Isso pode impactar os indicadores.` });
   if (diagBullets.length === 0) diagBullets.push({ cor: BOM, txt: `Nenhum alerta crítico identificado nesta semana. ${totais.totalAvaliacoes > 0 ? `${totais.totalAvaliacoes} avaliações realizadas dentro do esperado.` : ''}` });
   const diagHtml = diagBullets.map((b, i) => `<div style="display:flex;gap:8px;align-items:flex-start;${i < diagBullets.length - 1 ? 'padding-bottom:5px;margin-bottom:8px;border-bottom:0.5px solid #fcd5d5;' : ''}"><div style="width:6px;height:6px;border-radius:50%;background:${b.cor};flex-shrink:0;margin-top:3px;"></div><span style="font-size:8pt;line-height:1.5;color:#7f1d1d;">${b.txt}</span></div>`).join('');
@@ -31501,7 +31490,6 @@ ${rod(1)}</div>`;
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;">
         ${[
           { l: 'Sem avaliação', v: ind.semSavaliacao != null ? ind.semSavaliacao + ' alunos' : '—', c: (ind.semSavaliacao ?? 0) > 50 ? AMB : '#e5e7eb' },
-          { l: 'Avaliações atrasadas', v: ind.avaliacoesAtrasadas != null ? ind.avaliacoesAtrasadas + ' alunos' : '—', c: (ind.avaliacoesAtrasadas ?? 0) > 10 ? AMB : '#e5e7eb' },
           { l: 'Bio novas', v: String(totais.bioNovas), c: totais.bioNovas > 0 ? BOM : '#6b7280' },
           { l: 'Reavaliações', v: String(totais.reavaliacoes), c: totais.reavaliacoes > 0 ? BOM : '#6b7280' },
           { l: 'Treinos renovados', v: String(totais.treinosRenovados), c: totais.treinosRenovados > 0 ? BOM : '#6b7280' },
