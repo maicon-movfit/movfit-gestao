@@ -118,12 +118,59 @@ function janelaTblCol(titulo, linhas) {
   </div>`;
 }
 
-function janelaFiltrarLista(alunos, filtro) {
+function janelaExtrairProfessores(alunos) {
+  const map = new Map();
+  (alunos || []).forEach(a => {
+    const nome = (a.nome_professor || '').trim() || '— Sem professor';
+    map.set(nome, (map.get(nome) || 0) + 1);
+  });
+  return [...map.entries()]
+    .map(([nome, n]) => ({ nome, n }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function janelaRenderSelectProfessores(alunos, selecionado) {
+  const profs = janelaExtrairProfessores(alunos);
+  const opts = [`<option value="">Todos os professores (${(alunos || []).length})</option>`]
+    .concat(profs.map(p => {
+      const val = p.nome === '— Sem professor' ? '__sem__' : p.nome;
+      const sel = selecionado === val ? ' selected' : '';
+      const lbl = typeof esc === 'function' ? esc(p.nome) : p.nome;
+      return `<option value="${typeof esc === 'function' ? esc(val) : val}"${sel}>${lbl} (${p.n})</option>`;
+    }));
+  return `<select class="janela-prof-select" onchange="janelaTrocarProfessor(this)">${opts.join('')}</select>`;
+}
+
+function janelaAtualizarSelectProfessores(root, resetProfessor) {
+  const alunos = JSON.parse(root.dataset.alunos || '[]');
+  const sel = root.querySelector('.janela-prof-select');
+  const atual = resetProfessor ? '' : (sel?.value || '');
+  const wrap = root.querySelector('.janela-filtros');
+  if (wrap) {
+    const busca = wrap.querySelector('.janela-busca');
+    const buscaVal = busca?.value || '';
+    wrap.innerHTML =
+      janelaRenderSelectProfessores(alunos, atual) +
+      `<input type="search" class="janela-busca" placeholder="Buscar aluno…" value="${typeof esc === 'function' ? esc(buscaVal) : buscaVal}" oninput="janelaFiltrarBusca(this)">`;
+  }
+}
+
+function janelaGetFiltros(root) {
+  const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
+  let professor = root.querySelector('.janela-prof-select')?.value || '';
+  if (professor === '__sem__') professor = '— Sem professor';
+  return { filtro, professor };
+}
+
+function janelaFiltrarLista(alunos, filtro, professor) {
   return (alunos || []).filter(a => {
+    if (professor) {
+      const nomeProf = (a.nome_professor || '').trim() || '— Sem professor';
+      if (nomeProf !== professor) return false;
+    }
     if (!filtro) return true;
     const q = filtro.toLowerCase();
     return (a.nome_aluno || '').toLowerCase().includes(q) ||
-      (a.nome_professor || '').toLowerCase().includes(q) ||
       (a.matricula || '').includes(q);
   });
 }
@@ -144,8 +191,8 @@ function janelaRenderPaginador(total, pagina) {
   </div>`;
 }
 
-function janelaRenderTabela(alunos, filtro, pagina) {
-  const lista = janelaFiltrarLista(alunos, filtro);
+function janelaRenderTabela(alunos, filtro, pagina, professor) {
+  const lista = janelaFiltrarLista(alunos, filtro, professor);
 
   if (!lista.length) {
     return `<div class="janela-empty">Nenhum aluno nesta categoria.</div>`;
@@ -178,17 +225,18 @@ function janelaRenderTabela(alunos, filtro, pagina) {
   </table></div>${janelaRenderPaginador(lista.length, pag)}`;
 }
 
-function janelaAtualizarTabela(root, resetPage) {
+function janelaAtualizarTabela(root, resetPage, resetProfessor) {
   if (resetPage) root.dataset.pagina = '1';
+  if (resetProfessor) janelaAtualizarSelectProfessores(root, true);
   const alunos = JSON.parse(root.dataset.alunos || '[]');
-  const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
-  const lista = janelaFiltrarLista(alunos, filtro);
+  const { filtro, professor } = janelaGetFiltros(root);
+  const lista = janelaFiltrarLista(alunos, filtro, professor);
   const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10);
   pagina = Math.min(Math.max(1, pagina), totalPag);
   root.dataset.pagina = String(pagina);
   const wrap = root.querySelector('.janela-alunos-wrap');
-  if (wrap) wrap.innerHTML = janelaRenderTabela(alunos, filtro, pagina);
+  if (wrap) wrap.innerHTML = janelaRenderTabela(alunos, filtro, pagina, professor);
 }
 
 function janelaFiltrarBusca(input) {
@@ -196,12 +244,17 @@ function janelaFiltrarBusca(input) {
   if (root) janelaAtualizarTabela(root, true);
 }
 
+function janelaTrocarProfessor(select) {
+  const root = select.closest('.janela-card');
+  if (root) janelaAtualizarTabela(root, true);
+}
+
 function janelaIrPagina(btn, delta) {
   const root = btn.closest('.janela-card');
   if (!root) return;
   const alunos = JSON.parse(root.dataset.alunos || '[]');
-  const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
-  const lista = janelaFiltrarLista(alunos, filtro);
+  const { filtro, professor } = janelaGetFiltros(root);
+  const lista = janelaFiltrarLista(alunos, filtro, professor);
   const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10) + delta;
   root.dataset.pagina = String(Math.min(Math.max(1, pagina), totalPag));
@@ -296,9 +349,12 @@ function janelaRenderConteudo(unidade, unidId) {
         <div class="janela-tabs">${tabs.map(t =>
           `<button type="button" class="janela-tab${t.id === 'todos' ? ' janela-tab-on' : ''}" onclick="janelaTrocarAba(this,'${t.id}')">${t.label} <span class="janela-tab-n">${t.n}</span></button>`
         ).join('')}</div>
-        <input type="search" class="janela-busca" placeholder="Buscar aluno ou professor…" oninput="janelaFiltrarBusca(this)">
+        <div class="janela-filtros">
+          ${janelaRenderSelectProfessores(alunosTodos, '')}
+          <input type="search" class="janela-busca" placeholder="Buscar aluno…" oninput="janelaFiltrarBusca(this)">
+        </div>
       </div>
-      <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '', 1)}</div>
+      <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '', 1, '')}</div>
     </div>
   </div>`;
 }
@@ -313,6 +369,7 @@ function janelaTrocarAba(btn, categoria) {
     const porAba = JSON.parse(root.dataset.alunosPorAba || '{}');
     root.dataset.alunos = JSON.stringify(porAba[categoria] || []);
   } catch (_) { /* ignore */ }
+  janelaAtualizarSelectProfessores(root, true);
   janelaAtualizarTabela(root, true);
 }
 
