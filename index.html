@@ -748,6 +748,9 @@
     <!-- HERO: % em dia + Vencidos -->
     <div id="dashMetrics"></div>
 
+    <!-- Janela de Treino (dados ao vivo via webhook) -->
+    <div id="dashJanelaTreino"></div>
+
     <!-- Gráfico barras + Distribuição lista -->
     <div class="two-cols" style="margin-top:14px;">
       <div class="chart-card">
@@ -1621,6 +1624,7 @@ async function salvarMetasFirestore() {
 <script src="js/auth-config.js"></script>
 <script src="js/n8n-config.js"></script>
 <script src="js/pacto.js"></script>
+<script src="js/janela-treino.js"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════════════════
@@ -9244,6 +9248,10 @@ function renderDash(mesNome){atualizarCtxBar(mesNome);
     <td style="font-family:'DM Mono',monospace;text-align:center;color:var(--c-purple);">${pBioTotal!==null?pBioTotal+'%':'—'}</td>
     <td></td>
   </tr>`;
+
+  if (typeof renderJanelaTreino === 'function') {
+    renderJanelaTreino(unidadeAtual ? unidadeAtual.id : null);
+  }
 }
 
 
