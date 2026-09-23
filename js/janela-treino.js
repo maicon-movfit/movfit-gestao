@@ -5,6 +5,7 @@
 
 const _janelaCache = { data: null, at: 0 };
 const JANELA_CACHE_TTL_MS = 3 * 60 * 1000;
+const JANELA_PAGE_SIZE = 10;
 
 /** Mapeamento unidId (app) → unidade do webhook. */
 const JANELA_UNIDADE_MAP = {
@@ -117,18 +118,42 @@ function janelaTblCol(titulo, linhas) {
   </div>`;
 }
 
-function janelaRenderTabela(alunos, filtro) {
-  const lista = (alunos || []).filter(a => {
+function janelaFiltrarLista(alunos, filtro) {
+  return (alunos || []).filter(a => {
     if (!filtro) return true;
     const q = filtro.toLowerCase();
     return (a.nome_aluno || '').toLowerCase().includes(q) ||
       (a.nome_professor || '').toLowerCase().includes(q) ||
       (a.matricula || '').includes(q);
   });
+}
+
+function janelaRenderPaginador(total, pagina) {
+  const totalPag = Math.max(1, Math.ceil(total / JANELA_PAGE_SIZE));
+  const pag = Math.min(Math.max(1, pagina || 1), totalPag);
+  const inicio = total === 0 ? 0 : (pag - 1) * JANELA_PAGE_SIZE + 1;
+  const fim = Math.min(pag * JANELA_PAGE_SIZE, total);
+
+  return `<div class="janela-pag">
+    <span class="janela-pag-info">Mostrando ${inicio.toLocaleString('pt-BR')}–${fim.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}</span>
+    <div class="janela-pag-btns">
+      <button type="button" class="janela-pag-btn" onclick="janelaIrPagina(this,-1)" ${pag <= 1 ? 'disabled' : ''}>← Anterior</button>
+      <span class="janela-pag-num">Página ${pag} de ${totalPag}</span>
+      <button type="button" class="janela-pag-btn" onclick="janelaIrPagina(this,1)" ${pag >= totalPag ? 'disabled' : ''}>Próxima →</button>
+    </div>
+  </div>`;
+}
+
+function janelaRenderTabela(alunos, filtro, pagina) {
+  const lista = janelaFiltrarLista(alunos, filtro);
 
   if (!lista.length) {
     return `<div class="janela-empty">Nenhum aluno nesta categoria.</div>`;
   }
+
+  const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
+  const pag = Math.min(Math.max(1, pagina || 1), totalPag);
+  const slice = lista.slice((pag - 1) * JANELA_PAGE_SIZE, pag * JANELA_PAGE_SIZE);
 
   return `<div class="tw janela-tw"><table>
     <thead><tr>
@@ -139,7 +164,7 @@ function janelaRenderTabela(alunos, filtro) {
       <th>Último acesso</th>
       <th>Status</th>
     </tr></thead>
-    <tbody>${lista.map(a => {
+    <tbody>${slice.map(a => {
       const st = JANELA_STATUS[a.status_treino] || { label: a.status_treino || '—', cor: 'var(--muted)', bg: 'transparent' };
       return `<tr>
         <td style="font-weight:500;">${typeof esc === 'function' ? esc(a.nome_aluno) : a.nome_aluno}</td>
@@ -150,20 +175,37 @@ function janelaRenderTabela(alunos, filtro) {
         <td><span class="pill" style="background:${st.bg};color:${st.cor};border:1px solid ${st.cor}33;">${st.label}</span></td>
       </tr>`;
     }).join('')}</tbody>
-  </table></div>`;
+  </table></div>${janelaRenderPaginador(lista.length, pag)}`;
 }
 
-function janelaAtualizarTabela(root) {
+function janelaAtualizarTabela(root, resetPage) {
+  if (resetPage) root.dataset.pagina = '1';
   const alunos = JSON.parse(root.dataset.alunos || '[]');
-  const aba = root.dataset.aba || 'todos';
   const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
+  const lista = janelaFiltrarLista(alunos, filtro);
+  const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
+  let pagina = parseInt(root.dataset.pagina || '1', 10);
+  pagina = Math.min(Math.max(1, pagina), totalPag);
+  root.dataset.pagina = String(pagina);
   const wrap = root.querySelector('.janela-alunos-wrap');
-  if (wrap) wrap.innerHTML = janelaRenderTabela(alunos, filtro);
+  if (wrap) wrap.innerHTML = janelaRenderTabela(alunos, filtro, pagina);
 }
 
 function janelaFiltrarBusca(input) {
   const root = input.closest('.janela-card');
-  if (root) janelaAtualizarTabela(root);
+  if (root) janelaAtualizarTabela(root, true);
+}
+
+function janelaIrPagina(btn, delta) {
+  const root = btn.closest('.janela-card');
+  if (!root) return;
+  const alunos = JSON.parse(root.dataset.alunos || '[]');
+  const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
+  const lista = janelaFiltrarLista(alunos, filtro);
+  const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
+  let pagina = parseInt(root.dataset.pagina || '1', 10) + delta;
+  root.dataset.pagina = String(Math.min(Math.max(1, pagina), totalPag));
+  janelaAtualizarTabela(root);
 }
 
 function janelaRenderConteudo(unidade, unidId) {
@@ -226,7 +268,7 @@ function janelaRenderConteudo(unidade, unidId) {
     sem_treino: unidade.alunos?.sem_treino || [],
   };
 
-  return `<div class="janela-card" data-aba="todos" data-alunos-por-aba='${JSON.stringify(alunosPorAba).replace(/'/g, '&#39;')}' data-alunos='${JSON.stringify(alunosTodos).replace(/'/g, '&#39;')}'>
+  return `<div class="janela-card" data-aba="todos" data-pagina="1" data-alunos-por-aba='${JSON.stringify(alunosPorAba).replace(/'/g, '&#39;')}' data-alunos='${JSON.stringify(alunosTodos).replace(/'/g, '&#39;')}'>
     <div class="janela-card-head">
       <div>
         <div class="janela-title">Janela de Treino — ${typeof esc === 'function' ? esc(nomeUnidade) : nomeUnidade}</div>
@@ -256,7 +298,7 @@ function janelaRenderConteudo(unidade, unidId) {
         ).join('')}</div>
         <input type="search" class="janela-busca" placeholder="Buscar aluno ou professor…" oninput="janelaFiltrarBusca(this)">
       </div>
-      <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '')}</div>
+      <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '', 1)}</div>
     </div>
   </div>`;
 }
@@ -271,7 +313,7 @@ function janelaTrocarAba(btn, categoria) {
     const porAba = JSON.parse(root.dataset.alunosPorAba || '{}');
     root.dataset.alunos = JSON.stringify(porAba[categoria] || []);
   } catch (_) { /* ignore */ }
-  janelaAtualizarTabela(root);
+  janelaAtualizarTabela(root, true);
 }
 
 async function renderJanelaTreino(unidId, forceRefresh) {
