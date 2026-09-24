@@ -17,6 +17,7 @@ const JANELA_UNIDADE_MAP = {
 
 const JANELA_STATUS = {
   EM_DIA:     { label: 'Em dia',     cor: '#34c47c', bg: 'rgba(52,196,124,.1)' },
+  A_VENCER:   { label: 'A vencer',   cor: '#eab308', bg: 'rgba(234,179,8,.12)' },
   VENCIDO:    { label: 'Vencido',    cor: '#f05c5c', bg: 'rgba(240,92,92,.1)' },
   SEM_TREINO: { label: 'Sem treino', cor: '#f5a623', bg: 'rgba(245,166,35,.1)' },
 };
@@ -38,14 +39,54 @@ function janelaFmtDataCurta(iso) {
   return d.toLocaleDateString('pt-BR');
 }
 
-/** Desembrulha resposta n8n: pode vir direta ou em dados[].resposta. */
+/** Desembrulha resposta n8n: raiz direta ou legado dados[].resposta. */
 function janelaNormalizarResposta(raw) {
   if (!raw) return null;
-  if (raw.unidades) return raw;
+  if (raw.sucesso && raw.unidades) return raw;
   const item = raw.dados?.[0];
   if (item?.resposta?.unidades) return item.resposta;
   if (item?.unidades) return item;
+  if (raw.unidades) return raw;
   return null;
+}
+
+function janelaMontarAlunosTodos(unidade) {
+  const a = unidade.alunos || {};
+  if (a.todos?.length) return a.todos;
+  return [
+    ...(a.em_dia || []),
+    ...(a.a_vencer || []),
+    ...(a.vencidos || []),
+    ...(a.sem_treino || []),
+  ];
+}
+
+function janelaContarAVencer(unidade) {
+  const r = unidade.resumo || {};
+  if (r.a_vencer != null) return Number(r.a_vencer);
+  return (unidade.alunos?.a_vencer || []).length;
+}
+
+function janelaAtualizarCardsPainel(unidId, unidade) {
+  const aVencer = janelaContarAVencer(unidade);
+  const card = document.getElementById('dashMetricAVencer');
+  if (!card) return;
+  const mv = card.querySelector('.mv');
+  const ml = card.querySelector('.ml');
+  if (mv) mv.textContent = aVencer.toLocaleString('pt-BR');
+  if (ml) ml.textContent = 'Treinos a vencer';
+  while (mv && mv.nextElementSibling && !mv.nextElementSibling.classList.contains('md-live')) {
+    mv.nextElementSibling.remove();
+  }
+  let live = card.querySelector('.md-live');
+  if (!live) {
+    live = document.createElement('div');
+    live.className = 'md-live';
+    live.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;';
+    card.appendChild(live);
+  }
+  const when = janelaFmtData(unidade.sincronizacao?.ultima_atualizacao);
+  live.textContent = when && when !== '—' ? `Ao vivo · ${when}` : 'Ao vivo';
 }
 
 function janelaEncontrarUnidade(data, unidId) {
@@ -261,12 +302,13 @@ function janelaIrPagina(btn, delta) {
   janelaAtualizarTabela(root);
 }
 
-function janelaRenderConteudo(unidade, unidId) {
+function janelaRenderConteudo(unidade, unidId, totalAtivos) {
   const r = unidade.resumo || {};
-  const total = r.total_alunos_unicos || 0;
+  const total = totalAtivos ?? r.total_alunos_unicos ?? 0;
   const ident = r.treino_identificado || 0;
   const semIdent = Math.max(0, total - ident);
   const emDia = r.em_dia || 0;
+  const aVencer = janelaContarAVencer(unidade);
   const venc = r.vencidos || 0;
   const sem = r.sem_treino || 0;
   const sync = unidade.sincronizacao || {};
@@ -275,26 +317,25 @@ function janelaRenderConteudo(unidade, unidId) {
     : null) || unidade.unidade_nome || unidId;
 
   const pctEm = total > 0 ? Math.round(emDia / total * 100) : 0;
+  const pctAV = total > 0 ? Math.round(aVencer / total * 100) : 0;
   const pctVen = total > 0 ? Math.round(venc / total * 100) : 0;
   const pctSem = total > 0 ? Math.round(sem / total * 100) : 0;
 
-  const alunosTodos = unidade.alunos?.todos || [
-    ...(unidade.alunos?.em_dia || []),
-    ...(unidade.alunos?.vencidos || []),
-    ...(unidade.alunos?.sem_treino || []),
-  ];
+  const alunosTodos = janelaMontarAlunosTodos(unidade);
 
   const indicador = janelaTblCol('Indicador', [
-    ['Total de alunos', total],
+    [totalAtivos != null ? 'Alunos ativos' : 'Total de alunos', total],
     ['Treino identificado', ident, '#378add'],
     ['Sem treino identificado', semIdent, 'var(--muted)'],
     ['Em dia', emDia, '#34c47c'],
+    ['A vencer', aVencer, '#eab308'],
     ['Vencidos', venc, '#f05c5c'],
     ['Sem treino', sem, '#f5a623'],
   ]);
 
   const distribuicao = janelaTblCol('Distribuição', [
     ['Em dia', `${emDia} (${pctEm}%)`, '#34c47c'],
+    ['A vencer', `${aVencer} (${pctAV}%)`, '#eab308'],
     ['Vencidos', `${venc} (${pctVen}%)`, '#f05c5c'],
     ['Sem treino', `${sem} (${pctSem}%)`, '#f5a623'],
     ['Com treino', ident, '#378add'],
@@ -310,6 +351,7 @@ function janelaRenderConteudo(unidade, unidId) {
   const tabs = [
     { id: 'todos', label: 'Todos', n: alunosTodos.length },
     { id: 'em_dia', label: 'Em dia', n: (unidade.alunos?.em_dia || []).length },
+    { id: 'a_vencer', label: 'A vencer', n: (unidade.alunos?.a_vencer || []).length || aVencer },
     { id: 'vencidos', label: 'Vencidos', n: (unidade.alunos?.vencidos || []).length },
     { id: 'sem_treino', label: 'Sem treino', n: (unidade.alunos?.sem_treino || []).length },
   ];
@@ -317,6 +359,7 @@ function janelaRenderConteudo(unidade, unidId) {
   const alunosPorAba = {
     todos: alunosTodos,
     em_dia: unidade.alunos?.em_dia || [],
+    a_vencer: unidade.alunos?.a_vencer || [],
     vencidos: unidade.alunos?.vencidos || [],
     sem_treino: unidade.alunos?.sem_treino || [],
   };
@@ -334,11 +377,13 @@ function janelaRenderConteudo(unidade, unidId) {
 
     <div class="janela-bars">
       <div class="janela-bar" style="width:${pctEm}%;background:#34c47c;" title="Em dia ${pctEm}%"></div>
+      <div class="janela-bar" style="width:${pctAV}%;background:#eab308;" title="A vencer ${pctAV}%"></div>
       <div class="janela-bar" style="width:${pctVen}%;background:#f05c5c;" title="Vencidos ${pctVen}%"></div>
       <div class="janela-bar" style="width:${pctSem}%;background:#f5a623;" title="Sem treino ${pctSem}%"></div>
     </div>
     <div class="janela-bar-legend">
       <span><i style="background:#34c47c"></i> Em dia ${pctEm}%</span>
+      <span><i style="background:#eab308"></i> A vencer ${pctAV}%</span>
       <span><i style="background:#f05c5c"></i> Vencidos ${pctVen}%</span>
       <span><i style="background:#f5a623"></i> Sem treino ${pctSem}%</span>
     </div>
@@ -392,7 +437,13 @@ async function renderJanelaTreino(unidId, forceRefresh) {
     <div class="janela-sub">Carregando dados…</div>
   </div>`;
 
-  const data = await janelaBuscarDados();
+  const fetchAtivos = typeof totalAtivosBuscarDados === 'function'
+    ? totalAtivosBuscarDados(forceRefresh)
+    : Promise.resolve(null);
+  const [data] = await Promise.all([janelaBuscarDados(), fetchAtivos]);
+  const totalAtivos = typeof totalAtivosGetUnidade === 'function'
+    ? totalAtivosGetUnidade(unidId)
+    : null;
 
   if (!data) {
     el.innerHTML = `<div class="janela-card janela-erro">
@@ -413,7 +464,9 @@ async function renderJanelaTreino(unidId, forceRefresh) {
     return;
   }
 
-  if (!unidade.resumo?.total_alunos_unicos && !(unidade.alunos?.todos || []).length) {
+  if (!unidade.resumo?.total_alunos_unicos &&
+    !janelaMontarAlunosTodos(unidade).length &&
+    !janelaContarAVencer(unidade)) {
     el.innerHTML = `<div class="janela-card">
       <div class="janela-card-head">
         <div>
@@ -426,5 +479,6 @@ async function renderJanelaTreino(unidId, forceRefresh) {
     return;
   }
 
-  el.innerHTML = janelaRenderConteudo(unidade, unidId);
+  el.innerHTML = janelaRenderConteudo(unidade, unidId, totalAtivos);
+  janelaAtualizarCardsPainel(unidId, unidade);
 }
