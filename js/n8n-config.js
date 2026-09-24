@@ -19,6 +19,9 @@ const N8N_PROXY_TOKEN = 'movfit_proxy_k7x9m2pQ4wR9';
 /** Webhook da Janela de Treino (POST — retorna todas as unidades). */
 const N8N_JANELA_URL = 'https://n8n2.mov.pro.br/webhook/janela_de_treino';
 
+/** Webhook de alunos ativos por unidade (POST). */
+const N8N_TOTAL_ATIVOS_URL = 'https://n8n2.mov.pro.br/webhook/total_ativos';
+
 function n8nPactoConfigOk() {
   return !!(N8N_PACTO_BASE && N8N_PROXY_TOKEN);
 }

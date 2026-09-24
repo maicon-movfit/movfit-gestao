@@ -1624,6 +1624,7 @@ async function salvarMetasFirestore() {
 <script src="js/auth-config.js"></script>
 <script src="js/n8n-config.js"></script>
 <script src="js/pacto.js"></script>
+<script src="js/total-ativos.js"></script>
 <script src="js/janela-treino.js"></script>
 <script>
 
@@ -8999,20 +9000,24 @@ function renderDash(mesNome){atualizarCtxBar(mesNome);
 
   // ── MÉTRICAS SECUNDÁRIAS ────────────────────────────────────
   const metrics=[
-    {l:'Total de alunos',v:tot,d:prev?tot-aT:null,up:true},
+    {l:'Total de alunos',v:tot,d:prev?tot-aT:null,up:true,id:'dashMetricTotalAtivos'},
     {l:'Treinos em dia',v:emD,d:prev?emD-aE:null,up:true},
+    {l:'Treinos a vencer',v:'—',d:null,up:false,id:'dashMetricAVencer',live:true},
     {l:'Vencidos',v:vec,d:prev?vec-aV:null,up:false},
     {l:'Sem treino',v:sem,d:prev?sem-aS:null,up:false}
   ];
-  const metricsHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">
+  const metricsHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px;">
     ${metrics.map(m=>{
       let dh='';
-      if(m.d!==null){
+      if(m.live){
+        dh=`<div style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;">Carregando…</div>`;
+      } else if(m.d!==null){
         const g=m.up?m.d>=0:m.d<=0;
         const s=m.d>0?'+':'';
         dh=`<div style="font-size:11px;font-weight:600;color:${g?'var(--c-green)':'var(--c-red)'};margin-top:4px;">${s}${m.d} vs ${prev.nome}</div>`;
       }
-      return`<div class="mcard"><div class="ml">${m.l}</div><div class="mv">${m.v}</div>${dh}</div>`;
+      const cardId=m.id?` id="${m.id}"`:'';
+      return`<div class="mcard"${cardId}><div class="ml">${m.l}</div><div class="mv">${m.v}</div>${dh}</div>`;
     }).join('')}
   </div>`;
 
@@ -9249,6 +9254,9 @@ function renderDash(mesNome){atualizarCtxBar(mesNome);
     <td></td>
   </tr>`;
 
+  if (typeof atualizarMetricaTotalAtivos === 'function') {
+    atualizarMetricaTotalAtivos(unidadeAtual ? unidadeAtual.id : null);
+  }
   if (typeof renderJanelaTreino === 'function') {
     renderJanelaTreino(unidadeAtual ? unidadeAtual.id : null);
   }
