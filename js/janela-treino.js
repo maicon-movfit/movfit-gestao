@@ -39,6 +39,28 @@ function janelaFmtDataCurta(iso) {
   return d.toLocaleDateString('pt-BR');
 }
 
+function janelaDiasSemAcessar(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const hoje = new Date();
+  const h = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const u = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const dias = Math.floor((h - u) / (1000 * 60 * 60 * 24));
+  return dias >= 0 ? dias : 0;
+}
+
+function janelaFmtDiasSemAcessar(iso) {
+  const dias = janelaDiasSemAcessar(iso);
+  if (dias === null) return { txt: 'Sem registro', cor: 'var(--muted)' };
+  if (dias === 0) return { txt: 'Hoje', cor: 'var(--muted)' };
+  if (dias === 1) return { txt: '1 dia', cor: 'var(--muted)' };
+  let cor = 'var(--text)';
+  if (dias > 30) cor = '#f05c5c';
+  else if (dias >= 22) cor = '#f5a623';
+  return { txt: `${dias} dias`, cor };
+}
+
 /** Desembrulha resposta n8n: raiz direta ou legado dados[].resposta. */
 function janelaNormalizarResposta(raw) {
   if (!raw) return null;
@@ -250,16 +272,21 @@ function janelaRenderTabela(alunos, filtro, pagina, professor) {
       <th>Programa</th>
       <th>Válido até</th>
       <th>Último acesso</th>
+      <th>Dias s/ acessar</th>
       <th>Status</th>
     </tr></thead>
     <tbody>${slice.map(a => {
       const st = JANELA_STATUS[a.status_treino] || { label: a.status_treino || '—', cor: 'var(--muted)', bg: 'transparent' };
+      const diasNum = janelaDiasSemAcessar(a.ultimo_acesso);
+      const dias = janelaFmtDiasSemAcessar(a.ultimo_acesso);
+      const diasDest = a.status_treino === 'VENCIDO' && diasNum != null && diasNum > 30;
       return `<tr>
         <td style="font-weight:500;">${typeof esc === 'function' ? esc(a.nome_aluno) : a.nome_aluno}</td>
         <td>${typeof esc === 'function' ? esc(a.nome_professor || '—') : (a.nome_professor || '—')}</td>
         <td style="max-width:180px;white-space:normal;">${typeof esc === 'function' ? esc(a.nome_programa || '—') : (a.nome_programa || '—')}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${janelaFmtDataCurta(a.treino_valido_ate)}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${janelaFmtDataCurta(a.ultimo_acesso)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;font-weight:${diasDest ? '700' : '600'};color:${dias.cor};">${dias.txt}</td>
         <td><span class="pill" style="background:${st.bg};color:${st.cor};border:1px solid ${st.cor}33;">${st.label}</span></td>
       </tr>`;
     }).join('')}</tbody>
