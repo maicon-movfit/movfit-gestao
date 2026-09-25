@@ -1746,7 +1746,7 @@ tbody tr:last-child td{border-bottom:none;}
 }
 .janela-busca:focus{outline:none;border-color:var(--accent);}
 .janela-tw{margin-bottom:0;}
-.janela-tw table{min-width:720px;}
+.janela-tw table{min-width:820px;}
 .janela-empty{
   padding:24px;text-align:center;font-size:12px;color:var(--muted);
   background:var(--surface2);border-radius:8px;border:1px dashed var(--border2);
