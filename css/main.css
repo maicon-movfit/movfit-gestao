@@ -1756,6 +1756,13 @@ tbody tr:last-child td{border-bottom:none;}
   min-width:220px;max-width:320px;cursor:pointer;
 }
 .janela-prof-select:focus{outline:none;border-color:var(--accent);}
+.janela-dias-select{
+  font-size:12px;padding:6px 10px;border-radius:6px;
+  border:1px solid var(--border2);background:var(--surface);
+  color:var(--text);font-family:Inter,sans-serif;
+  min-width:160px;max-width:200px;cursor:pointer;
+}
+.janela-dias-select:focus{outline:none;border-color:var(--accent);}
 .janela-busca{
   font-size:12px;padding:6px 10px;border-radius:6px;
   border:1px solid var(--border2);background:var(--surface);
@@ -1796,5 +1803,5 @@ tbody tr:last-child td{border-bottom:none;}
   .janela-tables{grid-template-columns:1fr;}
   .janela-toolbar{flex-direction:column;align-items:stretch;}
   .janela-filtros{flex-direction:column;align-items:stretch;}
-  .janela-prof-select,.janela-busca{min-width:0;width:100%;max-width:none;}
+  .janela-prof-select,.janela-dias-select,.janela-busca{min-width:0;width:100%;max-width:none;}
 }
