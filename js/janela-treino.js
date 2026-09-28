@@ -39,6 +39,17 @@ function janelaFmtDataCurta(iso) {
   return d.toLocaleDateString('pt-BR');
 }
 
+function janelaTooltipMatricula(aluno) {
+  const mat = aluno?.matricula;
+  return mat ? `Matrícula: ${mat}` : 'Matrícula não informada';
+}
+
+function janelaRenderNomeAluno(aluno) {
+  const nome = typeof esc === 'function' ? esc(aluno.nome_aluno || '—') : (aluno.nome_aluno || '—');
+  const tip = typeof esc === 'function' ? esc(janelaTooltipMatricula(aluno)) : janelaTooltipMatricula(aluno);
+  return `<span class="janela-nome-aluno" title="${tip}">${nome}</span>`;
+}
+
 function janelaDiasSemAcessar(iso) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -55,10 +66,36 @@ function janelaFmtDiasSemAcessar(iso) {
   if (dias === null) return { txt: 'Sem registro', cor: 'var(--muted)' };
   if (dias === 0) return { txt: 'Hoje', cor: 'var(--muted)' };
   if (dias === 1) return { txt: '1 dia', cor: 'var(--muted)' };
-  let cor = 'var(--text)';
-  if (dias > 30) cor = '#f05c5c';
-  else if (dias >= 22) cor = '#f5a623';
-  return { txt: `${dias} dias`, cor };
+  const cls = janelaClassificarFrequencia(iso);
+  return { txt: `${dias} dias`, cor: cls.cor };
+}
+
+/** Faixas de frequência de acesso (último acesso). */
+const JANELA_FREQ = {
+  normal:       { id: 'normal',       label: 'Normal',                    faixa: '0–6 dias',   cor: '#34c47c', bg: 'rgba(52,196,124,.1)',  acao: 'Rotina normal' },
+  acompanhar:   { id: 'acompanhar',   label: 'Acompanhar',                faixa: '7–15 dias',  cor: '#378add', bg: 'rgba(55,138,221,.1)',  acao: 'Mandar mensagem' },
+  alerta:       { id: 'alerta',       label: 'Alerta — resgatar',         faixa: '16–30 dias', cor: '#f5a623', bg: 'rgba(245,166,35,.1)',  acao: 'Resgatar aluno' },
+  critico:      { id: 'critico',      label: 'Crítico — ação imediata',   faixa: '31+ dias',   cor: '#f05c5c', bg: 'rgba(240,92,92,.1)',   acao: 'Ação imediata p/ retorno' },
+  sem_registro: { id: 'sem_registro', label: 'Sem registro de acesso',    faixa: '—',          cor: 'var(--muted)', bg: 'transparent',     acao: 'Verificar cadastro' },
+};
+
+function janelaBucketId(iso) {
+  const dias = janelaDiasSemAcessar(iso);
+  if (dias === null) return 'sem_registro';
+  if (dias <= 6) return 'normal';
+  if (dias <= 15) return 'acompanhar';
+  if (dias <= 30) return 'alerta';
+  return 'critico';
+}
+
+function janelaClassificarFrequencia(iso) {
+  return JANELA_FREQ[janelaBucketId(iso)] || JANELA_FREQ.sem_registro;
+}
+
+function janelaMontarFreqBuckets(alunos) {
+  const b = { todos: alunos || [], normal: [], acompanhar: [], alerta: [], critico: [], sem_registro: [] };
+  (alunos || []).forEach(a => b[janelaBucketId(a.ultimo_acesso)].push(a));
+  return b;
 }
 
 /** Desembrulha resposta n8n: raiz direta ou legado dados[].resposta. */
@@ -204,23 +241,30 @@ function janelaRenderSelectProfessores(alunos, selecionado) {
   return `<select class="janela-prof-select" onchange="janelaTrocarProfessor(this)">${opts.join('')}</select>`;
 }
 
+function janelaGetViewRoot(root) {
+  const modulo = root.dataset.modulo || 'treino';
+  return root.querySelector(modulo === 'frequencia' ? '.janela-view-frequencia' : '.janela-view-treino') || root;
+}
+
 function janelaAtualizarSelectProfessores(root, resetProfessor) {
   const alunos = JSON.parse(root.dataset.alunos || '[]');
-  const sel = root.querySelector('.janela-prof-select');
+  const view = janelaGetViewRoot(root);
+  const sel = view.querySelector('.janela-prof-select');
   const atual = resetProfessor ? '' : (sel?.value || '');
-  const wrap = root.querySelector('.janela-filtros');
+  const wrap = view.querySelector('.janela-filtros');
   if (wrap) {
     const busca = wrap.querySelector('.janela-busca');
     const buscaVal = busca?.value || '';
     wrap.innerHTML =
       janelaRenderSelectProfessores(alunos, atual) +
-      `<input type="search" class="janela-busca" placeholder="Buscar aluno…" value="${typeof esc === 'function' ? esc(buscaVal) : buscaVal}" oninput="janelaFiltrarBusca(this)">`;
+      `<input type="search" class="janela-busca" placeholder="Buscar aluno ou matrícula…" value="${typeof esc === 'function' ? esc(buscaVal) : buscaVal}" oninput="janelaFiltrarBusca(this)">`;
   }
 }
 
 function janelaGetFiltros(root) {
-  const filtro = (root.querySelector('.janela-busca')?.value || '').trim();
-  let professor = root.querySelector('.janela-prof-select')?.value || '';
+  const view = janelaGetViewRoot(root);
+  const filtro = (view.querySelector('.janela-busca')?.value || '').trim();
+  let professor = view.querySelector('.janela-prof-select')?.value || '';
   if (professor === '__sem__') professor = '— Sem professor';
   return { filtro, professor };
 }
@@ -281,7 +325,7 @@ function janelaRenderTabela(alunos, filtro, pagina, professor) {
       const dias = janelaFmtDiasSemAcessar(a.ultimo_acesso);
       const diasDest = a.status_treino === 'VENCIDO' && diasNum != null && diasNum > 30;
       return `<tr>
-        <td style="font-weight:500;">${typeof esc === 'function' ? esc(a.nome_aluno) : a.nome_aluno}</td>
+        <td style="font-weight:500;">${janelaRenderNomeAluno(a)}</td>
         <td>${typeof esc === 'function' ? esc(a.nome_professor || '—') : (a.nome_professor || '—')}</td>
         <td style="max-width:180px;white-space:normal;">${typeof esc === 'function' ? esc(a.nome_programa || '—') : (a.nome_programa || '—')}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${janelaFmtDataCurta(a.treino_valido_ate)}</td>
@@ -293,18 +337,75 @@ function janelaRenderTabela(alunos, filtro, pagina, professor) {
   </table></div>${janelaRenderPaginador(lista.length, pag)}`;
 }
 
+function janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor) {
+  let lista = janelaFiltrarLista(alunos, filtro, professor);
+  lista = [...lista].sort((a, b) => {
+    const da = janelaDiasSemAcessar(a.ultimo_acesso);
+    const db = janelaDiasSemAcessar(b.ultimo_acesso);
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return db - da;
+  });
+
+  if (!lista.length) {
+    return `<div class="janela-empty">Nenhum aluno nesta faixa de frequência.</div>`;
+  }
+
+  const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
+  const pag = Math.min(Math.max(1, pagina || 1), totalPag);
+  const slice = lista.slice((pag - 1) * JANELA_PAGE_SIZE, pag * JANELA_PAGE_SIZE);
+
+  return `<div class="tw janela-tw"><table>
+    <thead><tr>
+      <th>Aluno</th>
+      <th>Professor</th>
+      <th>Último acesso</th>
+      <th>Dias s/ acessar</th>
+      <th>Classificação</th>
+      <th>Ação sugerida</th>
+    </tr></thead>
+    <tbody>${slice.map(a => {
+      const cls = janelaClassificarFrequencia(a.ultimo_acesso);
+      const dias = janelaFmtDiasSemAcessar(a.ultimo_acesso);
+      return `<tr>
+        <td style="font-weight:500;">${janelaRenderNomeAluno(a)}</td>
+        <td>${typeof esc === 'function' ? esc(a.nome_professor || '—') : (a.nome_professor || '—')}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;">${janelaFmtDataCurta(a.ultimo_acesso)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:${dias.cor};">${dias.txt}</td>
+        <td><span class="pill" style="background:${cls.bg};color:${cls.cor};border:1px solid ${cls.cor}33;">${cls.label}</span></td>
+        <td style="font-size:11px;color:var(--muted);">${cls.acao}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>${janelaRenderPaginador(lista.length, pag)}`;
+}
+
+function janelaGetAlunosLista(root) {
+  try {
+    return JSON.parse(root.dataset.alunos || '[]');
+  } catch (_) {
+    return [];
+  }
+}
+
 function janelaAtualizarTabela(root, resetPage, resetProfessor) {
   if (resetPage) root.dataset.pagina = '1';
   if (resetProfessor) janelaAtualizarSelectProfessores(root, true);
-  const alunos = JSON.parse(root.dataset.alunos || '[]');
+  const alunos = janelaGetAlunosLista(root);
   const { filtro, professor } = janelaGetFiltros(root);
+  const modulo = root.dataset.modulo || 'treino';
   const lista = janelaFiltrarLista(alunos, filtro, professor);
   const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10);
   pagina = Math.min(Math.max(1, pagina), totalPag);
   root.dataset.pagina = String(pagina);
-  const wrap = root.querySelector('.janela-alunos-wrap');
-  if (wrap) wrap.innerHTML = janelaRenderTabela(alunos, filtro, pagina, professor);
+  const view = janelaGetViewRoot(root);
+  const wrap = view.querySelector('.janela-alunos-wrap');
+  if (wrap) {
+    wrap.innerHTML = modulo === 'frequencia'
+      ? janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor)
+      : janelaRenderTabela(alunos, filtro, pagina, professor);
+  }
 }
 
 function janelaFiltrarBusca(input) {
@@ -320,13 +421,112 @@ function janelaTrocarProfessor(select) {
 function janelaIrPagina(btn, delta) {
   const root = btn.closest('.janela-card');
   if (!root) return;
-  const alunos = JSON.parse(root.dataset.alunos || '[]');
+  const alunos = janelaGetAlunosLista(root);
   const { filtro, professor } = janelaGetFiltros(root);
   const lista = janelaFiltrarLista(alunos, filtro, professor);
   const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10) + delta;
   root.dataset.pagina = String(Math.min(Math.max(1, pagina), totalPag));
   janelaAtualizarTabela(root);
+}
+
+function janelaRenderResumoFrequencia(alunos) {
+  const buckets = janelaMontarFreqBuckets(alunos);
+  const total = (alunos || []).length;
+  const pct = (n) => total > 0 ? Math.round(n / total * 100) : 0;
+
+  const indicador = janelaTblCol('Frequência', [
+    ['Total na lista', total],
+    [JANELA_FREQ.normal.label, buckets.normal.length, JANELA_FREQ.normal.cor],
+    [JANELA_FREQ.acompanhar.label, buckets.acompanhar.length, JANELA_FREQ.acompanhar.cor],
+    [JANELA_FREQ.alerta.label, buckets.alerta.length, JANELA_FREQ.alerta.cor],
+    [JANELA_FREQ.critico.label, buckets.critico.length, JANELA_FREQ.critico.cor],
+    [JANELA_FREQ.sem_registro.label, buckets.sem_registro.length, JANELA_FREQ.sem_registro.cor],
+  ]);
+
+  const distribuicao = janelaTblCol('Distribuição', [
+    [`Normal (${JANELA_FREQ.normal.faixa})`, `${buckets.normal.length} (${pct(buckets.normal.length)}%)`, JANELA_FREQ.normal.cor],
+    [`Acompanhar (${JANELA_FREQ.acompanhar.faixa})`, `${buckets.acompanhar.length} (${pct(buckets.acompanhar.length)}%)`, JANELA_FREQ.acompanhar.cor],
+    [`Alerta (${JANELA_FREQ.alerta.faixa})`, `${buckets.alerta.length} (${pct(buckets.alerta.length)}%)`, JANELA_FREQ.alerta.cor],
+    [`Crítico (${JANELA_FREQ.critico.faixa})`, `${buckets.critico.length} (${pct(buckets.critico.length)}%)`, JANELA_FREQ.critico.cor],
+    ['Sem registro', buckets.sem_registro.length, JANELA_FREQ.sem_registro.cor],
+  ]);
+
+  const acoes = janelaTblCol('Ações sugeridas', [
+    ['Normal', JANELA_FREQ.normal.acao],
+    ['Acompanhar', JANELA_FREQ.acompanhar.acao],
+    ['Alerta', JANELA_FREQ.alerta.acao],
+    ['Crítico', JANELA_FREQ.critico.acao],
+    ['Sem registro', JANELA_FREQ.sem_registro.acao],
+  ]);
+
+  const pN = pct(buckets.normal.length);
+  const pA = pct(buckets.acompanhar.length);
+  const pAl = pct(buckets.alerta.length);
+  const pC = pct(buckets.critico.length);
+  const pS = pct(buckets.sem_registro.length);
+
+  const bars = `<div class="janela-bars janela-bars-freq">
+    <div class="janela-bar" style="width:${pN}%;background:${JANELA_FREQ.normal.cor};" title="Normal ${pN}%"></div>
+    <div class="janela-bar" style="width:${pA}%;background:${JANELA_FREQ.acompanhar.cor};" title="Acompanhar ${pA}%"></div>
+    <div class="janela-bar" style="width:${pAl}%;background:${JANELA_FREQ.alerta.cor};" title="Alerta ${pAl}%"></div>
+    <div class="janela-bar" style="width:${pC}%;background:${JANELA_FREQ.critico.cor};" title="Crítico ${pC}%"></div>
+    <div class="janela-bar" style="width:${pS}%;background:var(--muted);" title="Sem registro ${pS}%"></div>
+  </div>
+  <div class="janela-bar-legend">
+    <span><i style="background:${JANELA_FREQ.normal.cor}"></i> Normal ${pN}%</span>
+    <span><i style="background:${JANELA_FREQ.acompanhar.cor}"></i> Acompanhar ${pA}%</span>
+    <span><i style="background:${JANELA_FREQ.alerta.cor}"></i> Alerta ${pAl}%</span>
+    <span><i style="background:${JANELA_FREQ.critico.cor}"></i> Crítico ${pC}%</span>
+    <span><i style="background:var(--muted)"></i> Sem registro ${pS}%</span>
+  </div>`;
+
+  return { indicador, distribuicao, acoes, bars, buckets };
+}
+
+function janelaTrocarModulo(btn, modulo) {
+  const root = btn.closest('.janela-card');
+  if (!root) return;
+  root.dataset.modulo = modulo;
+  root.dataset.pagina = '1';
+  root.querySelectorAll('.janela-modulo-btn').forEach(b => b.classList.remove('janela-modulo-on'));
+  btn.classList.add('janela-modulo-on');
+
+  const viewTreino = root.querySelector('.janela-view-treino');
+  const viewFreq = root.querySelector('.janela-view-frequencia');
+  if (viewTreino) viewTreino.hidden = modulo !== 'treino';
+  if (viewFreq) viewFreq.hidden = modulo !== 'frequencia';
+
+  if (modulo === 'frequencia') {
+    try {
+      const porFreq = JSON.parse(root.dataset.alunosPorFreq || '{}');
+      const freqAba = root.dataset.freqAba || 'todos';
+      root.dataset.alunos = JSON.stringify(porFreq[freqAba] || []);
+    } catch (_) { /* ignore */ }
+  } else {
+    try {
+      const porAba = JSON.parse(root.dataset.alunosPorAba || '{}');
+      const aba = root.dataset.aba || 'todos';
+      root.dataset.alunos = JSON.stringify(porAba[aba] || []);
+    } catch (_) { /* ignore */ }
+  }
+
+  janelaAtualizarSelectProfessores(root, false);
+  janelaAtualizarTabela(root, true);
+}
+
+function janelaTrocarAbaFreq(btn, categoria) {
+  const root = btn.closest('.janela-card');
+  if (!root) return;
+  root.querySelectorAll('.janela-view-frequencia .janela-tab').forEach(b => b.classList.remove('janela-tab-on'));
+  btn.classList.add('janela-tab-on');
+  root.dataset.freqAba = categoria;
+  try {
+    const porFreq = JSON.parse(root.dataset.alunosPorFreq || '{}');
+    root.dataset.alunos = JSON.stringify(porFreq[categoria] || []);
+  } catch (_) { /* ignore */ }
+  janelaAtualizarSelectProfessores(root, true);
+  janelaAtualizarTabela(root, true);
 }
 
 function janelaRenderConteudo(unidade, unidId, totalAtivos) {
@@ -391,7 +591,31 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
     sem_treino: unidade.alunos?.sem_treino || [],
   };
 
-  return `<div class="janela-card" data-aba="todos" data-pagina="1" data-alunos-por-aba='${JSON.stringify(alunosPorAba).replace(/'/g, '&#39;')}' data-alunos='${JSON.stringify(alunosTodos).replace(/'/g, '&#39;')}'>
+  const freqResumo = janelaRenderResumoFrequencia(alunosTodos);
+  const alunosPorFreq = {
+    todos: alunosTodos,
+    normal: freqResumo.buckets.normal,
+    acompanhar: freqResumo.buckets.acompanhar,
+    alerta: freqResumo.buckets.alerta,
+    critico: freqResumo.buckets.critico,
+    sem_registro: freqResumo.buckets.sem_registro,
+  };
+
+  const freqTabs = [
+    { id: 'todos', label: 'Todos', n: alunosTodos.length },
+    { id: 'normal', label: 'Normal', n: freqResumo.buckets.normal.length, cor: JANELA_FREQ.normal.cor },
+    { id: 'acompanhar', label: 'Acompanhar', n: freqResumo.buckets.acompanhar.length, cor: JANELA_FREQ.acompanhar.cor },
+    { id: 'alerta', label: 'Alerta', n: freqResumo.buckets.alerta.length, cor: JANELA_FREQ.alerta.cor },
+    { id: 'critico', label: 'Crítico', n: freqResumo.buckets.critico.length, cor: JANELA_FREQ.critico.cor },
+    { id: 'sem_registro', label: 'Sem registro', n: freqResumo.buckets.sem_registro.length },
+  ];
+
+  const jsonAba = JSON.stringify(alunosPorAba).replace(/'/g, '&#39;');
+  const jsonFreq = JSON.stringify(alunosPorFreq).replace(/'/g, '&#39;');
+  const jsonAlunos = JSON.stringify(alunosTodos).replace(/'/g, '&#39;');
+
+  return `<div class="janela-card" data-modulo="treino" data-aba="todos" data-freq-aba="todos" data-pagina="1"
+    data-alunos-por-aba='${jsonAba}' data-alunos-por-freq='${jsonFreq}' data-alunos='${jsonAlunos}'>
     <div class="janela-card-head">
       <div>
         <div class="janela-title">Janela de Treino — ${typeof esc === 'function' ? esc(nomeUnidade) : nomeUnidade}</div>
@@ -400,33 +624,56 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
       <button type="button" class="janela-refresh" onclick="renderJanelaTreino('${unidId}', true)" title="Atualizar">↻ Atualizar</button>
     </div>
 
-    <div class="janela-tables">${indicador}${distribuicao}${sinc}</div>
-
-    <div class="janela-bars">
-      <div class="janela-bar" style="width:${pctEm}%;background:#34c47c;" title="Em dia ${pctEm}%"></div>
-      <div class="janela-bar" style="width:${pctAV}%;background:#eab308;" title="A vencer ${pctAV}%"></div>
-      <div class="janela-bar" style="width:${pctVen}%;background:#f05c5c;" title="Vencidos ${pctVen}%"></div>
-      <div class="janela-bar" style="width:${pctSem}%;background:#f5a623;" title="Sem treino ${pctSem}%"></div>
-    </div>
-    <div class="janela-bar-legend">
-      <span><i style="background:#34c47c"></i> Em dia ${pctEm}%</span>
-      <span><i style="background:#eab308"></i> A vencer ${pctAV}%</span>
-      <span><i style="background:#f05c5c"></i> Vencidos ${pctVen}%</span>
-      <span><i style="background:#f5a623"></i> Sem treino ${pctSem}%</span>
+    <div class="janela-modulo-nav">
+      <button type="button" class="janela-modulo-btn janela-modulo-on" onclick="janelaTrocarModulo(this,'treino')">Situação do treino</button>
+      <button type="button" class="janela-modulo-btn" onclick="janelaTrocarModulo(this,'frequencia')">Frequência de acesso</button>
     </div>
 
-    <div class="janela-alunos-sec">
-      <div class="sec" style="margin-bottom:8px;">Alunos</div>
-      <div class="janela-toolbar">
-        <div class="janela-tabs">${tabs.map(t =>
-          `<button type="button" class="janela-tab${t.id === 'todos' ? ' janela-tab-on' : ''}" onclick="janelaTrocarAba(this,'${t.id}')">${t.label} <span class="janela-tab-n">${t.n}</span></button>`
-        ).join('')}</div>
-        <div class="janela-filtros">
-          ${janelaRenderSelectProfessores(alunosTodos, '')}
-          <input type="search" class="janela-busca" placeholder="Buscar aluno…" oninput="janelaFiltrarBusca(this)">
-        </div>
+    <div class="janela-view-treino">
+      <div class="janela-tables">${indicador}${distribuicao}${sinc}</div>
+      <div class="janela-bars">
+        <div class="janela-bar" style="width:${pctEm}%;background:#34c47c;" title="Em dia ${pctEm}%"></div>
+        <div class="janela-bar" style="width:${pctAV}%;background:#eab308;" title="A vencer ${pctAV}%"></div>
+        <div class="janela-bar" style="width:${pctVen}%;background:#f05c5c;" title="Vencidos ${pctVen}%"></div>
+        <div class="janela-bar" style="width:${pctSem}%;background:#f5a623;" title="Sem treino ${pctSem}%"></div>
       </div>
-      <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '', 1, '')}</div>
+      <div class="janela-bar-legend">
+        <span><i style="background:#34c47c"></i> Em dia ${pctEm}%</span>
+        <span><i style="background:#eab308"></i> A vencer ${pctAV}%</span>
+        <span><i style="background:#f05c5c"></i> Vencidos ${pctVen}%</span>
+        <span><i style="background:#f5a623"></i> Sem treino ${pctSem}%</span>
+      </div>
+      <div class="janela-alunos-sec">
+        <div class="sec" style="margin-bottom:8px;">Alunos por situação do treino</div>
+        <div class="janela-toolbar">
+          <div class="janela-tabs">${tabs.map(t =>
+            `<button type="button" class="janela-tab${t.id === 'todos' ? ' janela-tab-on' : ''}" onclick="janelaTrocarAba(this,'${t.id}')">${t.label} <span class="janela-tab-n">${t.n}</span></button>`
+          ).join('')}</div>
+          <div class="janela-filtros">
+            ${janelaRenderSelectProfessores(alunosTodos, '')}
+            <input type="search" class="janela-busca" placeholder="Buscar aluno ou matrícula…" oninput="janelaFiltrarBusca(this)">
+          </div>
+        </div>
+        <div class="janela-alunos-wrap">${janelaRenderTabela(alunosTodos, '', 1, '')}</div>
+      </div>
+    </div>
+
+    <div class="janela-view-frequencia" hidden>
+      <div class="janela-tables">${freqResumo.indicador}${freqResumo.distribuicao}${freqResumo.acoes}</div>
+      ${freqResumo.bars}
+      <div class="janela-alunos-sec">
+        <div class="sec" style="margin-bottom:8px;">Alunos por frequência de acesso</div>
+        <div class="janela-toolbar">
+          <div class="janela-tabs">${freqTabs.map(t =>
+            `<button type="button" class="janela-tab${t.id === 'todos' ? ' janela-tab-on' : ''}" onclick="janelaTrocarAbaFreq(this,'${t.id}')">${t.label} <span class="janela-tab-n"${t.cor ? ` style="color:${t.cor}"` : ''}>${t.n}</span></button>`
+          ).join('')}</div>
+          <div class="janela-filtros">
+            ${janelaRenderSelectProfessores(alunosTodos, '')}
+            <input type="search" class="janela-busca" placeholder="Buscar aluno ou matrícula…" oninput="janelaFiltrarBusca(this)">
+          </div>
+        </div>
+        <div class="janela-alunos-wrap">${janelaRenderTabelaFrequencia(alunosTodos, '', 1, '')}</div>
+      </div>
     </div>
   </div>`;
 }
@@ -434,7 +681,7 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
 function janelaTrocarAba(btn, categoria) {
   const root = btn.closest('.janela-card');
   if (!root) return;
-  root.querySelectorAll('.janela-tab').forEach(b => b.classList.remove('janela-tab-on'));
+  root.querySelectorAll('.janela-view-treino .janela-tab').forEach(b => b.classList.remove('janela-tab-on'));
   btn.classList.add('janela-tab-on');
   root.dataset.aba = categoria;
   try {
