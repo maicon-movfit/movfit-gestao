@@ -1665,7 +1665,7 @@ tbody tr:last-child td{border-bottom:none;}
 /* ══════════════════════════════════════════════
    JANELA DE TREINO
 ══════════════════════════════════════════════ */
-#dashJanelaTreino{margin-top:14px;}
+#dashJanelaTreino,#dashMatriculadosMes{margin-top:14px;}
 .janela-card{
   background:var(--surface);
   border:1px solid var(--border);
