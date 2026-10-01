@@ -1666,6 +1666,8 @@ tbody tr:last-child td{border-bottom:none;}
    JANELA DE TREINO
 ══════════════════════════════════════════════ */
 #dashJanelaTreino,#dashMatriculadosMes{margin-top:14px;}
+.matric-toolbar-comp{margin-bottom:6px;}
+.matric-toolbar-comp .matric-comp-select{min-width:220px;}
 .janela-card{
   background:var(--surface);
   border:1px solid var(--border);
