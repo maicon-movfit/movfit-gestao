@@ -4,7 +4,9 @@
 // ════════════════════════════════════════════════════════════════════════
 
 const _matriculadosCache = { data: null, at: 0 };
+const _avaliacoesCache = { data: null, at: 0 };
 const MATRICULADOS_CACHE_TTL_MS = 3 * 60 * 1000;
+const AVALIACOES_CACHE_TTL_MS = 3 * 60 * 1000;
 const MATRICULADOS_PAGE_SIZE = 10;
 
 const MATRICULADOS_UNIDADE_MAP = {
@@ -84,53 +86,127 @@ function matriculadosNormalizarMatricula(mat) {
   return semZeros || '0';
 }
 
-function matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos) {
-  const janelaMap = new Map();
+/** Mapa matrícula → aluno; em duplicata mantém o registro mais recente. */
+function matriculadosMontarMapaAlunos(alunos) {
+  const map = new Map();
+  (alunos || []).forEach(a => {
+    const k = matriculadosNormalizarMatricula(a.matricula);
+    if (!k) return;
+    const prev = map.get(k);
+    if (!prev) {
+      map.set(k, a);
+      return;
+    }
+    const dtA = new Date(a.atualizado_em || a.coletado_em || 0).getTime();
+    const dtB = new Date(prev.atualizado_em || prev.coletado_em || 0).getTime();
+    if (dtA >= dtB) map.set(k, a);
+  });
+  return map;
+}
+
+function avaliacoesNormalizarResposta(raw) {
+  if (!raw) return null;
+  if (raw.unidades) return raw;
+  const item = raw.dados?.[0];
+  if (item?.unidades) return item;
+  return null;
+}
+
+async function avaliacoesBuscarDados(forceRefresh) {
+  if (typeof N8N_AVALIACOES_ATRASADAS_URL === 'undefined' || !N8N_AVALIACOES_ATRASADAS_URL) {
+    return null;
+  }
+  if (!forceRefresh && _avaliacoesCache.data &&
+    (Date.now() - _avaliacoesCache.at) < AVALIACOES_CACHE_TTL_MS) {
+    return _avaliacoesCache.data;
+  }
+  if (window._avaliacoesInflightPromise) return window._avaliacoesInflightPromise;
+
+  window._avaliacoesInflightPromise = (async () => {
+    try {
+      const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      };
+      if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
+        headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
+      }
+      const resp = await fetch(N8N_AVALIACOES_ATRASADAS_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      if (!resp.ok) {
+        console.warn('[AVALIACOES] Webhook HTTP', resp.status);
+        return null;
+      }
+      const raw = await resp.json();
+      const data = avaliacoesNormalizarResposta(raw);
+      if (!data?.unidades) {
+        console.warn('[AVALIACOES] Resposta inválida');
+        return null;
+      }
+      _avaliacoesCache.data = data;
+      _avaliacoesCache.at = Date.now();
+      return data;
+    } catch (e) {
+      console.warn('[AVALIACOES] Erro:', e.message);
+      return null;
+    } finally {
+      window._avaliacoesInflightPromise = null;
+    }
+  })();
+
+  return window._avaliacoesInflightPromise;
+}
+
+function matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes) {
+  let janelaMap = new Map();
   if (dataJanela && typeof janelaEncontrarUnidade === 'function') {
     const u = janelaEncontrarUnidade(dataJanela, unidId);
     const alunos = typeof janelaMontarAlunosTodos === 'function'
       ? janelaMontarAlunosTodos(u || {})
       : [];
-    alunos.forEach(a => {
-      const k = matriculadosNormalizarMatricula(a.matricula);
-      if (k) janelaMap.set(k, a);
-    });
+    janelaMap = matriculadosMontarMapaAlunos(alunos);
   }
 
-  const ativosMap = new Map();
+  let ativosMap = new Map();
   if (dataAtivos && typeof totalAtivosEncontrarUnidade === 'function') {
     const u = totalAtivosEncontrarUnidade(dataAtivos, unidId);
-    (u?.alunos || []).forEach(a => {
-      const k = matriculadosNormalizarMatricula(a.matricula);
-      if (k) ativosMap.set(k, a);
-    });
+    ativosMap = matriculadosMontarMapaAlunos(u?.alunos || []);
   }
 
-  return { janela: janelaMap, ativos: ativosMap };
+  let avaliacoesMap = new Map();
+  if (dataAvaliacoes) {
+    const u = matriculadosEncontrarUnidade(dataAvaliacoes, unidId);
+    avaliacoesMap = matriculadosMontarMapaAlunos(u?.alunos || []);
+  }
+
+  return { janela: janelaMap, ativos: ativosMap, avaliacoes: avaliacoesMap };
 }
 
-function matriculadosMapasPorUnidade(dataJanela, dataAtivos) {
+function matriculadosMapasPorUnidade(dataJanela, dataAtivos, dataAvaliacoes) {
   const out = {};
   Object.keys(MATRICULADOS_UNIDADE_MAP).forEach(unidId => {
-    out[unidId] = matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos);
+    out[unidId] = matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes);
   });
   return out;
 }
 
-async function matriculadosBuscarCruzamentos(unidId) {
-  const tarefas = [
+async function matriculadosBuscarCruzamentos(unidId, forceRefresh) {
+  const [dataJanela, dataAtivos, dataAvaliacoes] = await Promise.all([
     typeof janelaBuscarDados === 'function'
       ? janelaBuscarDados().catch(() => null)
       : Promise.resolve(null),
     typeof totalAtivosBuscarDados === 'function'
-      ? totalAtivosBuscarDados().catch(() => null)
+      ? totalAtivosBuscarDados(forceRefresh).catch(() => null)
       : Promise.resolve(null),
-  ];
-  const [dataJanela, dataAtivos] = await Promise.all(tarefas);
+    avaliacoesBuscarDados(forceRefresh).catch(() => null),
+  ]);
   if (unidId) {
-    return matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos);
+    return matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes);
   }
-  return matriculadosMapasPorUnidade(dataJanela, dataAtivos);
+  return matriculadosMapasPorUnidade(dataJanela, dataAtivos, dataAvaliacoes);
 }
 
 function matriculadosTreinoLabel(statusTreino, fallback) {
@@ -142,18 +218,92 @@ function matriculadosTreinoLabel(statusTreino, fallback) {
   return null;
 }
 
+/** Interpreta avaliacao_status do webhook de matriculados. */
+function matriculadosParseAvaliacao(status) {
+  const s = String(status || '').trim().toLowerCase();
+  if (!s) return { feita: null, label: '—', tipo: 'muted' };
+  if (/realiz|feita|conclu|ok|em_dia|ativa/.test(s) && !/nao|sem|pend|não/.test(s)) {
+    return { feita: true, label: 'Sim', tipo: 'ok' };
+  }
+  if (/vencid/.test(s)) {
+    return { feita: true, label: 'Vencida', tipo: 'warn' };
+  }
+  if (/nao_verificad|não_verificad/.test(s)) {
+    return { feita: null, label: 'Não verificado', tipo: 'muted' };
+  }
+  if (/pend|sem|nao_realiz|não_realiz|nao_feita|não_feita/.test(s)) {
+    return { feita: false, label: 'Pendente', tipo: 'warn' };
+  }
+  return { feita: null, label: status, tipo: 'muted' };
+}
+
+/**
+ * Avaliação via webhook avaliacoes_atrasadas (lista de atrasados).
+ * Fora da lista = não atrasada (não implica que já fez avaliação).
+ */
+function matriculadosResolverAvaliacao(m, avAtrasada, temListaAvaliacoes) {
+  if (avAtrasada) {
+    return {
+      avaliacao_atrasada: true,
+      avaliacao_em_dia: false,
+      avaliacao_label: 'Atrasada',
+      avaliacao_tipo: 'alert',
+      data_avaliacao: avAtrasada.data_avaliacao || null,
+      data_proxima_avaliacao: avAtrasada.data_proxima || null,
+      nome_avaliador: avAtrasada.nome_avaliador || null,
+    };
+  }
+  if (temListaAvaliacoes) {
+    return {
+      avaliacao_atrasada: false,
+      avaliacao_em_dia: true,
+      avaliacao_label: 'Não atrasada',
+      avaliacao_tipo: 'ok',
+      data_avaliacao: null,
+      data_proxima_avaliacao: null,
+      nome_avaliador: null,
+    };
+  }
+  const aval = matriculadosParseAvaliacao(m.avaliacao_status);
+  return {
+    avaliacao_atrasada: null,
+    avaliacao_em_dia: null,
+    avaliacao_label: aval.label,
+    avaliacao_tipo: aval.tipo,
+    data_avaliacao: null,
+    data_proxima_avaliacao: null,
+    nome_avaliador: null,
+  };
+}
+
+/** Aluno com treino montado — somente via Janela de Treino (fonte confiável). */
+function matriculadosTemTreinoMontado(j, statusTreino) {
+  if (!j) return false;
+  if (statusTreino && statusTreino !== 'SEM_TREINO') return true;
+  return !!(j.nome_programa && j.codigo_programa);
+}
+
 function matriculadosValidacaoIssues(m) {
   const issues = [];
-  if (!m._cruzamento?.janela) issues.push('Sem registro na Janela de Treino');
-  if (m._cruzamento?.ativos === false && m._cruzamento?.temListaAtivos) {
-    issues.push('Não consta na lista de ativos');
-  }
   const sit = String(m.situacao_cliente_descricao || m.situacao_cliente || '');
-  if (/ativo/i.test(sit) && m.status_treino === 'VENCIDO') {
+  const ativo = /ativo/i.test(sit);
+
+  if (!m._cruzamento?.janela) {
+    issues.push('Sem registro na Janela de Treino');
+  }
+  if (m._cruzamento?.janela && m._cruzamento?.ativos === false && m._cruzamento?.temListaAtivos) {
+    issues.push('Na janela, mas não consta em ativos');
+  }
+  if (ativo && m.avaliacao_atrasada === true) {
+    issues.push('Avaliação física atrasada');
+  }
+  if (ativo && m.status_treino === 'VENCIDO') {
     issues.push('Contrato ativo com treino vencido');
   }
-  if (/ativo/i.test(sit) && m.status_treino === 'SEM_TREINO') {
-    issues.push('Contrato ativo sem treino');
+  if (ativo && m._cruzamento?.janela && !m.com_treino) {
+    issues.push(m.status_treino === 'SEM_TREINO'
+      ? 'Contrato ativo sem treino na janela'
+      : 'Ativo sem treino montado');
   }
   if (m.precisa_contato && m.status_treino === 'EM_DIA') {
     issues.push('Marcado para contato, mas treino em dia');
@@ -165,14 +315,20 @@ function matriculadosEnriquecerAluno(m, mapas) {
   const key = matriculadosNormalizarMatricula(m.matricula);
   const j = mapas?.janela?.get(key) || null;
   const a = mapas?.ativos?.get(key) || null;
+  const av = mapas?.avaliacoes?.get(key) || null;
+  const temListaAvaliacoes = (mapas?.avaliacoes?.size || 0) > 0;
   const statusTreino = j?.status_treino || null;
   const treinoLabel = matriculadosTreinoLabel(statusTreino, m.treino_status)
     || (j ? 'Sem status' : 'Não encontrado');
+  const aval = matriculadosResolverAvaliacao(m, av, temListaAvaliacoes);
+  const comTreino = matriculadosTemTreinoMontado(j, statusTreino);
 
   return {
     ...m,
     treino_status: treinoLabel,
     status_treino: statusTreino,
+    ...aval,
+    com_treino: comTreino,
     treino_valido_ate: j?.treino_valido_ate || m.treino_valido_ate || null,
     ultimo_acesso: j?.ultimo_acesso || m.ultimo_acesso || null,
     nome_professor: j?.nome_professor || m.nome_professor || null,
@@ -180,7 +336,9 @@ function matriculadosEnriquecerAluno(m, mapas) {
     _cruzamento: {
       janela: !!j,
       ativos: !!a,
+      avaliacoes: !!av,
       temListaAtivos: (mapas?.ativos?.size || 0) > 0,
+      temListaAvaliacoes,
     },
   };
 }
@@ -209,11 +367,17 @@ function matriculadosResumoCruzamento(lista) {
   const naJanela = lista.filter(m => m._cruzamento?.janela).length;
   const emAtivos = lista.filter(m => m._cruzamento?.ativos).length;
   const temListaAtivos = lista.some(m => m._cruzamento?.temListaAtivos);
+  const comTreinoMontado = lista.filter(m => m.com_treino).length;
+  const avaliacaoAtrasada = lista.filter(m => m.avaliacao_atrasada === true).length;
+  const avaliacaoNaoAtrasada = lista.filter(m => m.avaliacao_em_dia === true).length;
   const comTreino = lista.filter(m =>
     m.status_treino === 'EM_DIA' || /em dia/i.test(String(m.treino_status || ''))
   ).length;
   const alertas = lista.filter(m => matriculadosValidacaoIssues(m).length > 0).length;
-  return { total, naJanela, emAtivos, temListaAtivos, comTreino, alertas };
+  return {
+    total, naJanela, emAtivos, temListaAtivos,
+    comTreino, comTreinoMontado, avaliacaoAtrasada, avaliacaoNaoAtrasada, alertas,
+  };
 }
 
 function matriculadosUnidIdPorCodigo(codigo, nome) {
@@ -434,7 +598,7 @@ function matriculadosContarAbas(lista) {
   return c;
 }
 
-function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao) {
+function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada) {
   let out = lista || [];
   const aba = statusAba || 'todos';
   if (aba !== 'todos') {
@@ -459,6 +623,17 @@ function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao)
       if (sitF === 'trancado') return /tranc/.test(sit);
       if (sitF === 'suspenso') return /susp/.test(sit);
       return sit.includes(sitF);
+    });
+  }
+  const jor = jornada || 'todos';
+  if (jor !== 'todos') {
+    out = out.filter(m => {
+      if (jor === 'avaliacao_atrasada') return m.avaliacao_atrasada === true;
+      if (jor === 'avaliacao_nao_atrasada') return m.avaliacao_em_dia === true;
+      if (jor === 'avaliacao_nao_verificada') return m.avaliacao_atrasada == null;
+      if (jor === 'com_treino') return !!m.com_treino;
+      if (jor === 'sem_treino') return !m.com_treino;
+      return true;
     });
   }
   if (filtro) {
@@ -510,12 +685,26 @@ function matriculadosRenderSelectSituacao(val) {
   return `<select class="janela-prof-select matric-sit-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
 }
 
+function matriculadosRenderSelectJornada(val) {
+  const v = val || 'todos';
+  const opts = [
+    ['todos', 'Jornada: todos'],
+    ['avaliacao_atrasada', 'Jornada: avaliação atrasada'],
+    ['avaliacao_nao_atrasada', 'Jornada: avaliação não atrasada'],
+    ['avaliacao_nao_verificada', 'Jornada: avaliação não verificada'],
+    ['com_treino', 'Jornada: com treino montado'],
+    ['sem_treino', 'Jornada: sem treino montado'],
+  ];
+  return `<select class="janela-prof-select matric-jornada-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
+}
+
 function matriculadosLerFiltros(root) {
   return {
     filtro: (root.querySelector('.matric-busca')?.value || '').trim(),
     statusAba: root.dataset.statusAba || 'todos',
     validacao: root.querySelector('.matric-valid-select')?.value || 'todos',
     situacao: root.querySelector('.matric-sit-select')?.value || 'todos',
+    jornada: root.querySelector('.matric-jornada-select')?.value || 'todos',
   };
 }
 
@@ -588,14 +777,32 @@ function matriculadosRenderValidacao(m) {
 function matriculadosTooltipAluno(m) {
   const parts = [];
   if (m.matricula) parts.push(`Matrícula: ${m.matricula}`);
+  if (m.avaliacao_label) parts.push(`Avaliação: ${m.avaliacao_label}`);
+  if (m.data_avaliacao) parts.push(`Última avaliação: ${matriculadosFmtDataCurta(m.data_avaliacao)}`);
+  if (m.data_proxima_avaliacao) parts.push(`Próxima: ${matriculadosFmtDataCurta(m.data_proxima_avaliacao)}`);
+  if (m.nome_avaliador) parts.push(`Avaliador: ${m.nome_avaliador}`);
+  if (m.com_treino != null) parts.push(`Treino montado: ${m.com_treino ? 'Sim' : 'Não'}`);
   if (m.nome_professor) parts.push(`Professor: ${m.nome_professor}`);
   if (m.nome_programa) parts.push(`Programa: ${m.nome_programa}`);
   if (m.ultimo_acesso) parts.push(`Último acesso: ${matriculadosFmtDataCurta(m.ultimo_acesso)}`);
   return parts.join(' · ') || 'Matrícula não informada';
 }
 
-function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao) {
-  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao);
+function matriculadosRenderSimNao(val, labelSim, labelNao) {
+  if (val === true) return matriculadosPillStatus(labelSim || 'Sim', 'ok');
+  if (val === false) return matriculadosPillStatus(labelNao || 'Não', 'warn');
+  return matriculadosPillStatus('—', 'muted');
+}
+
+function matriculadosRenderAvaliacaoPill(m) {
+  if (m.avaliacao_label && m.avaliacao_label !== '—') {
+    return matriculadosPillStatus(m.avaliacao_label, m.avaliacao_tipo || 'muted');
+  }
+  return matriculadosPillStatus('—', 'muted');
+}
+
+function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada) {
+  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada);
   if (!filtrada.length) {
     return `<div class="janela-empty">Nenhum aluno neste filtro.</div>`;
   }
@@ -610,7 +817,9 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
       <th>Plano</th>
       <th>Data matrícula</th>
       <th>Situação</th>
-      <th>Treino</th>
+      <th>Avaliação física</th>
+      <th>Com treino</th>
+      <th>Situação treino</th>
       <th>Válido até</th>
       <th>Contato</th>
       <th>Validação</th>
@@ -633,6 +842,8 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
         <td style="max-width:160px;white-space:normal;font-size:11px;">${plano}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${matriculadosFmtDataCurta(m.data_lancamento)}</td>
         <td>${matriculadosPillStatus(sit, sitTipo)}</td>
+        <td>${matriculadosRenderAvaliacaoPill(m)}</td>
+        <td>${matriculadosRenderSimNao(m.com_treino, 'Sim', 'Não')}</td>
         <td>${matriculadosRenderTreinoPill(m)}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${matriculadosFmtDataCurta(m.treino_valido_ate)}</td>
         <td style="font-size:11px;color:${m.precisa_contato ? '#f05c5c' : 'var(--muted)'};">${typeof esc === 'function' ? esc(contato) : contato}</td>
@@ -645,14 +856,14 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
 function matriculadosAtualizarTabela(root, resetPage) {
   if (resetPage) root.dataset.pagina = '1';
   const lista = JSON.parse(root.dataset.matriculados || '[]');
-  const { filtro, statusAba, validacao, situacao } = matriculadosLerFiltros(root);
-  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao);
+  const { filtro, statusAba, validacao, situacao, jornada } = matriculadosLerFiltros(root);
+  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada);
   const totalPag = Math.max(1, Math.ceil(filtrada.length / MATRICULADOS_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10);
   pagina = Math.min(Math.max(1, pagina), totalPag);
   root.dataset.pagina = String(pagina);
   const wrap = root.querySelector('.matric-alunos-wrap');
-  if (wrap) wrap.innerHTML = matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao);
+  if (wrap) wrap.innerHTML = matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada);
 }
 
 function matriculadosFiltrarBusca(input) {
@@ -664,8 +875,8 @@ function matriculadosIrPagina(btn, delta) {
   const root = btn.closest('.matric-card');
   if (!root) return;
   const lista = JSON.parse(root.dataset.matriculados || '[]');
-  const { filtro, statusAba, validacao, situacao } = matriculadosLerFiltros(root);
-  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao);
+  const { filtro, statusAba, validacao, situacao, jornada } = matriculadosLerFiltros(root);
+  const filtrada = matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada);
   const totalPag = Math.max(1, Math.ceil(filtrada.length / MATRICULADOS_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10) + delta;
   root.dataset.pagina = String(Math.min(Math.max(1, pagina), totalPag));
@@ -692,15 +903,15 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
     ['Competência', matriculadosFmtCompetencia(competencia)],
-    ['Treino em dia (janela)', comTreino, '#34c47c'],
-    ['Precisam contato', precisaContato, precisaContato ? '#f05c5c' : 'var(--muted)'],
+    ['Avaliação atrasada', lista.length ? `${cruz.avaliacaoAtrasada} (${Math.round(cruz.avaliacaoAtrasada / lista.length * 100)}%)` : '0', '#f05c5c'],
+    ['Com treino montado', lista.length ? `${cruz.comTreinoMontado} (${Math.round(cruz.comTreinoMontado / lista.length * 100)}%)` : '0', '#34c47c'],
   ]);
 
-  const distribuicao = matriculadosTblCol('Cruzamento', [
+  const distribuicao = matriculadosTblCol('Jornada', [
+    ['Avaliação não atrasada', lista.length ? `${cruz.avaliacaoNaoAtrasada} (${Math.round(cruz.avaliacaoNaoAtrasada / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Na Janela de Treino', lista.length ? `${cruz.naJanela} (${Math.round(cruz.naJanela / lista.length * 100)}%)` : '0', '#378add'],
     ['Treino em dia', lista.length ? `${comTreino} (${Math.round(comTreino / lista.length * 100)}%)` : '0', '#34c47c'],
-    ['Alertas de validação', cruz.alertas, cruz.alertas ? '#f05c5c' : 'var(--muted)'],
-    ['Rede (todas unidades)', resumo.total_alunos_unicos ?? '—', '#378add'],
+    ['Precisam contato', precisaContato, precisaContato ? '#f05c5c' : 'var(--muted)'],
   ]);
 
   const linhasAtivos = cruz.temListaAtivos
@@ -710,7 +921,7 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const sinc = matriculadosTblCol('Sincronização', [
     ['Fonte', fonteLabel],
     ['Competência', competencia],
-    ['Cruzamento', 'Matrícula → Janela de Treino'],
+    ['Cruzamento', 'Matrícula → Janela + Avaliações atrasadas'],
     ...linhasAtivos,
     ['Histórico (meses)', mesesSalvos],
     ['Gerado em', data.gerado_em ? matriculadosFmtData(data.gerado_em) : (o.sincronizado_em ? matriculadosFmtData(o.sincronizado_em) : '—')],
@@ -737,12 +948,13 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
       <div class="janela-toolbar">
         <div class="janela-tabs matric-status-tabs">${matriculadosRenderTabsStatus(lista, 'todos')}</div>
         <div class="janela-filtros">
+          ${matriculadosRenderSelectJornada('todos')}
           ${matriculadosRenderSelectValidacao('todos')}
           ${matriculadosRenderSelectSituacao('todos')}
           <input type="search" class="janela-busca matric-busca" placeholder="Buscar aluno, matrícula ou plano…" oninput="matriculadosFiltrarBusca(this)">
         </div>
       </div>
-      <div class="matric-alunos-wrap">${matriculadosRenderTabela(lista, '', 1, 'todos', 'todos', 'todos')}</div>
+      <div class="matric-alunos-wrap">${matriculadosRenderTabela(lista, '', 1, 'todos', 'todos', 'todos', 'todos')}</div>
     </div>
   </div>`;
 }
@@ -780,7 +992,7 @@ async function matriculadosTrocarCompetencia(select, unidId) {
   }
 
   const listaRaw = histDoc.matriculados || [];
-  const mapas = await matriculadosBuscarCruzamentos(unidId);
+  const mapas = await matriculadosBuscarCruzamentos(unidId, false);
   const lista = matriculadosEnriquecerLista(listaRaw, mapas);
   const unidade = {
     unidade_codigo: histDoc.unidade_codigo,
@@ -838,6 +1050,8 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
   if (forceRefresh) {
     _matriculadosCache.data = null;
     _matriculadosCache.at = 0;
+    _avaliacoesCache.data = null;
+    _avaliacoesCache.at = 0;
   }
 
   el.innerHTML = `<div class="janela-card janela-loading">
@@ -848,7 +1062,7 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
   const [data, historico, mapasPorUnid] = await Promise.all([
     matriculadosBuscarDados(forceRefresh),
     matriculadosListarCompetencias(unidId),
-    matriculadosBuscarCruzamentos(),
+    matriculadosBuscarCruzamentos(null, forceRefresh),
   ]);
 
   const dataEnriquecida = data
