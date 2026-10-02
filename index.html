@@ -635,6 +635,7 @@
     <div class="prof-rows" id="gradeRows"></div>
     <div class="add-row" onclick="avisarCadastrarProfessorNaEquipe()"><span style="font-size:16px;color:var(--muted);">+</span><span>Adicionar professor (cadastre na aba Equipe)</span></div>
   </div>
+  <div id="pactoCacheAlert" style="display:none;margin:12px 0;padding:12px 16px;border-radius:10px;font-size:12px;line-height:1.5;"></div>
   <!-- PAINEL DE FEEDBACK EM TEMPO REAL -->
   <div id="gradeFeedbackPanel" style="display:none;margin:16px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;box-shadow:var(--sh1);">
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px;">
@@ -3314,8 +3315,13 @@ function inicializarMesChip(unidId) {
   const title = document.getElementById('gradeTitle');
   const uid = unidId || (unidadeAtual && unidadeAtual.id);
   let val = (inp && inp.value.trim()) || atual;
+  const valAntes = val;
   if (!_gradeModoEdicao && uid && mesChipDeveAvancar(val, uid)) val = atual;
+  else if (!_gradeModoEdicao && val && compararMeses(val, atual) < 0) val = atual;
   else if (!inp || !inp.value.trim()) val = atual;
+  if (val !== valAntes && typeof mostrarToast === 'function') {
+    mostrarToast(`Mês ajustado para ${val} (fechamento do mês corrente).`);
+  }
   if (inp) inp.value = val;
   if (chip) chip.textContent = val;
   if (title) title.textContent = val;
@@ -3717,6 +3723,24 @@ async function limparGrade(){
 // Preenche: Total, Ativos, Com treino, Vencidos, Em dia, Sem treino, Duração (médio Pacto).
 // opts.auto: true → chamado ao abrir a grade (sem confirmação; toast mais discreto).
 let _gradePactoSeq = 0;
+
+function atualizarAlertaCachePacto(iso) {
+  const el = document.getElementById('pactoCacheAlert');
+  if (!el) return;
+  if (!iso) { el.style.display = 'none'; el.textContent = ''; return; }
+  const fmt = typeof pactoFmtColeta === 'function' ? pactoFmtColeta(iso) : iso;
+  const dias = typeof pactoDiasDesdeColeta === 'function' ? pactoDiasDesdeColeta(iso) : null;
+  if (dias != null && dias > 7) {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block;margin:12px 0;padding:12px 16px;border-radius:10px;font-size:12px;line-height:1.5;background:var(--amber-bg);border:1px solid rgba(245,166,35,.35);color:var(--c-amber);';
+    el.innerHTML = `<strong>⚠ Dados da Pacto desatualizados no servidor</strong><br>Última coleta: <strong>${fmt}</strong> (há ${dias} dias). O botão "Atualizar da Pacto" está funcionando, mas o n8n ainda devolve o cache Postgres antigo — os números não mudam até o job de sincronização no servidor rodar de novo.`;
+  } else {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block;margin:12px 0;padding:8px 12px;border-radius:8px;font-size:11px;line-height:1.4;background:var(--surface2);color:var(--muted);border:1px solid var(--border);';
+    el.textContent = `Pacto · coleta em ${fmt}${dias != null ? ` (${dias === 0 ? 'hoje' : dias + ' dia(s)'})` : ''}`;
+  }
+}
+
 async function preencherGradeComPacto(opts) {
   const auto = !!(opts && opts.auto);
   const seq = opts && opts.seq != null ? opts.seq : null;
@@ -3785,9 +3809,11 @@ async function preencherGradeComPacto(opts) {
       else mostrarToast(msgCfg);
       return;
     }
-    const lista = await pactoBuscarProfessoresBI(empresaId, unidId);
+    const lista = await pactoBuscarProfessoresBI(empresaId, unidId, { forceRefresh: !auto });
     if (!unidadeAtual || unidadeAtual.id !== unidId) return;
     if (seq != null && seq !== _gradePactoSeq) return;
+    const coletaEm = typeof pactoExtrairAtualizadoEm === 'function' ? pactoExtrairAtualizadoEm(lista) : null;
+    atualizarAlertaCachePacto(coletaEm);
     if (!lista || !lista.length) {
       const msgVazio = 'Pacto/cache não retornou professores. No n8n: Check proxy deve repassar unidade; Select filtra por unidade; Respond manda o array inteiro.';
       if (auto) setSaveStatus(msgVazio, 'e');
@@ -3983,7 +4009,11 @@ async function preencherGradeComPacto(opts) {
     feedbackGrade();
     _marcarGradeModificada();
 
-    let msg = `Pacto: ${okCount} professor(es) preenchido(s)`;
+    const diasCache = coletaEm && typeof pactoDiasDesdeColeta === 'function' ? pactoDiasDesdeColeta(coletaEm) : null;
+    const staleSuffix = diasCache != null && diasCache > 7
+      ? ` · cache do servidor de ${typeof pactoFmtColeta === 'function' ? pactoFmtColeta(coletaEm) : coletaEm}`
+      : '';
+    let msg = `Pacto: ${okCount} professor(es) preenchido(s)${staleSuffix}`;
     if (biIncompleto) {
       msg = `BI incompleto (${normalizados.length} no webhook, ${nomesNaGrade.length} na grade). No n8n, o Respond deve devolver o array inteiro — não marquei ninguém como fora do Treino Web. Preenchidos: ${okCount}.`;
     } else if (falha) {
@@ -3993,13 +4023,18 @@ async function preencherGradeComPacto(opts) {
       msg += '. Revise e clique em Registrar mês.';
     }
     if (!auto) mostrarToast(msg);
+    const staleStatus = diasCache != null && diasCache > 7
+      ? `⚠ Pacto importada (${okCount} ok), mas cache n8n desatualizado (${diasCache} dias). Números iguais ao mês passado até o servidor sincronizar.`
+      : null;
     setSaveStatus(
-      biIncompleto
-        ? `⚠ Webhook incompleto (${normalizados.length}/${nomesNaGrade.length}). Ajuste o Respond no n8n para enviar todos os professores.`
-        : okCount
-          ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
-          : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
-      biIncompleto ? 'w' : (okCount ? 'ok' : 'w')
+      staleStatus
+        ? staleStatus
+        : biIncompleto
+          ? `⚠ Webhook incompleto (${normalizados.length}/${nomesNaGrade.length}). Ajuste o Respond no n8n para enviar todos os professores.`
+          : okCount
+            ? `✓ Importado da Pacto (${okCount} ok${falha ? ', ' + falha + ' fora do Treino Web' : ''}). Ainda não está salvo — clique em Registrar mês.`
+            : 'Nenhum professor no Treino Web. Abra o Console (F12) → [PACTO GRADE] para ver os nomes retornados.',
+      staleStatus ? 'w' : (biIncompleto ? 'w' : (okCount ? 'ok' : 'w'))
     );
   } catch (e) {
     console.error('[PACTO GRADE]', e);
