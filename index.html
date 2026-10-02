@@ -3129,6 +3129,8 @@ async function renderVisaoRT(unidId) {
 async function entrarUnidade(unidId) {
   const unid=UNIDADES.find(u=>u.id===unidId); if(!unid) return;
   _limparFlagGrade(); // ao trocar de unidade, grade nova = sem modificações pendentes
+  _gradeModoEdicao=false;
+  _gradeInitMes=null;
   unidadeAtual=unid;
   document.getElementById('headerGeral').style.display='none';
   const hu=document.getElementById('headerUnidade'); hu.style.display='flex';
@@ -3143,7 +3145,8 @@ async function entrarUnidade(unidId) {
   showLoading(true);
   await getHistoricoAsync(unid.id);
   showLoading(false);
-  await inicializarGradeComProfessoresDaUnidade(unid.id); // carrega os professores cadastrados dessa unidade, números zerados
+  const nomeMesGrade = inicializarMesChip(unid.id);
+  await recarregarGradeNovoMes(unid.id, nomeMesGrade);
   atualizarHeader(); atualizarSelects(); renderHistorico();
   if(usuarioLogado && usuarioLogado.papel === 'rt') {
     const navNovoMes = document.getElementById('navTabNovoMes');
@@ -3271,16 +3274,52 @@ function gerarNomeMesAtual() {
 
 const MESES_NOMES_FULL=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 let _seletorMesContexto={modo:'grade',nomeAntigo:null};
+/** Mês para o qual a grade foi carregada por último (evita reutilizar números do mês anterior). */
+let _gradeInitMes = null;
+/** true quando editarMes() carregou um mês do histórico — não avançar chip automaticamente. */
+let _gradeModoEdicao = false;
 
-function inicializarMesChip() {
-  const nome=gerarNomeMesAtual();
-  const inp=document.getElementById('mesAtual');
-  const chip=document.getElementById('mesChipLabel');
-  const title=document.getElementById('gradeTitle');
-  if(inp && !inp.value) inp.value=nome;
-  const val=inp?inp.value:nome;
-  if(chip) chip.textContent=val;
-  if(title) title.textContent=val;
+function mesJaRegistradoNoHistorico(nome, unidId) {
+  const uid = unidId || (unidadeAtual && unidadeAtual.id);
+  if (!uid || !nome) return false;
+  return getHistorico(uid).some(m => m.nome === nome);
+}
+
+/** Avança o chip para o mês corrente quando o mês exibido já foi fechado no histórico. */
+function mesChipDeveAvancar(mesNome, unidId) {
+  const atual = gerarNomeMesAtual();
+  if (!mesNome || mesNome === atual) return false;
+  if (!mesJaRegistradoNoHistorico(mesNome, unidId)) return false;
+  return compararMeses(mesNome, atual) < 0;
+}
+
+function assinaturaNumerosMes(profs) {
+  return JSON.stringify((profs || []).map(p =>
+    [p.total || 0, p.comTreino || 0, p.vencido || 0, p.emDia || 0, p.semTreino || 0].join(',')
+  ).sort());
+}
+
+async function recarregarGradeNovoMes(unidId, nomeMes) {
+  _gradeInitMes = nomeMes;
+  _gradeModoEdicao = false;
+  _limparFlagGrade();
+  if (typeof pactoLimparCacheDados === 'function') pactoLimparCacheDados();
+  return inicializarGradeComProfessoresDaUnidade(unidId);
+}
+
+function inicializarMesChip(unidId) {
+  const atual = gerarNomeMesAtual();
+  const inp = document.getElementById('mesAtual');
+  const chip = document.getElementById('mesChipLabel');
+  const title = document.getElementById('gradeTitle');
+  const uid = unidId || (unidadeAtual && unidadeAtual.id);
+  let val = (inp && inp.value.trim()) || atual;
+  if (!_gradeModoEdicao && uid && mesChipDeveAvancar(val, uid)) val = atual;
+  else if (!inp || !inp.value.trim()) val = atual;
+  if (inp) inp.value = val;
+  if (chip) chip.textContent = val;
+  if (title) title.textContent = val;
+  return val;
 }
 function abrirSeletorMesGrade(nomeBase, opts){
   // Só redefine o contexto se NÃO veio do fluxo de renomear
@@ -3332,12 +3371,25 @@ async function confirmarSeletorMesGrade(){
     return;
   }
   const inp=document.getElementById('mesAtual');
+  const mesAnterior=(inp&&inp.value.trim())||_gradeInitMes;
+  if(nome!==mesAnterior && _gradeModificada){
+    const okTrocar=await confirmDialog(
+      `Trocar para "${nome}" recarrega a grade com dados frescos da Pacto.\n\nNúmeros não salvos do mês anterior serão perdidos.`,
+      'Trocar mês na grade',
+      'warn'
+    );
+    if(!okTrocar) return;
+  }
   const chip=document.getElementById('mesChipLabel');
   const title=document.getElementById('gradeTitle');
   if(inp) inp.value=nome;
   if(chip) chip.textContent=nome;
   if(title) title.textContent=nome;
   fecharSeletorMesGrade();
+  if(unidadeAtual && nome!==_gradeInitMes){
+    _gradeModoEdicao=false;
+    await recarregarGradeNovoMes(unidadeAtual.id, nome);
+  }
 }
 
 /** ID canônico do doc em meses — mesmo padrão de adicionarMes/deletarMes. */
@@ -3431,8 +3483,13 @@ function goTab(id) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   // Só recarrega a grade se a aba não estava ativa — evita apagar números já
   // digitados pelo RT caso o mesmo item de navegação seja clicado de novo.
-  if(id==='dados' && !jaEstavaAtiva) { inicializarMesChip(); if(unidadeAtual) inicializarGradeComProfessoresDaUnidade(unidadeAtual.id); }
-  else if(id==='dados') { inicializarMesChip(); }
+  if(id==='dados') {
+    const unidId = unidadeAtual && unidadeAtual.id;
+    const nomeMes = inicializarMesChip(unidId);
+    const mesMudou = nomeMes !== _gradeInitMes;
+    const deveRecarregar = unidId && !_gradeModoEdicao && (!jaEstavaAtiva || mesMudou);
+    if(deveRecarregar) recarregarGradeNovoMes(unidId, nomeMes);
+  }
   const _tabEl = document.getElementById('tab-'+id);
   if(_tabEl) { _tabEl.classList.add('active'); }
   else { console.warn('[goTab] elemento não encontrado: tab-'+id); }
@@ -8466,12 +8523,34 @@ async function salvarMes(){
   if(!profs.length){setSaveStatus('A grade está vazia. Preencha os dados primeiro.','w');return;}
   if(!unidadeAtual){setSaveStatus('Nenhuma unidade selecionada.','e');return;}
   const unidId = unidadeAtual.id; // captura agora, evita inconsistência se trocar de unidade durante o salvamento
+  const hist=getHistorico(unidId);
+  const existente=hist.find(m=>m.nome===nome);
+  if(existente && !_gradeModoEdicao){
+    const okSobrescrever=await confirmDialog(
+      `"${nome}" já está registrado no histórico.\n\nDeseja sobrescrever com os números atuais da grade?`,
+      'Mês já registrado',
+      'warn'
+    );
+    if(!okSobrescrever) return;
+  }
+  const idxMes=hist.findIndex(m=>m.nome===nome);
+  const mesRef=idxMes>0?hist[idxMes-1]:(hist.length&&hist[hist.length-1].nome!==nome?hist[hist.length-1]:null);
+  if(mesRef && assinaturaNumerosMes(profs)===assinaturaNumerosMes(mesRef.professores)){
+    const okIgual=await confirmDialog(
+      `Os números são idênticos ao mês "${mesRef.nome}".\n\nSe ainda não atualizou da Pacto, cancele e clique em "Atualizar da Pacto".\n\nRegistrar "${nome}" mesmo assim?`,
+      'Dados iguais ao mês anterior',
+      'warn'
+    );
+    if(!okIgual) return;
+  }
   setSaveStatus('Vinculando professores ao cadastro...','');
   await vincularProfessoresAoCadastro(unidId, profs);
   if(!unidadeAtual || unidadeAtual.id !== unidId) { setSaveStatus('A unidade foi trocada durante o salvamento — operação cancelada por segurança.','e'); return; }
   setSaveStatus('Salvando na nuvem...','');
   await adicionarMes({nome,professores:profs,savedAt:new Date().toISOString()}, unidId);
   _limparFlagGrade(); // mês salvo — sem alterações pendentes
+  _gradeModoEdicao=false;
+  _gradeInitMes=nome;
   renderHistorico();
   setSaveStatus(`✓ Mês "${nome}" salvo — ${profs.length} professores registrados.`,'ok');
   // Botão "Ver Painel" — carrega os dados apenas quando o usuário clicar
@@ -8912,6 +8991,9 @@ async function editarMes(nome) {
     p.comTreino||0, p.vencido||0, p.emDia||0, p.semTreino||0,
     p.duracao||0, p.bioEmDia||0, p.bioVencida||0, p.bioSemAval||0
   ]), true);
+  _gradeModoEdicao=true;
+  _gradeInitMes=nome;
+  _limparFlagGrade();
 
   // Atualizar título da grade
   const titulo = document.getElementById('gradeTitle');
