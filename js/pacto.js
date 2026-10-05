@@ -43,6 +43,7 @@ async function pactoViaN8n(tipo, body = {}) {
     ...rest,
     ...(unidId ? { unidId } : {}),
     ...(unidadeCache ? { unidade: unidadeCache } : {}),
+    ...(body.forceRefresh ? { forceRefresh: true } : {}),
   };
   const cacheKey = action + '|' + tipo + '|' + JSON.stringify(rest) + '|' + (unidadeCache || unidId || '');
   const cached = _pactoCache[cacheKey];
@@ -148,11 +149,44 @@ function pactoCalcularTotal(ativos, trancado, cancelado) {
   return Number(ativos) + Number(trancado || 0) + Number(cancelado || 0);
 }
 
+/** Data da última coleta no cache n8n/Postgres (null se ausente). */
+function pactoExtrairAtualizadoEm(lista) {
+  if (!lista?.length) return null;
+  let max = 0;
+  let iso = null;
+  lista.forEach(p => {
+    const raw = p?.atualizado_em || p?.atualizadoEm || p?.coletado_em || null;
+    if (!raw) return;
+    const t = new Date(raw).getTime();
+    if (!Number.isNaN(t) && t >= max) { max = t; iso = raw; }
+  });
+  return iso;
+}
+
+function pactoDiasDesdeColeta(iso) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function pactoFmtColeta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 // ── Busca professores do Treino Web com indicadores já calculados ────
-async function pactoBuscarProfessoresBI(empresaId, unidId) {
+async function pactoBuscarProfessoresBI(empresaId, unidId, opts) {
+  const o = opts || {};
   const data = await pactoViaN8n('bi', {
     empresaId: String(empresaId),
     unidId: unidId || pactoUnidadePorEmpresa(empresaId) || undefined,
+    forceRefresh: !!o.forceRefresh,
   });
   return pactoExtrairLista(data);
 }

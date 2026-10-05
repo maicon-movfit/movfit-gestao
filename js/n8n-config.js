@@ -28,6 +28,9 @@ const N8N_MATRICULADOS_URL = 'https://n8n2.mov.pro.br/webhook/matriculados_mes';
 /** Webhook de avaliações físicas atrasadas por unidade (POST). */
 const N8N_AVALIACOES_ATRASADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes_atrasadas';
 
+/** Webhook de avaliações físicas realizadas por unidade (POST). */
+const N8N_AVALIACOES_REALIZADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes_realizadas';
+
 function n8nPactoConfigOk() {
   return !!(N8N_PACTO_BASE && N8N_PROXY_TOKEN);
 }
