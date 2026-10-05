@@ -435,6 +435,11 @@ function matriculadosEnriquecerPayload(data, mapasPorUnid) {
   };
 }
 
+/** Matriculado do mês com avaliação realizada e treino montado na Janela. */
+function matriculadosJornadaCompleta(m) {
+  return m.avaliacao_realizada === true && !!m.com_treino;
+}
+
 function matriculadosResumoCruzamento(lista) {
   const total = lista.length;
   const naJanela = lista.filter(m => m._cruzamento?.janela).length;
@@ -443,6 +448,7 @@ function matriculadosResumoCruzamento(lista) {
   const comTreinoMontado = lista.filter(m => m.com_treino).length;
   const avaliacaoAtrasada = lista.filter(m => m.avaliacao_atrasada === true).length;
   const avaliacaoRealizada = lista.filter(m => m.avaliacao_realizada === true).length;
+  const jornadaCompleta = lista.filter(m => matriculadosJornadaCompleta(m)).length;
   const avaliacaoSemRegistro = lista.filter(m =>
     m.avaliacao_atrasada === false && m.avaliacao_realizada === false
   ).length;
@@ -453,7 +459,7 @@ function matriculadosResumoCruzamento(lista) {
   return {
     total, naJanela, emAtivos, temListaAtivos,
     comTreino, comTreinoMontado,
-    avaliacaoAtrasada, avaliacaoRealizada, avaliacaoSemRegistro, alertas,
+    avaliacaoAtrasada, avaliacaoRealizada, avaliacaoSemRegistro, jornadaCompleta, alertas,
   };
 }
 
@@ -709,6 +715,7 @@ function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao,
       if (jor === 'avaliacao_realizada') return m.avaliacao_realizada === true;
       if (jor === 'avaliacao_sem') return m.avaliacao_atrasada === false && m.avaliacao_realizada === false;
       if (jor === 'avaliacao_nao_verificada') return m.avaliacao_atrasada == null && m.avaliacao_realizada == null;
+      if (jor === 'jornada_completa') return matriculadosJornadaCompleta(m);
       if (jor === 'com_treino') return !!m.com_treino;
       if (jor === 'sem_treino') return !m.com_treino;
       return true;
@@ -767,6 +774,7 @@ function matriculadosRenderSelectJornada(val) {
   const v = val || 'todos';
   const opts = [
     ['todos', 'Jornada: todos'],
+    ['jornada_completa', 'Jornada: aval.+treino (completa)'],
     ['avaliacao_realizada', 'Jornada: avaliação realizada'],
     ['avaliacao_atrasada', 'Jornada: avaliação atrasada'],
     ['avaliacao_sem', 'Jornada: sem avaliação'],
@@ -982,13 +990,13 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
     ['Competência', matriculadosFmtCompetencia(competencia)],
-    ['Avaliação realizada', lista.length ? `${cruz.avaliacaoRealizada} (${Math.round(cruz.avaliacaoRealizada / lista.length * 100)}%)` : '0', '#34c47c'],
+    ['Jornada completa', lista.length ? `${cruz.jornadaCompleta} (${Math.round(cruz.jornadaCompleta / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Avaliação atrasada', lista.length ? `${cruz.avaliacaoAtrasada} (${Math.round(cruz.avaliacaoAtrasada / lista.length * 100)}%)` : '0', '#f05c5c'],
   ]);
 
   const distribuicao = matriculadosTblCol('Jornada', [
-    ['Sem avaliação', lista.length ? `${cruz.avaliacaoSemRegistro} (${Math.round(cruz.avaliacaoSemRegistro / lista.length * 100)}%)` : '0', '#f5a623'],
-    ['Com treino montado', lista.length ? `${cruz.comTreinoMontado} (${Math.round(cruz.comTreinoMontado / lista.length * 100)}%)` : '0', '#34c47c'],
+    ['Aval. realizada', lista.length ? `${cruz.avaliacaoRealizada} (${Math.round(cruz.avaliacaoRealizada / lista.length * 100)}%)` : '0', '#34c47c'],
+    ['Com treino montado', lista.length ? `${cruz.comTreinoMontado} (${Math.round(cruz.comTreinoMontado / lista.length * 100)}%)` : '0', '#378add'],
     ['Na Janela de Treino', lista.length ? `${cruz.naJanela} (${Math.round(cruz.naJanela / lista.length * 100)}%)` : '0', '#378add'],
     ['Precisam contato', precisaContato, precisaContato ? '#f05c5c' : 'var(--muted)'],
   ]);
@@ -1094,15 +1102,15 @@ async function matriculadosTrocarCompetencia(select, unidId) {
   });
 }
 
-function matriculadosAtualizarMetrica(unidId, data) {
-  const card = document.getElementById('dashMetricMatriculados');
+function matriculadosPreencherMetricCard(cardId, opts) {
+  const card = document.getElementById(cardId);
   if (!card) return;
-  const total = matriculadosGetTotal(unidId, data);
-  if (total == null) return;
+  const o = opts || {};
   const mv = card.querySelector('.mv');
   const ml = card.querySelector('.ml');
-  if (mv) mv.textContent = total.toLocaleString('pt-BR');
-  if (ml) ml.textContent = 'Matriculados no mês';
+  if (mv && o.valor != null) mv.textContent = o.valor;
+  if (ml && o.label) ml.textContent = o.label;
+  if (mv) mv.style.color = o.valorCor || '';
   let live = card.querySelector('.md-live');
   while (mv && mv.nextElementSibling && mv.nextElementSibling !== live) {
     mv.nextElementSibling.remove();
@@ -1113,8 +1121,46 @@ function matriculadosAtualizarMetrica(unidId, data) {
     live.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;';
     card.appendChild(live);
   }
+  if (o.sub != null) live.textContent = o.sub;
+}
+
+function matriculadosAtualizarMetrica(unidId, data, lista) {
+  const total = matriculadosGetTotal(unidId, data);
   const comp = data?.competencia;
-  live.textContent = comp ? matriculadosFmtCompetencia(comp) : 'Ao vivo';
+  const subComp = comp ? matriculadosFmtCompetencia(comp) : 'Ao vivo';
+
+  if (total != null) {
+    matriculadosPreencherMetricCard('dashMetricMatriculados', {
+      valor: total.toLocaleString('pt-BR'),
+      label: 'Matriculados no mês',
+      sub: subComp,
+    });
+  }
+
+  const cardAv = document.getElementById('dashMetricMatriculadosAvRealizada');
+  if (!cardAv) return;
+
+  if (!Array.isArray(lista)) {
+    matriculadosPreencherMetricCard('dashMetricMatriculadosAvRealizada', {
+      valor: '—',
+      label: 'C/ avaliação realizada',
+      sub: 'Carregando…',
+    });
+    return;
+  }
+
+  const n = lista.length;
+  const realizadas = lista.filter(m => m.avaliacao_realizada === true).length;
+  const jornadaOk = lista.filter(m => matriculadosJornadaCompleta(m)).length;
+  const pct = n ? Math.round(realizadas / n * 100) : 0;
+  matriculadosPreencherMetricCard('dashMetricMatriculadosAvRealizada', {
+    valor: jornadaOk.toLocaleString('pt-BR'),
+    label: 'Aval.+treino (mês)',
+    sub: n
+      ? `${jornadaOk} jornada completa · ${realizadas} c/ aval. (${pct}%) · ${subComp}`
+      : `Nenhum matriculado · ${subComp}`,
+    valorCor: jornadaOk > 0 ? '#34c47c' : undefined,
+  });
 }
 
 async function renderMatriculadosMes(unidId, forceRefresh) {
@@ -1176,7 +1222,7 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
       </div>
       <div class="janela-empty">Nenhum aluno matriculado nesta unidade no mês.</div>
     </div>`;
-    matriculadosAtualizarMetrica(unidId, data);
+    matriculadosAtualizarMetrica(unidId, data, []);
     return;
   }
 
@@ -1188,5 +1234,5 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
     historico: historicoAtualizado,
     competenciaAoVivo: data.competencia,
   });
-  matriculadosAtualizarMetrica(unidId, data);
+  matriculadosAtualizarMetrica(unidId, data, lista);
 }

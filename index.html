@@ -9123,6 +9123,7 @@ function renderDash(mesNome){atualizarCtxBar(mesNome);
   const metrics=[
     {l:'Total de alunos',v:tot,d:prev?tot-aT:null,up:true,id:'dashMetricTotalAtivos'},
     {l:'Matriculados no mês',v:'—',d:null,up:true,id:'dashMetricMatriculados',live:true},
+    {l:'Aval.+treino (mês)',v:'—',d:null,up:true,id:'dashMetricMatriculadosAvRealizada',live:true},
     {l:'Treinos em dia',v:emD,d:prev?emD-aE:null,up:true},
     {l:'Treinos a vencer',v:'—',d:null,up:false,id:'dashMetricAVencer',live:true},
     {l:'Vencidos',v:vec,d:prev?vec-aV:null,up:false},
