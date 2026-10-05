@@ -4,7 +4,8 @@
 // ════════════════════════════════════════════════════════════════════════
 
 const _matriculadosCache = { data: null, at: 0 };
-const _avaliacoesCache = { data: null, at: 0 };
+const _avaliacoesAtrasadasCache = { data: null, at: 0 };
+const _avaliacoesRealizadasCache = { data: null, at: 0 };
 const MATRICULADOS_CACHE_TTL_MS = 3 * 60 * 1000;
 const AVALIACOES_CACHE_TTL_MS = 3 * 60 * 1000;
 const MATRICULADOS_PAGE_SIZE = 10;
@@ -112,17 +113,16 @@ function avaliacoesNormalizarResposta(raw) {
   return null;
 }
 
-async function avaliacoesBuscarDados(forceRefresh) {
-  if (typeof N8N_AVALIACOES_ATRASADAS_URL === 'undefined' || !N8N_AVALIACOES_ATRASADAS_URL) {
-    return null;
+async function avaliacoesBuscarWebhook(url, cache, tag, forceRefresh) {
+  if (!url) return null;
+  if (!forceRefresh && cache.data &&
+    (Date.now() - cache.at) < AVALIACOES_CACHE_TTL_MS) {
+    return cache.data;
   }
-  if (!forceRefresh && _avaliacoesCache.data &&
-    (Date.now() - _avaliacoesCache.at) < AVALIACOES_CACHE_TTL_MS) {
-    return _avaliacoesCache.data;
-  }
-  if (window._avaliacoesInflightPromise) return window._avaliacoesInflightPromise;
+  const inflightKey = '_avInflight_' + tag;
+  if (window[inflightKey]) return window[inflightKey];
 
-  window._avaliacoesInflightPromise = (async () => {
+  window[inflightKey] = (async () => {
     try {
       const headers = {
         Accept: 'application/json',
@@ -131,33 +131,71 @@ async function avaliacoesBuscarDados(forceRefresh) {
       if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
         headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
       }
-      const resp = await fetch(N8N_AVALIACOES_ATRASADAS_URL, {
+      const resp = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({}),
       });
       if (!resp.ok) {
-        console.warn('[AVALIACOES] Webhook HTTP', resp.status);
+        console.warn(`[AVALIACOES ${tag}] Webhook HTTP`, resp.status);
         return null;
       }
       const raw = await resp.json();
       const data = avaliacoesNormalizarResposta(raw);
       if (!data?.unidades) {
-        console.warn('[AVALIACOES] Resposta inválida');
+        console.warn(`[AVALIACOES ${tag}] Resposta inválida`);
         return null;
       }
-      _avaliacoesCache.data = data;
-      _avaliacoesCache.at = Date.now();
+      cache.data = data;
+      cache.at = Date.now();
       return data;
     } catch (e) {
-      console.warn('[AVALIACOES] Erro:', e.message);
+      console.warn(`[AVALIACOES ${tag}] Erro:`, e.message);
       return null;
     } finally {
-      window._avaliacoesInflightPromise = null;
+      window[inflightKey] = null;
     }
   })();
 
-  return window._avaliacoesInflightPromise;
+  return window[inflightKey];
+}
+
+async function avaliacoesBuscarAtrasadas(forceRefresh) {
+  if (typeof N8N_AVALIACOES_ATRASADAS_URL === 'undefined' || !N8N_AVALIACOES_ATRASADAS_URL) {
+    return null;
+  }
+  return avaliacoesBuscarWebhook(
+    N8N_AVALIACOES_ATRASADAS_URL,
+    _avaliacoesAtrasadasCache,
+    'atrasadas',
+    forceRefresh
+  );
+}
+
+async function avaliacoesBuscarRealizadas(forceRefresh) {
+  if (typeof N8N_AVALIACOES_REALIZADAS_URL === 'undefined' || !N8N_AVALIACOES_REALIZADAS_URL) {
+    return null;
+  }
+  return avaliacoesBuscarWebhook(
+    N8N_AVALIACOES_REALIZADAS_URL,
+    _avaliacoesRealizadasCache,
+    'realizadas',
+    forceRefresh
+  );
+}
+
+async function avaliacoesBuscarCruzamentoDados(forceRefresh) {
+  const [atrasadas, realizadas] = await Promise.all([
+    avaliacoesBuscarAtrasadas(forceRefresh).catch(() => null),
+    avaliacoesBuscarRealizadas(forceRefresh).catch(() => null),
+  ]);
+  return { atrasadas, realizadas };
+}
+
+function matriculadosMontarMapaAvaliacoes(dataAvaliacoes, unidId, tipo) {
+  if (!dataAvaliacoes?.[tipo]) return new Map();
+  const u = matriculadosEncontrarUnidade(dataAvaliacoes[tipo], unidId);
+  return matriculadosMontarMapaAlunos(u?.alunos || []);
 }
 
 function matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes) {
@@ -176,19 +214,21 @@ function matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataA
     ativosMap = matriculadosMontarMapaAlunos(u?.alunos || []);
   }
 
-  let avaliacoesMap = new Map();
-  if (dataAvaliacoes) {
-    const u = matriculadosEncontrarUnidade(dataAvaliacoes, unidId);
-    avaliacoesMap = matriculadosMontarMapaAlunos(u?.alunos || []);
-  }
+  const avaliacoesAtrasadasMap = matriculadosMontarMapaAvaliacoes(dataAvaliacoes, unidId, 'atrasadas');
+  const avaliacoesRealizadasMap = matriculadosMontarMapaAvaliacoes(dataAvaliacoes, unidId, 'realizadas');
 
-  return { janela: janelaMap, ativos: ativosMap, avaliacoes: avaliacoesMap };
+  return {
+    janela: janelaMap,
+    ativos: ativosMap,
+    avaliacoesAtrasadas: avaliacoesAtrasadasMap,
+    avaliacoesRealizadas: avaliacoesRealizadasMap,
+  };
 }
 
 function matriculadosMapasPorUnidade(dataJanela, dataAtivos, dataAvaliacoes) {
   const out = {};
-  Object.keys(MATRICULADOS_UNIDADE_MAP).forEach(unidId => {
-    out[unidId] = matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes);
+  Object.keys(MATRICULADOS_UNIDADE_MAP).forEach(uid => {
+    out[uid] = matriculadosMontarMapasCruzamento(uid, dataJanela, dataAtivos, dataAvaliacoes);
   });
   return out;
 }
@@ -201,7 +241,7 @@ async function matriculadosBuscarCruzamentos(unidId, forceRefresh) {
     typeof totalAtivosBuscarDados === 'function'
       ? totalAtivosBuscarDados(forceRefresh).catch(() => null)
       : Promise.resolve(null),
-    avaliacoesBuscarDados(forceRefresh).catch(() => null),
+    avaliacoesBuscarCruzamentoDados(forceRefresh).catch(() => null),
   ]);
   if (unidId) {
     return matriculadosMontarMapasCruzamento(unidId, dataJanela, dataAtivos, dataAvaliacoes);
@@ -238,25 +278,51 @@ function matriculadosParseAvaliacao(status) {
 }
 
 /**
- * Avaliação via webhook avaliacoes_atrasadas (lista de atrasados).
- * Fora da lista = não atrasada (não implica que já fez avaliação).
+ * Avaliação via webhooks avaliacoes_atrasadas + avaliacoes_realizadas.
+ * Prioridade: atrasada > realizada > sem avaliação > fallback matriculados.
  */
-function matriculadosResolverAvaliacao(m, avAtrasada, temListaAvaliacoes) {
+function matriculadosResolverAvaliacao(m, avAtrasada, avRealizada, ctx) {
+  const temAtrasadas = ctx?.temListaAtrasadas || false;
+  const temRealizadas = ctx?.temListaRealizadas || false;
+  const proxima = (av) => av?.data_proxima || av?.data_proxima_avaliacao || null;
+
   if (avAtrasada) {
     return {
       avaliacao_atrasada: true,
-      avaliacao_em_dia: false,
+      avaliacao_realizada: false,
       avaliacao_label: 'Atrasada',
       avaliacao_tipo: 'alert',
       data_avaliacao: avAtrasada.data_avaliacao || null,
-      data_proxima_avaliacao: avAtrasada.data_proxima || null,
+      data_proxima_avaliacao: proxima(avAtrasada),
       nome_avaliador: avAtrasada.nome_avaliador || null,
     };
   }
-  if (temListaAvaliacoes) {
+  if (avRealizada) {
     return {
       avaliacao_atrasada: false,
-      avaliacao_em_dia: true,
+      avaliacao_realizada: true,
+      avaliacao_label: 'Realizada',
+      avaliacao_tipo: 'ok',
+      data_avaliacao: avRealizada.data_avaliacao || null,
+      data_proxima_avaliacao: proxima(avRealizada),
+      nome_avaliador: avRealizada.nome_avaliador || null,
+    };
+  }
+  if (temRealizadas || temAtrasadas) {
+    if (temRealizadas) {
+      return {
+        avaliacao_atrasada: false,
+        avaliacao_realizada: false,
+        avaliacao_label: 'Sem avaliação',
+        avaliacao_tipo: 'warn',
+        data_avaliacao: null,
+        data_proxima_avaliacao: null,
+        nome_avaliador: null,
+      };
+    }
+    return {
+      avaliacao_atrasada: false,
+      avaliacao_realizada: null,
       avaliacao_label: 'Não atrasada',
       avaliacao_tipo: 'ok',
       data_avaliacao: null,
@@ -267,7 +333,7 @@ function matriculadosResolverAvaliacao(m, avAtrasada, temListaAvaliacoes) {
   const aval = matriculadosParseAvaliacao(m.avaliacao_status);
   return {
     avaliacao_atrasada: null,
-    avaliacao_em_dia: null,
+    avaliacao_realizada: null,
     avaliacao_label: aval.label,
     avaliacao_tipo: aval.tipo,
     data_avaliacao: null,
@@ -315,12 +381,17 @@ function matriculadosEnriquecerAluno(m, mapas) {
   const key = matriculadosNormalizarMatricula(m.matricula);
   const j = mapas?.janela?.get(key) || null;
   const a = mapas?.ativos?.get(key) || null;
-  const av = mapas?.avaliacoes?.get(key) || null;
-  const temListaAvaliacoes = (mapas?.avaliacoes?.size || 0) > 0;
+  const avAtrasada = mapas?.avaliacoesAtrasadas?.get(key) || null;
+  const avRealizada = mapas?.avaliacoesRealizadas?.get(key) || null;
+  const temListaAtrasadas = (mapas?.avaliacoesAtrasadas?.size || 0) > 0;
+  const temListaRealizadas = (mapas?.avaliacoesRealizadas?.size || 0) > 0;
   const statusTreino = j?.status_treino || null;
   const treinoLabel = matriculadosTreinoLabel(statusTreino, m.treino_status)
     || (j ? 'Sem status' : 'Não encontrado');
-  const aval = matriculadosResolverAvaliacao(m, av, temListaAvaliacoes);
+  const aval = matriculadosResolverAvaliacao(m, avAtrasada, avRealizada, {
+    temListaAtrasadas,
+    temListaRealizadas,
+  });
   const comTreino = matriculadosTemTreinoMontado(j, statusTreino);
 
   return {
@@ -336,9 +407,11 @@ function matriculadosEnriquecerAluno(m, mapas) {
     _cruzamento: {
       janela: !!j,
       ativos: !!a,
-      avaliacoes: !!av,
+      avaliacaoAtrasada: !!avAtrasada,
+      avaliacaoRealizada: !!avRealizada,
       temListaAtivos: (mapas?.ativos?.size || 0) > 0,
-      temListaAvaliacoes,
+      temListaAtrasadas,
+      temListaRealizadas,
     },
   };
 }
@@ -369,14 +442,18 @@ function matriculadosResumoCruzamento(lista) {
   const temListaAtivos = lista.some(m => m._cruzamento?.temListaAtivos);
   const comTreinoMontado = lista.filter(m => m.com_treino).length;
   const avaliacaoAtrasada = lista.filter(m => m.avaliacao_atrasada === true).length;
-  const avaliacaoNaoAtrasada = lista.filter(m => m.avaliacao_em_dia === true).length;
+  const avaliacaoRealizada = lista.filter(m => m.avaliacao_realizada === true).length;
+  const avaliacaoSemRegistro = lista.filter(m =>
+    m.avaliacao_atrasada === false && m.avaliacao_realizada === false
+  ).length;
   const comTreino = lista.filter(m =>
     m.status_treino === 'EM_DIA' || /em dia/i.test(String(m.treino_status || ''))
   ).length;
   const alertas = lista.filter(m => matriculadosValidacaoIssues(m).length > 0).length;
   return {
     total, naJanela, emAtivos, temListaAtivos,
-    comTreino, comTreinoMontado, avaliacaoAtrasada, avaliacaoNaoAtrasada, alertas,
+    comTreino, comTreinoMontado,
+    avaliacaoAtrasada, avaliacaoRealizada, avaliacaoSemRegistro, alertas,
   };
 }
 
@@ -629,8 +706,9 @@ function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao,
   if (jor !== 'todos') {
     out = out.filter(m => {
       if (jor === 'avaliacao_atrasada') return m.avaliacao_atrasada === true;
-      if (jor === 'avaliacao_nao_atrasada') return m.avaliacao_em_dia === true;
-      if (jor === 'avaliacao_nao_verificada') return m.avaliacao_atrasada == null;
+      if (jor === 'avaliacao_realizada') return m.avaliacao_realizada === true;
+      if (jor === 'avaliacao_sem') return m.avaliacao_atrasada === false && m.avaliacao_realizada === false;
+      if (jor === 'avaliacao_nao_verificada') return m.avaliacao_atrasada == null && m.avaliacao_realizada == null;
       if (jor === 'com_treino') return !!m.com_treino;
       if (jor === 'sem_treino') return !m.com_treino;
       return true;
@@ -689,8 +767,9 @@ function matriculadosRenderSelectJornada(val) {
   const v = val || 'todos';
   const opts = [
     ['todos', 'Jornada: todos'],
+    ['avaliacao_realizada', 'Jornada: avaliação realizada'],
     ['avaliacao_atrasada', 'Jornada: avaliação atrasada'],
-    ['avaliacao_nao_atrasada', 'Jornada: avaliação não atrasada'],
+    ['avaliacao_sem', 'Jornada: sem avaliação'],
     ['avaliacao_nao_verificada', 'Jornada: avaliação não verificada'],
     ['com_treino', 'Jornada: com treino montado'],
     ['sem_treino', 'Jornada: sem treino montado'],
@@ -903,14 +982,14 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
     ['Competência', matriculadosFmtCompetencia(competencia)],
+    ['Avaliação realizada', lista.length ? `${cruz.avaliacaoRealizada} (${Math.round(cruz.avaliacaoRealizada / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Avaliação atrasada', lista.length ? `${cruz.avaliacaoAtrasada} (${Math.round(cruz.avaliacaoAtrasada / lista.length * 100)}%)` : '0', '#f05c5c'],
-    ['Com treino montado', lista.length ? `${cruz.comTreinoMontado} (${Math.round(cruz.comTreinoMontado / lista.length * 100)}%)` : '0', '#34c47c'],
   ]);
 
   const distribuicao = matriculadosTblCol('Jornada', [
-    ['Avaliação não atrasada', lista.length ? `${cruz.avaliacaoNaoAtrasada} (${Math.round(cruz.avaliacaoNaoAtrasada / lista.length * 100)}%)` : '0', '#34c47c'],
+    ['Sem avaliação', lista.length ? `${cruz.avaliacaoSemRegistro} (${Math.round(cruz.avaliacaoSemRegistro / lista.length * 100)}%)` : '0', '#f5a623'],
+    ['Com treino montado', lista.length ? `${cruz.comTreinoMontado} (${Math.round(cruz.comTreinoMontado / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Na Janela de Treino', lista.length ? `${cruz.naJanela} (${Math.round(cruz.naJanela / lista.length * 100)}%)` : '0', '#378add'],
-    ['Treino em dia', lista.length ? `${comTreino} (${Math.round(comTreino / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Precisam contato', precisaContato, precisaContato ? '#f05c5c' : 'var(--muted)'],
   ]);
 
@@ -921,7 +1000,7 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const sinc = matriculadosTblCol('Sincronização', [
     ['Fonte', fonteLabel],
     ['Competência', competencia],
-    ['Cruzamento', 'Matrícula → Janela + Avaliações atrasadas'],
+    ['Cruzamento', 'Matrícula → Janela + Aval. realizadas/atrasadas'],
     ...linhasAtivos,
     ['Histórico (meses)', mesesSalvos],
     ['Gerado em', data.gerado_em ? matriculadosFmtData(data.gerado_em) : (o.sincronizado_em ? matriculadosFmtData(o.sincronizado_em) : '—')],
@@ -1050,8 +1129,10 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
   if (forceRefresh) {
     _matriculadosCache.data = null;
     _matriculadosCache.at = 0;
-    _avaliacoesCache.data = null;
-    _avaliacoesCache.at = 0;
+    _avaliacoesAtrasadasCache.data = null;
+    _avaliacoesAtrasadasCache.at = 0;
+    _avaliacoesRealizadasCache.data = null;
+    _avaliacoesRealizadasCache.at = 0;
   }
 
   el.innerHTML = `<div class="janela-card janela-loading">
