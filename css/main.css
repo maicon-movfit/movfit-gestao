@@ -1688,6 +1688,46 @@ tbody tr:last-child td{border-bottom:none;}
   padding:0 2px;align-self:center;
 }
 .matric-view-onboarding,.matric-view-frequencia{animation:janelaFadeIn .2s ease;}
+.matric-head-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.matric-relatorio-btn{background:rgba(55,138,221,.08)!important;border-color:rgba(55,138,221,.35)!important;color:#378add!important;}
+.matric-relatorio-btn:hover{background:rgba(55,138,221,.15)!important;color:#2563b0!important;}
+.matric-rel-modal{
+  position:fixed;inset:0;z-index:850;display:flex;align-items:center;justify-content:center;padding:16px;
+}
+.matric-rel-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);}
+.matric-rel-panel{
+  position:relative;z-index:1;width:100%;max-width:520px;max-height:90vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--sh4);
+}
+.matric-rel-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding:16px 18px;border-bottom:1px solid var(--border);
+}
+.matric-rel-title{font-size:15px;font-weight:700;color:var(--text);}
+.matric-rel-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.matric-rel-close{
+  background:var(--bg);border:1px solid var(--border);border-radius:8px;
+  width:32px;height:32px;cursor:pointer;color:var(--muted);font-size:14px;
+}
+.matric-rel-body{padding:16px 18px 20px;}
+.matric-rel-tipo{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.matric-rel-radio{font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;}
+.matric-rel-preview{
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;
+}
+.matric-rel-preview-hd{font-size:12px;font-weight:700;color:#1a3a5c;margin-bottom:8px;}
+.matric-rel-preview-grid{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);}
+.matric-rel-acoes{display:flex;flex-wrap:wrap;gap:8px;}
+.matric-rel-acoes .btn{font-size:11px;padding:8px 12px;}
+.matric-rel-hist{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow:auto;}
+.matric-rel-hist-item{
+  display:flex;justify-content:space-between;gap:8px;font-size:11px;
+  padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);
+}
+.matric-rel-hist-item em{color:var(--muted);font-style:normal;font-size:10px;}
+.matric-rel-hist-meta{color:var(--muted);font-size:10px;white-space:nowrap;}
+.matric-rel-hist-empty{font-size:11px;color:var(--muted);padding:8px 0;}
 .janela-card{
   background:var(--surface);
   border:1px solid var(--border);

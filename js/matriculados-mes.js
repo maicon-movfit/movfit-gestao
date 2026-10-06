@@ -1214,7 +1214,10 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
         <div class="janela-title">Matriculados no mês — ${typeof esc === 'function' ? esc(nomeUnidade) : nomeUnidade}</div>
         <div class="janela-sub">${matriculadosFmtCompetencia(competencia)} · ${fonteLabel}${fonte === 'historico' ? ' · consulta ao histórico interno' : ''}${data.gerado_em && fonte === 'live' ? ' · Atualizado ' + matriculadosFmtData(data.gerado_em) : ''}</div>
       </div>
-      <button type="button" class="janela-refresh" onclick="renderMatriculadosMes('${unidId}', true)" title="Atualizar ao vivo">↻ Atualizar</button>
+      <div class="matric-head-actions">
+        <button type="button" class="janela-refresh matric-relatorio-btn" onclick="matriculadosAbrirModalRelatorio('${unidId}')" title="Gerar relatório ou exportar">📄 Relatório</button>
+        <button type="button" class="janela-refresh" onclick="renderMatriculadosMes('${unidId}', true)" title="Atualizar ao vivo">↻ Atualizar</button>
+      </div>
     </div>
     <div class="janela-tables">${indicador}${distribuicao}${sinc}</div>
     ${funil}
@@ -1447,4 +1450,431 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
     competenciaAoVivo: data.competencia,
   });
   matriculadosAtualizarMetrica(unidId, data, lista);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// RELATÓRIOS — mensal / semanal · Firestore · CSV · PDF (impressão)
+// ════════════════════════════════════════════════════════════════════════
+
+function matriculadosColRelatorios(unidId) {
+  if (typeof db === 'undefined' || !unidId) return null;
+  return db.collection('unidades').doc(unidId).collection('matriculados_relatorios');
+}
+
+function matriculadosIsoSemana(d) {
+  const dt = d ? new Date(d) : new Date();
+  const utc = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const y = utc.getUTCFullYear();
+  const w = Math.ceil((((utc - new Date(Date.UTC(y, 0, 1))) / 86400000) + 1) / 7);
+  return `${y}-W${String(w).padStart(2, '0')}`;
+}
+
+function matriculadosFmtPeriodoSemana(iso) {
+  const m = String(iso || '').match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return iso || '—';
+  return `Semana ${Number(m[2])} · ${m[1]}`;
+}
+
+function matriculadosInicioSemana(d) {
+  const dt = d ? new Date(d) : new Date();
+  const day = dt.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const ini = new Date(dt);
+  ini.setHours(0, 0, 0, 0);
+  ini.setDate(ini.getDate() + diff);
+  return ini;
+}
+
+function matriculadosFimSemana(d) {
+  const ini = matriculadosInicioSemana(d);
+  const fim = new Date(ini);
+  fim.setDate(fim.getDate() + 6);
+  fim.setHours(23, 59, 59, 999);
+  return fim;
+}
+
+function matriculadosAlunoNaSemana(m, refDate) {
+  if (!m.data_lancamento) return false;
+  const dt = new Date(m.data_lancamento);
+  if (Number.isNaN(dt.getTime())) return false;
+  return dt >= matriculadosInicioSemana(refDate) && dt <= matriculadosFimSemana(refDate);
+}
+
+function matriculadosObterListaDoCard(unidId) {
+  const card = document.querySelector(`.matric-card[data-unid-id="${unidId}"]`);
+  if (!card) return [];
+  try {
+    return JSON.parse(card.dataset.matriculados || '[]');
+  } catch (_) {
+    return [];
+  }
+}
+
+function matriculadosObterMetaDoCard(unidId) {
+  const card = document.querySelector(`.matric-card[data-unid-id="${unidId}"]`);
+  const titulo = card?.querySelector('.janela-title')?.textContent || '';
+  const sub = card?.querySelector('.janela-sub')?.textContent || '';
+  const competenciaSel = card?.dataset.competenciaSel || '__live__';
+  const nomeUnidade = (typeof UNIDADES !== 'undefined'
+    ? UNIDADES.find(u => u.id === unidId)?.nome
+    : null) || unidId;
+  return { titulo, sub, competenciaSel, nomeUnidade };
+}
+
+function matriculadosMontarResumoRelatorio(lista) {
+  const cruz = matriculadosResumoCruzamento(lista);
+  const onboarding = matriculadosResumoOnboarding(lista);
+  const buckets = typeof janelaMontarFreqBuckets === 'function'
+    ? janelaMontarFreqBuckets(lista) : null;
+  const freq = buckets ? {
+    normal: buckets.normal.length,
+    acompanhar: buckets.acompanhar.length,
+    alerta: buckets.alerta.length,
+    critico: buckets.critico.length,
+    sem_registro: buckets.sem_registro.length,
+  } : null;
+  return { ...cruz, ...onboarding, frequencia: freq };
+}
+
+function matriculadosLinhaExportacao(m) {
+  const cls = typeof janelaClassificarFrequencia === 'function'
+    ? janelaClassificarFrequencia(m.ultimo_acesso) : { label: '—', acao: '—' };
+  const dias = typeof janelaFmtDiasSemAcessar === 'function'
+    ? janelaFmtDiasSemAcessar(m.ultimo_acesso).txt : '—';
+  let jornada = 'Pendente';
+  if (matriculadosJornadaCompleta(m)) jornada = 'Completa';
+  else if (m.avaliacao_atrasada) jornada = 'Bio atrasada';
+  else if (m.avaliacao_realizada && !m.com_treino) jornada = 'Só bio';
+  else if (!m.avaliacao_realizada && m.com_treino) jornada = 'Só treino';
+  return {
+    nome: m.nome_aluno || '',
+    matricula: m.matricula || '',
+    plano: m.plano || '',
+    data_matricula: matriculadosFmtDataCurta(m.data_lancamento),
+    situacao: m.situacao_cliente_descricao || m.situacao_cliente || '',
+    jornada,
+    bio: m.avaliacao_label || (m.avaliacao_realizada ? 'Realizada' : m.avaliacao_atrasada ? 'Atrasada' : '—'),
+    com_treino: m.com_treino ? 'Sim' : 'Não',
+    situacao_treino: m.treino_status || m.status_treino || '',
+    ultimo_acesso: matriculadosFmtDataCurta(m.ultimo_acesso),
+    dias_sem_vir: dias,
+    frequencia: cls.label,
+    acao_sugerida: cls.acao,
+    professor: m.nome_professor || '',
+    programa: m.nome_programa || '',
+  };
+}
+
+function matriculadosCsvEsc(val) {
+  const s = String(val ?? '');
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function matriculadosMontarPayloadRelatorio(unidId, lista, tipo, opts) {
+  const o = opts || {};
+  const agora = new Date();
+  const competencia = o.competencia || _matriculadosCache.data?.competencia || agora.toISOString().slice(0, 7);
+  const periodo = tipo === 'semanal' ? matriculadosIsoSemana(agora) : competencia;
+  const listaSemana = lista.filter(m => matriculadosAlunoNaSemana(m, agora));
+  const detalhe = lista;
+  const meta = matriculadosObterMetaDoCard(unidId);
+  return {
+    tipo,
+    periodo,
+    competencia,
+    unidadeId: unidId,
+    unidade_nome: meta.nomeUnidade,
+    gerado_em: agora.toISOString(),
+    fonte: o.fonte || (meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico'),
+    resumo_mes: matriculadosMontarResumoRelatorio(lista),
+    resumo_detalhe: matriculadosMontarResumoRelatorio(detalhe),
+    novos_semana: listaSemana.length,
+    alunos: detalhe.map(matriculadosLinhaExportacao),
+    total_mes: lista.length,
+    total_detalhe: detalhe.length,
+  };
+}
+
+function matriculadosExportarCSV(payload) {
+  const cols = [
+    ['nome', 'Aluno'], ['matricula', 'Matrícula'], ['plano', 'Plano'],
+    ['data_matricula', 'Data matrícula'], ['situacao', 'Situação'], ['jornada', 'Jornada'],
+    ['bio', 'Bio'], ['com_treino', 'Com treino'], ['situacao_treino', 'Situação treino'],
+    ['ultimo_acesso', 'Último acesso'], ['dias_sem_vir', 'Dias s/ vir'],
+    ['frequencia', 'Frequência'], ['acao_sugerida', 'Ação sugerida'],
+    ['professor', 'Professor'], ['programa', 'Programa'],
+  ];
+  const header = cols.map(([, lbl]) => matriculadosCsvEsc(lbl)).join(';');
+  const rows = (payload.alunos || []).map(a =>
+    cols.map(([k]) => matriculadosCsvEsc(a[k])).join(';')
+  );
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + header + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `matriculados_${payload.tipo}_${payload.periodo}_${payload.unidadeId}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function matriculadosHtmlRelatorio(payload) {
+  const r = payload.resumo_mes;
+  const rd = payload.resumo_detalhe;
+  const f = r.frequencia || {};
+  const tituloTipo = payload.tipo === 'semanal'
+    ? `Relatório semanal — ${matriculadosFmtPeriodoSemana(payload.periodo)}`
+    : `Relatório mensal — ${matriculadosFmtCompetencia(payload.competencia)}`;
+  const escH = (s) => (typeof esc === 'function' ? esc(String(s ?? '')) : String(s ?? ''));
+
+  const tblRows = (payload.alunos || []).slice(0, 200).map(a => `<tr>
+    <td>${escH(a.nome)}</td>
+    <td>${escH(a.matricula)}</td>
+    <td>${escH(a.data_matricula)}</td>
+    <td>${escH(a.jornada)}</td>
+    <td>${escH(a.bio)}</td>
+    <td>${escH(a.com_treino)}</td>
+    <td>${escH(a.dias_sem_vir)}</td>
+    <td>${escH(a.frequencia)}</td>
+    <td>${escH(a.acao_sugerida)}</td>
+  </tr>`).join('');
+
+  const extraSem = payload.tipo === 'semanal'
+    ? `<p class="sub">Novos matriculados na semana: <strong>${payload.novos_semana}</strong> · Total do mês: <strong>${payload.total_mes}</strong></p>`
+    : '';
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>${escH(tituloTipo)}</title>
+<style>
+  body{font-family:Inter,Arial,sans-serif;color:#111;margin:24px;font-size:11pt;}
+  h1{font-size:16pt;margin:0 0 4px;}
+  .sub{color:#666;font-size:9pt;margin:0 0 16px;}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  .kpi{border:1px solid #e5e7eb;border-radius:8px;padding:10px;text-align:center;}
+  .kpi-v{font-size:18pt;font-weight:700;color:#1a3a5c;}
+  .kpi-l{font-size:8pt;color:#666;margin-top:4px;text-transform:uppercase;}
+  .sec{font-size:9pt;font-weight:700;text-transform:uppercase;color:#1a3a5c;margin:16px 0 8px;}
+  table{width:100%;border-collapse:collapse;font-size:8.5pt;}
+  th,td{border:1px solid #e5e7eb;padding:5px 6px;text-align:left;}
+  th{background:#1a3a5c;color:#fff;}
+  tr:nth-child(even){background:#f9fafb;}
+  @media print{body{margin:12mm;} .no-print{display:none;}}
+</style></head><body>
+  <h1>${escH(tituloTipo)}</h1>
+  <p class="sub">${escH(payload.unidade_nome)} · Gerado em ${matriculadosFmtData(payload.gerado_em)}${extraSem}</p>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-v">${rd.total ?? payload.total_detalhe}</div><div class="kpi-l">Matriculados no mês</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#34c47c">${rd.avaliacaoRealizada ?? rd.bio ?? 0}</div><div class="kpi-l">Bio feita</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#378add">${rd.comTreinoMontado ?? rd.treino ?? 0}</div><div class="kpi-l">Com treino</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#34c47c">${rd.jornadaCompleta ?? rd.completa ?? 0}</div><div class="kpi-l">Jornada completa</div></div>
+  </div>
+  <div class="sec">Frequência de acesso (mês)</div>
+  <div class="kpis" style="grid-template-columns:repeat(5,1fr);">
+    <div class="kpi"><div class="kpi-v" style="color:#34c47c;font-size:14pt">${f.normal ?? 0}</div><div class="kpi-l">0–6 dias</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#378add;font-size:14pt">${f.acompanhar ?? 0}</div><div class="kpi-l">7–15 dias</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#f5a623;font-size:14pt">${f.alerta ?? 0}</div><div class="kpi-l">16–30 dias</div></div>
+    <div class="kpi"><div class="kpi-v" style="color:#f05c5c;font-size:14pt">${f.critico ?? 0}</div><div class="kpi-l">31+ dias</div></div>
+    <div class="kpi"><div class="kpi-v" style="font-size:14pt">${f.sem_registro ?? 0}</div><div class="kpi-l">Sem registro</div></div>
+  </div>
+  <div class="sec">Detalhamento (${payload.alunos.length} aluno${payload.alunos.length !== 1 ? 's' : ''})</div>
+  <table><thead><tr>
+    <th>Aluno</th><th>Matrícula</th><th>Matrícula em</th><th>Jornada</th><th>Bio</th><th>Treino</th><th>Dias s/ vir</th><th>Frequência</th><th>Ação</th>
+  </tr></thead><tbody>${tblRows || '<tr><td colspan="9">Nenhum aluno</td></tr>'}</tbody></table>
+  ${payload.alunos.length > 200 ? '<p class="sub">Exibidos 200 primeiros — exporte CSV para lista completa.</p>' : ''}
+  <p class="sub no-print" style="margin-top:20px;">Use Ctrl+P ou o botão Imprimir para salvar em PDF.</p>
+</body></html>`;
+}
+
+function matriculadosImprimirRelatorio(payload) {
+  const w = window.open('', '_blank');
+  if (!w) {
+    alert('Permita pop-ups para gerar o PDF.');
+    return;
+  }
+  w.document.write(matriculadosHtmlRelatorio(payload));
+  w.document.close();
+  w.onload = () => setTimeout(() => w.print(), 300);
+}
+
+async function matriculadosSalvarRelatorio(unidId, payload) {
+  const col = matriculadosColRelatorios(unidId);
+  if (!col) {
+    if (typeof mostrarToast === 'function') mostrarToast('Firestore indisponível — exporte CSV/PDF.');
+    return false;
+  }
+  const docId = `${payload.tipo}_${payload.periodo}`;
+  try {
+    await col.doc(docId).set({
+      ...payload,
+      salvo_em: new Date().toISOString(),
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.warn('[MATRICULADOS] Erro ao salvar relatório', e.message);
+    return false;
+  }
+}
+
+async function matriculadosListarRelatorios(unidId, limite) {
+  const col = matriculadosColRelatorios(unidId);
+  if (!col) return [];
+  try {
+    const snap = await col.orderBy('gerado_em', 'desc').limit(limite || 8).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('[MATRICULADOS] Erro ao listar relatórios', e.message);
+    return [];
+  }
+}
+
+function matriculadosRenderPreviewRelatorio(payload) {
+  const r = payload.resumo_detalhe;
+  const titulo = payload.tipo === 'semanal'
+    ? matriculadosFmtPeriodoSemana(payload.periodo)
+    : matriculadosFmtCompetencia(payload.competencia);
+  return `<div class="matric-rel-preview">
+    <div class="matric-rel-preview-hd">${titulo} · ${payload.tipo === 'semanal' ? 'Semanal' : 'Mensal'}</div>
+    <div class="matric-rel-preview-grid">
+      <span><strong>${payload.total_detalhe}</strong> alunos no detalhe</span>
+      <span><strong style="color:#34c47c">${r.jornadaCompleta ?? r.completa ?? 0}</strong> jornada completa</span>
+      <span><strong style="color:#34c47c">${r.avaliacaoRealizada ?? r.bio ?? 0}</strong> bio feita</span>
+      <span><strong style="color:#378add">${r.comTreinoMontado ?? r.treino ?? 0}</strong> com treino</span>
+      ${payload.tipo === 'semanal' ? `<span><strong>${payload.novos_semana}</strong> novos na semana · ${payload.total_mes} no mês</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function matriculadosRenderHistoricoRelatorios(items) {
+  if (!items.length) {
+    return '<div class="matric-rel-hist-empty">Nenhum registro salvo ainda.</div>';
+  }
+  return `<div class="matric-rel-hist">${items.map(it => {
+    const lbl = it.tipo === 'semanal'
+      ? matriculadosFmtPeriodoSemana(it.periodo)
+      : matriculadosFmtCompetencia(it.competencia || it.periodo);
+    const dt = it.salvo_em || it.gerado_em;
+    return `<div class="matric-rel-hist-item">
+      <span>${lbl} <em>(${it.tipo})</em></span>
+      <span class="matric-rel-hist-meta">${dt ? matriculadosFmtData(dt) : '—'} · ${it.total_detalhe ?? it.alunos?.length ?? 0} alunos</span>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function matriculadosEnsureModalRelatorio() {
+  if (document.getElementById('matricRelModal')) return;
+  const el = document.createElement('div');
+  el.id = 'matricRelModal';
+  el.className = 'matric-rel-modal';
+  el.style.display = 'none';
+  el.innerHTML = `<div class="matric-rel-backdrop" onclick="matriculadosFecharModalRelatorio()"></div>
+    <div class="matric-rel-panel" role="dialog" aria-labelledby="matricRelTitulo">
+      <div class="matric-rel-head">
+        <div>
+          <div id="matricRelTitulo" class="matric-rel-title">Relatório — Matriculados</div>
+          <div id="matricRelSub" class="matric-rel-sub"></div>
+        </div>
+        <button type="button" class="matric-rel-close" onclick="matriculadosFecharModalRelatorio()" aria-label="Fechar">✕</button>
+      </div>
+      <div class="matric-rel-body">
+        <div class="matric-rel-tipo">
+          <label class="matric-rel-radio"><input type="radio" name="matricRelTipo" value="mensal" checked> Mensal (competência)</label>
+          <label class="matric-rel-radio"><input type="radio" name="matricRelTipo" value="semanal"> Semanal (snapshot + novos na semana)</label>
+        </div>
+        <div id="matricRelPreview"></div>
+        <div class="matric-rel-acoes">
+          <button type="button" class="btn primary" onclick="matriculadosAcaoRelatorio('salvar')">💾 Registrar</button>
+          <button type="button" class="btn" onclick="matriculadosAcaoRelatorio('csv')">⬇ CSV</button>
+          <button type="button" class="btn" onclick="matriculadosAcaoRelatorio('pdf')">📄 PDF / Imprimir</button>
+        </div>
+        <div class="sec" style="margin-top:16px;margin-bottom:6px;">Registros salvos</div>
+        <div id="matricRelHistorico"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  el.querySelectorAll('input[name="matricRelTipo"]').forEach(inp => {
+    inp.addEventListener('change', () => matriculadosAtualizarPreviewRelatorio());
+  });
+}
+
+function matriculadosLerTipoRelatorio() {
+  const inp = document.querySelector('#matricRelModal input[name="matricRelTipo"]:checked');
+  return inp?.value === 'semanal' ? 'semanal' : 'mensal';
+}
+
+function matriculadosAtualizarPreviewRelatorio() {
+  const unidId = document.getElementById('matricRelModal')?.dataset.unidId;
+  if (!unidId) return;
+  const lista = matriculadosObterListaDoCard(unidId);
+  const tipo = matriculadosLerTipoRelatorio();
+  const meta = matriculadosObterMetaDoCard(unidId);
+  const payload = matriculadosMontarPayloadRelatorio(unidId, lista, tipo, {
+    competencia: _matriculadosCache.data?.competencia,
+    fonte: meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico',
+  });
+  const prev = document.getElementById('matricRelPreview');
+  if (prev) prev.innerHTML = matriculadosRenderPreviewRelatorio(payload);
+  document.getElementById('matricRelModal').dataset.payload = JSON.stringify(payload);
+}
+
+async function matriculadosAbrirModalRelatorio(unidId) {
+  matriculadosEnsureModalRelatorio();
+  const modal = document.getElementById('matricRelModal');
+  const lista = matriculadosObterListaDoCard(unidId);
+  if (!lista.length) {
+    alert('Nenhum matriculado carregado para gerar relatório.');
+    return;
+  }
+  const meta = matriculadosObterMetaDoCard(unidId);
+  modal.dataset.unidId = unidId;
+  document.getElementById('matricRelSub').textContent = meta.nomeUnidade;
+  matriculadosAtualizarPreviewRelatorio();
+  const hist = await matriculadosListarRelatorios(unidId, 8);
+  const histEl = document.getElementById('matricRelHistorico');
+  if (histEl) histEl.innerHTML = matriculadosRenderHistoricoRelatorios(hist);
+  modal.style.display = 'flex';
+}
+
+function matriculadosFecharModalRelatorio() {
+  const modal = document.getElementById('matricRelModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function matriculadosAcaoRelatorio(acao) {
+  const modal = document.getElementById('matricRelModal');
+  const unidId = modal?.dataset.unidId;
+  if (!unidId) return;
+  let payload;
+  try {
+    payload = JSON.parse(modal.dataset.payload || '{}');
+  } catch (_) {
+    payload = null;
+  }
+  if (!payload?.alunos) {
+    const lista = matriculadosObterListaDoCard(unidId);
+    payload = matriculadosMontarPayloadRelatorio(unidId, lista, matriculadosLerTipoRelatorio(), {});
+  }
+  if (acao === 'csv') {
+    matriculadosExportarCSV(payload);
+    if (typeof mostrarToast === 'function') mostrarToast('CSV exportado.');
+    return;
+  }
+  if (acao === 'pdf') {
+    matriculadosImprimirRelatorio(payload);
+    return;
+  }
+  if (acao === 'salvar') {
+    const ok = await matriculadosSalvarRelatorio(unidId, payload);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(ok ? 'Registro salvo no histórico.' : 'Não foi possível salvar.');
+    } else if (ok) {
+      alert('Registro salvo no histórico.');
+    }
+    if (ok) {
+      const hist = await matriculadosListarRelatorios(unidId, 8);
+      const histEl = document.getElementById('matricRelHistorico');
+      if (histEl) histEl.innerHTML = matriculadosRenderHistoricoRelatorios(hist);
+    }
+  }
 }
