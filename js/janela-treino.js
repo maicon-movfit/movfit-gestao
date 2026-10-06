@@ -304,6 +304,70 @@ function janelaFiltrarLista(alunos, filtro, professor, diasFaixa) {
   });
 }
 
+function janelaThSort(col, label, sortCol, sortDir) {
+  const on = sortCol === col;
+  const arrow = !on ? '↕' : sortDir === 'asc' ? '↑' : '↓';
+  return `<th class="janela-th-sort${on ? ' janela-th-sort-on' : ''}" onclick="janelaClicarOrdenacao(this,'${col}')" title="Ordenar coluna">${label} <span class="janela-sort-ico">${arrow}</span></th>`;
+}
+
+function janelaClicarOrdenacao(th, col) {
+  const root = th.closest('.janela-card');
+  if (!root) return;
+  const prev = root.dataset.sortCol || '';
+  const prevDir = root.dataset.sortDir || 'asc';
+  root.dataset.sortCol = col;
+  root.dataset.sortDir = prev === col && prevDir === 'asc' ? 'desc' : 'asc';
+  janelaAtualizarTabela(root, true);
+}
+
+function janelaSortVal(a, col) {
+  switch (col) {
+    case 'aluno': return (a.nome_aluno || '').toLowerCase();
+    case 'professor': return (a.nome_professor || '').toLowerCase();
+    case 'programa': return (a.nome_programa || '').toLowerCase();
+    case 'valido_ate': return a.treino_valido_ate ? new Date(a.treino_valido_ate).getTime() : null;
+    case 'ultimo_acesso': return a.ultimo_acesso ? new Date(a.ultimo_acesso).getTime() : null;
+    case 'dias': {
+      const d = janelaDiasSemAcessar(a.ultimo_acesso);
+      return d === null ? null : d;
+    }
+    case 'status': {
+      const st = JANELA_STATUS[a.status_treino];
+      return (st?.label || a.status_treino || '').toLowerCase();
+    }
+    case 'classificacao': {
+      const c = janelaClassificarFrequencia(a.ultimo_acesso);
+      return (c?.label || '').toLowerCase();
+    }
+    case 'acao': {
+      const c = janelaClassificarFrequencia(a.ultimo_acesso);
+      return (c?.acao || '').toLowerCase();
+    }
+    default: return null;
+  }
+}
+
+function janelaCmpOrdenacao(a, b, col) {
+  const va = janelaSortVal(a, col);
+  const vb = janelaSortVal(b, col);
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
+  if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+  return String(va).localeCompare(String(vb), 'pt-BR', { sensitivity: 'base' });
+}
+
+function janelaAplicarOrdenacao(lista, sortCol, sortDir, modulo) {
+  if (sortCol) {
+    const mul = sortDir === 'desc' ? -1 : 1;
+    return [...(lista || [])].sort((a, b) => janelaCmpOrdenacao(a, b, sortCol) * mul);
+  }
+  if (modulo === 'frequencia') {
+    return [...(lista || [])].sort((a, b) => janelaCmpOrdenacao(a, b, 'dias') * -1);
+  }
+  return lista || [];
+}
+
 function janelaRenderPaginador(total, pagina) {
   const totalPag = Math.max(1, Math.ceil(total / JANELA_PAGE_SIZE));
   const pag = Math.min(Math.max(1, pagina || 1), totalPag);
@@ -320,8 +384,11 @@ function janelaRenderPaginador(total, pagina) {
   </div>`;
 }
 
-function janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa) {
-  const lista = janelaFiltrarLista(alunos, filtro, professor, diasFaixa);
+function janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa, sortCol, sortDir) {
+  const sc = sortCol || '';
+  const sd = sortDir || 'asc';
+  let lista = janelaFiltrarLista(alunos, filtro, professor, diasFaixa);
+  lista = janelaAplicarOrdenacao(lista, sc, sd, 'treino');
 
   if (!lista.length) {
     return `<div class="janela-empty">Nenhum aluno nesta categoria.</div>`;
@@ -333,13 +400,13 @@ function janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa) {
 
   return `<div class="tw janela-tw"><table>
     <thead><tr>
-      <th>Aluno</th>
-      <th>Professor</th>
-      <th>Programa</th>
-      <th>Válido até</th>
-      <th>Último acesso</th>
-      <th>Dias s/ acessar</th>
-      <th>Status</th>
+      ${janelaThSort('aluno', 'Aluno', sc, sd)}
+      ${janelaThSort('professor', 'Professor', sc, sd)}
+      ${janelaThSort('programa', 'Programa', sc, sd)}
+      ${janelaThSort('valido_ate', 'Válido até', sc, sd)}
+      ${janelaThSort('ultimo_acesso', 'Último acesso', sc, sd)}
+      ${janelaThSort('dias', 'Dias s/ acessar', sc, sd)}
+      ${janelaThSort('status', 'Status', sc, sd)}
     </tr></thead>
     <tbody>${slice.map(a => {
       const st = JANELA_STATUS[a.status_treino] || { label: a.status_treino || '—', cor: 'var(--muted)', bg: 'transparent' };
@@ -359,16 +426,11 @@ function janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa) {
   </table></div>${janelaRenderPaginador(lista.length, pag)}`;
 }
 
-function janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor, diasFaixa) {
+function janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor, diasFaixa, sortCol, sortDir) {
+  const sc = sortCol || '';
+  const sd = sortDir || 'asc';
   let lista = janelaFiltrarLista(alunos, filtro, professor, diasFaixa);
-  lista = [...lista].sort((a, b) => {
-    const da = janelaDiasSemAcessar(a.ultimo_acesso);
-    const db = janelaDiasSemAcessar(b.ultimo_acesso);
-    if (da === null && db === null) return 0;
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return db - da;
-  });
+  lista = janelaAplicarOrdenacao(lista, sc, sd, 'frequencia');
 
   if (!lista.length) {
     return `<div class="janela-empty">Nenhum aluno nesta faixa de frequência.</div>`;
@@ -380,12 +442,12 @@ function janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor, diasFai
 
   return `<div class="tw janela-tw"><table>
     <thead><tr>
-      <th>Aluno</th>
-      <th>Professor</th>
-      <th>Último acesso</th>
-      <th>Dias s/ acessar</th>
-      <th>Classificação</th>
-      <th>Ação sugerida</th>
+      ${janelaThSort('aluno', 'Aluno', sc, sd)}
+      ${janelaThSort('professor', 'Professor', sc, sd)}
+      ${janelaThSort('ultimo_acesso', 'Último acesso', sc, sd)}
+      ${janelaThSort('dias', 'Dias s/ acessar', sc, sd)}
+      ${janelaThSort('classificacao', 'Classificação', sc, sd)}
+      ${janelaThSort('acao', 'Ação sugerida', sc, sd)}
     </tr></thead>
     <tbody>${slice.map(a => {
       const cls = janelaClassificarFrequencia(a.ultimo_acesso);
@@ -416,6 +478,8 @@ function janelaAtualizarTabela(root, resetPage, resetProfessor, resetDias) {
   const alunos = janelaGetAlunosLista(root);
   const { filtro, professor, diasFaixa } = janelaGetFiltros(root);
   const modulo = root.dataset.modulo || 'treino';
+  const sortCol = root.dataset.sortCol || '';
+  const sortDir = root.dataset.sortDir || 'asc';
   const lista = janelaFiltrarLista(alunos, filtro, professor, diasFaixa);
   const totalPag = Math.max(1, Math.ceil(lista.length / JANELA_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10);
@@ -425,8 +489,8 @@ function janelaAtualizarTabela(root, resetPage, resetProfessor, resetDias) {
   const wrap = view.querySelector('.janela-alunos-wrap');
   if (wrap) {
     wrap.innerHTML = modulo === 'frequencia'
-      ? janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor, diasFaixa)
-      : janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa);
+      ? janelaRenderTabelaFrequencia(alunos, filtro, pagina, professor, diasFaixa, sortCol, sortDir)
+      : janelaRenderTabela(alunos, filtro, pagina, professor, diasFaixa, sortCol, sortDir);
   }
 }
 

@@ -342,6 +342,68 @@ function matriculadosResolverAvaliacao(m, avAtrasada, avRealizada, ctx) {
   };
 }
 
+/**
+ * Último acesso da Janela pode ser de contrato anterior.
+ * Para matriculados do mês, frequência conta só a partir da data_lancamento.
+ */
+function matriculadosResolverAcessoMatricula(m, ultimoAcessoBruto) {
+  const mat = m.data_lancamento ? new Date(m.data_lancamento) : null;
+  const acc = ultimoAcessoBruto ? new Date(ultimoAcessoBruto) : null;
+  const matOk = mat && !Number.isNaN(mat.getTime());
+  const accOk = acc && !Number.isNaN(acc.getTime());
+
+  if (accOk && matOk && acc >= mat) {
+    return {
+      ultimo_acesso_bruto: ultimoAcessoBruto,
+      ultimo_acesso_efetivo: ultimoAcessoBruto,
+      iso_frequencia: ultimoAcessoBruto,
+      acesso_anterior_matricula: false,
+      sem_visita_desde_matricula: false,
+    };
+  }
+  if (accOk && matOk && acc < mat) {
+    return {
+      ultimo_acesso_bruto: ultimoAcessoBruto,
+      ultimo_acesso_efetivo: null,
+      iso_frequencia: m.data_lancamento,
+      acesso_anterior_matricula: true,
+      sem_visita_desde_matricula: true,
+    };
+  }
+  if (!accOk && matOk) {
+    return {
+      ultimo_acesso_bruto: null,
+      ultimo_acesso_efetivo: null,
+      iso_frequencia: m.data_lancamento,
+      acesso_anterior_matricula: false,
+      sem_visita_desde_matricula: true,
+    };
+  }
+  return {
+    ultimo_acesso_bruto: ultimoAcessoBruto || null,
+    ultimo_acesso_efetivo: ultimoAcessoBruto || null,
+    iso_frequencia: ultimoAcessoBruto || null,
+    acesso_anterior_matricula: false,
+    sem_visita_desde_matricula: false,
+  };
+}
+
+function matriculadosFmtDiasMatricula(m) {
+  if (typeof janelaFmtDiasSemAcessar !== 'function' || typeof janelaDiasSemAcessar !== 'function') {
+    return { txt: '—', cor: 'var(--muted)' };
+  }
+  const iso = m.iso_frequencia || m.ultimo_acesso;
+  if (!iso) return { txt: 'Sem registro', cor: 'var(--muted)' };
+  const base = janelaFmtDiasSemAcessar(iso);
+  if (m.sem_visita_desde_matricula) {
+    const dias = janelaDiasSemAcessar(iso);
+    if (dias === 0) return { txt: 'Matriculou hoje', cor: 'var(--muted)' };
+    if (dias === 1) return { txt: '1 dia (desde matr.)', cor: base.cor };
+    return { txt: `${dias} dias (desde matr.)`, cor: base.cor };
+  }
+  return base;
+}
+
 /** Aluno com treino montado — somente via Janela de Treino (fonte confiável). */
 function matriculadosTemTreinoMontado(j, statusTreino) {
   if (!j) return false;
@@ -393,8 +455,10 @@ function matriculadosEnriquecerAluno(m, mapas) {
     temListaRealizadas,
   });
   const comTreino = matriculadosTemTreinoMontado(j, statusTreino);
-  const ultimoAcesso = j?.ultimo_acesso || m.ultimo_acesso || null;
+  const ultimoAcessoBruto = j?.ultimo_acesso || m.ultimo_acesso || null;
+  const acesso = matriculadosResolverAcessoMatricula(m, ultimoAcessoBruto);
   const temJanelaFns = typeof janelaBucketId === 'function' && typeof janelaDiasSemAcessar === 'function';
+  const isoFreq = acesso.iso_frequencia;
 
   return {
     ...m,
@@ -403,9 +467,13 @@ function matriculadosEnriquecerAluno(m, mapas) {
     ...aval,
     com_treino: comTreino,
     treino_valido_ate: j?.treino_valido_ate || m.treino_valido_ate || null,
-    ultimo_acesso: ultimoAcesso,
-    frequencia_id: temJanelaFns ? janelaBucketId(ultimoAcesso) : null,
-    dias_sem_acesso: temJanelaFns ? janelaDiasSemAcessar(ultimoAcesso) : null,
+    ultimo_acesso: acesso.ultimo_acesso_efetivo || acesso.ultimo_acesso_bruto,
+    ultimo_acesso_bruto: acesso.ultimo_acesso_bruto,
+    iso_frequencia: isoFreq,
+    acesso_anterior_matricula: acesso.acesso_anterior_matricula,
+    sem_visita_desde_matricula: acesso.sem_visita_desde_matricula,
+    frequencia_id: temJanelaFns && isoFreq ? janelaBucketId(isoFreq) : (temJanelaFns ? 'sem_registro' : null),
+    dias_sem_acesso: temJanelaFns && isoFreq ? janelaDiasSemAcessar(isoFreq) : null,
     nome_professor: j?.nome_professor || m.nome_professor || null,
     nome_programa: j?.nome_programa || m.nome_programa || null,
     _cruzamento: {
@@ -467,8 +535,14 @@ function matriculadosRenderFreqPill(m) {
   if (typeof janelaClassificarFrequencia !== 'function') {
     return matriculadosPillStatus('—', 'muted');
   }
-  const cls = janelaClassificarFrequencia(m.ultimo_acesso);
-  return `<span class="pill" style="background:${cls.bg};color:${cls.cor};border:1px solid ${cls.cor}33;" title="${cls.faixa}">${cls.label}</span>`;
+  const iso = m.iso_frequencia || m.ultimo_acesso;
+  const cls = janelaClassificarFrequencia(iso);
+  const tip = m.acesso_anterior_matricula
+    ? `${cls.faixa} · Último acesso (${matriculadosFmtDataCurta(m.ultimo_acesso_bruto)}) é anterior à matrícula`
+    : m.sem_visita_desde_matricula
+      ? `${cls.faixa} · Sem visita registrada desde a matrícula`
+      : cls.faixa;
+  return `<span class="pill" style="background:${cls.bg};color:${cls.cor};border:1px solid ${cls.cor}33;" title="${tip}">${cls.label}</span>`;
 }
 
 function matriculadosOrdenarOnboarding(lista) {
@@ -1016,7 +1090,14 @@ function matriculadosTooltipAluno(m) {
   if (m.com_treino != null) parts.push(`Treino montado: ${m.com_treino ? 'Sim' : 'Não'}`);
   if (m.nome_professor) parts.push(`Professor: ${m.nome_professor}`);
   if (m.nome_programa) parts.push(`Programa: ${m.nome_programa}`);
-  if (m.ultimo_acesso) parts.push(`Último acesso: ${matriculadosFmtDataCurta(m.ultimo_acesso)}`);
+  if (m.ultimo_acesso_bruto) parts.push(`Último acesso (janela): ${matriculadosFmtDataCurta(m.ultimo_acesso_bruto)}`);
+  if (m.sem_visita_desde_matricula) {
+    parts.push(m.acesso_anterior_matricula
+      ? 'Acesso anterior à matrícula — contando dias desde a matrícula'
+      : 'Sem visita desde a matrícula');
+  } else if (m.ultimo_acesso) {
+    parts.push(`Último acesso: ${matriculadosFmtDataCurta(m.ultimo_acesso)}`);
+  }
   return parts.join(' · ') || 'Matrícula não informada';
 }
 
@@ -1026,6 +1107,78 @@ function matriculadosRenderSimNao(val, labelSim, labelNao) {
   return matriculadosPillStatus('—', 'muted');
 }
 
+function matriculadosThSort(col, label, sortCol, sortDir) {
+  const on = sortCol === col;
+  const arrow = !on ? '↕' : sortDir === 'asc' ? '↑' : '↓';
+  return `<th class="janela-th-sort${on ? ' janela-th-sort-on' : ''}" onclick="matriculadosClicarOrdenacao(this,'${col}')" title="Ordenar coluna">${label} <span class="janela-sort-ico">${arrow}</span></th>`;
+}
+
+function matriculadosClicarOrdenacao(th, col) {
+  const root = th.closest('.matric-card');
+  if (!root) return;
+  const prev = root.dataset.sortCol || '';
+  const prevDir = root.dataset.sortDir || 'asc';
+  root.dataset.sortCol = col;
+  root.dataset.sortDir = prev === col && prevDir === 'asc' ? 'desc' : 'asc';
+  matriculadosAtualizarTabela(root, true);
+}
+
+function matriculadosSortVal(m, col) {
+  switch (col) {
+    case 'aluno': return (m.nome_aluno || '').toLowerCase();
+    case 'matricula': return (m.matricula || '').replace(/^0+/, '') || '0';
+    case 'plano': return (m.plano || '').toLowerCase();
+    case 'data_matricula': return m.data_lancamento ? new Date(m.data_lancamento).getTime() : null;
+    case 'jornada': {
+      if (matriculadosJornadaCompleta(m)) return 0;
+      if (m.avaliacao_atrasada) return 1;
+      if (m.avaliacao_realizada && !m.com_treino) return 2;
+      if (!m.avaliacao_realizada && m.com_treino) return 3;
+      return 4;
+    }
+    case 'bio': return (m.avaliacao_label || '').toLowerCase();
+    case 'treino': return m.com_treino ? 0 : 1;
+    case 'dias': return m.dias_sem_acesso != null ? m.dias_sem_acesso : null;
+    case 'frequencia': return MATRIC_FREQ_ORDEM[m.frequencia_id] ?? 5;
+    case 'ultimo_acesso': {
+      const iso = m.iso_frequencia || m.ultimo_acesso;
+      return iso ? new Date(iso).getTime() : null;
+    }
+    case 'situacao_treino': return (m.treino_status || m.status_treino || '').toLowerCase();
+    case 'classificacao': {
+      const iso = m.iso_frequencia || m.ultimo_acesso;
+      const c = typeof janelaClassificarFrequencia === 'function'
+        ? janelaClassificarFrequencia(iso) : { label: '' };
+      return (c.label || '').toLowerCase();
+    }
+    case 'acao': {
+      const iso = m.iso_frequencia || m.ultimo_acesso;
+      const c = typeof janelaClassificarFrequencia === 'function'
+        ? janelaClassificarFrequencia(iso) : { acao: '' };
+      return (c.acao || '').toLowerCase();
+    }
+    default: return null;
+  }
+}
+
+function matriculadosCmpOrdenacao(a, b, col) {
+  const va = matriculadosSortVal(a, col);
+  const vb = matriculadosSortVal(b, col);
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
+  if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+  return String(va).localeCompare(String(vb), 'pt-BR', { numeric: true, sensitivity: 'base' });
+}
+
+function matriculadosAplicarOrdenacao(lista, sortCol, sortDir) {
+  if (sortCol) {
+    const mul = sortDir === 'desc' ? -1 : 1;
+    return [...(lista || [])].sort((a, b) => matriculadosCmpOrdenacao(a, b, sortCol) * mul);
+  }
+  return matriculadosOrdenarParaRelatorio(lista);
+}
+
 function matriculadosRenderAvaliacaoPill(m) {
   if (m.avaliacao_label && m.avaliacao_label !== '—') {
     return matriculadosPillStatus(m.avaliacao_label, m.avaliacao_tipo || 'muted');
@@ -1033,9 +1186,12 @@ function matriculadosRenderAvaliacaoPill(m) {
   return matriculadosPillStatus('—', 'muted');
 }
 
-function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada) {
-  const filtrada = matriculadosOrdenarOnboarding(
-    matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada)
+function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, sortCol, sortDir) {
+  const sc = sortCol || '';
+  const sd = sortDir || 'asc';
+  const filtrada = matriculadosAplicarOrdenacao(
+    matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada),
+    sc, sd
   );
   if (!filtrada.length) {
     return `<div class="janela-empty">Nenhum aluno neste filtro.</div>`;
@@ -1046,15 +1202,15 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
 
   return `<div class="tw janela-tw"><table>
     <thead><tr>
-      <th>Aluno</th>
-      <th>Matrícula</th>
-      <th>Plano</th>
-      <th>Data matrícula</th>
-      <th>Jornada</th>
-      <th>Bio</th>
-      <th>Treino</th>
-      <th>Frequência</th>
-      <th>Situação treino</th>
+      ${matriculadosThSort('aluno', 'Aluno', sc, sd)}
+      ${matriculadosThSort('matricula', 'Matrícula', sc, sd)}
+      ${matriculadosThSort('plano', 'Plano', sc, sd)}
+      ${matriculadosThSort('data_matricula', 'Data matrícula', sc, sd)}
+      ${matriculadosThSort('jornada', 'Jornada', sc, sd)}
+      ${matriculadosThSort('bio', 'Bio', sc, sd)}
+      ${matriculadosThSort('treino', 'Treino', sc, sd)}
+      ${matriculadosThSort('frequencia', 'Frequência', sc, sd)}
+      ${matriculadosThSort('situacao_treino', 'Situação treino', sc, sd)}
       <th>Contato</th>
       <th>Validação</th>
     </tr></thead>
@@ -1070,8 +1226,7 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
         : '—';
       const sitTipo = /ativo|normal|em dia/i.test(String(sit)) ? 'ok'
         : /tranc|susp/i.test(String(sit)) ? 'warn' : 'muted';
-      const diasFmt = typeof janelaFmtDiasSemAcessar === 'function'
-        ? janelaFmtDiasSemAcessar(m.ultimo_acesso) : { txt: '—', cor: 'var(--muted)' };
+      const diasFmt = matriculadosFmtDiasMatricula(m);
       return `<tr>
         <td style="font-weight:500;"><span class="janela-nome-aluno" title="${tip}">${nome}</span></td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${mat}</td>
@@ -1089,9 +1244,12 @@ function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, s
   </table></div>${matriculadosRenderPaginador(filtrada.length, pag)}`;
 }
 
-function matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa) {
-  const filtrada = matriculadosOrdenarFrequencia(
-    matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', freqFaixa)
+function matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa, sortCol, sortDir) {
+  const sc = sortCol || '';
+  const sd = sortDir || 'asc';
+  const filtrada = matriculadosAplicarOrdenacao(
+    matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', freqFaixa),
+    sc, sd
   );
   if (!filtrada.length) {
     return `<div class="janela-empty">Nenhum aluno nesta faixa de frequência.</div>`;
@@ -1102,29 +1260,31 @@ function matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa) {
 
   return `<div class="tw janela-tw"><table>
     <thead><tr>
-      <th>Aluno</th>
-      <th>Matrícula</th>
-      <th>Jornada</th>
-      <th>Último acesso</th>
-      <th>Dias s/ vir</th>
-      <th>Classificação</th>
-      <th>Ação sugerida</th>
+      ${matriculadosThSort('aluno', 'Aluno', sc, sd)}
+      ${matriculadosThSort('matricula', 'Matrícula', sc, sd)}
+      ${matriculadosThSort('jornada', 'Jornada', sc, sd)}
+      ${matriculadosThSort('ultimo_acesso', 'Último acesso', sc, sd)}
+      ${matriculadosThSort('dias', 'Dias s/ vir', sc, sd)}
+      ${matriculadosThSort('classificacao', 'Classificação', sc, sd)}
+      ${matriculadosThSort('acao', 'Ação sugerida', sc, sd)}
     </tr></thead>
     <tbody>${slice.map(m => {
       const nomeRaw = m.nome_aluno || '—';
       const nome = typeof esc === 'function' ? esc(nomeRaw) : nomeRaw;
       const mat = typeof esc === 'function' ? esc(m.matricula || '—') : (m.matricula || '—');
+      const iso = m.iso_frequencia || m.ultimo_acesso;
       const cls = typeof janelaClassificarFrequencia === 'function'
-        ? janelaClassificarFrequencia(m.ultimo_acesso)
+        ? janelaClassificarFrequencia(iso)
         : { label: '—', cor: 'var(--muted)', bg: 'transparent', acao: '—' };
-      const dias = typeof janelaFmtDiasSemAcessar === 'function'
-        ? janelaFmtDiasSemAcessar(m.ultimo_acesso)
-        : { txt: '—', cor: 'var(--muted)' };
+      const dias = matriculadosFmtDiasMatricula(m);
+      const ultAcessoTxt = m.sem_visita_desde_matricula
+        ? (m.acesso_anterior_matricula ? 'Antes da matr.' : '—')
+        : matriculadosFmtDataCurta(m.ultimo_acesso);
       return `<tr>
         <td style="font-weight:500;">${nome}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;">${mat}</td>
         <td>${matriculadosBadgeJornada(m)}</td>
-        <td style="font-family:'DM Mono',monospace;font-size:11px;">${matriculadosFmtDataCurta(m.ultimo_acesso)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px;">${ultAcessoTxt}</td>
         <td style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:${dias.cor};">${dias.txt}</td>
         <td><span class="pill" style="background:${cls.bg};color:${cls.cor};border:1px solid ${cls.cor}33;">${cls.label}</span></td>
         <td style="font-size:11px;color:var(--muted);">${cls.acao}</td>
@@ -1144,13 +1304,15 @@ function matriculadosAtualizarTabela(root, resetPage) {
   let pagina = parseInt(root.dataset.pagina || '1', 10);
   pagina = Math.min(Math.max(1, pagina), totalPag);
   root.dataset.pagina = String(pagina);
+  const sortCol = root.dataset.sortCol || '';
+  const sortDir = root.dataset.sortDir || 'asc';
   const wrap = modulo === 'frequencia'
     ? root.querySelector('.matric-freq-alunos-wrap')
     : root.querySelector('.matric-alunos-wrap');
   if (!wrap) return;
   wrap.innerHTML = modulo === 'frequencia'
-    ? matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa)
-    : matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada);
+    ? matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa, sortCol, sortDir)
+    : matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, sortCol, sortDir);
 }
 
 function matriculadosFiltrarBusca(input) {
@@ -1563,10 +1725,10 @@ function matriculadosMontarResumoRelatorio(lista) {
 }
 
 function matriculadosLinhaExportacao(m) {
+  const iso = m.iso_frequencia || m.ultimo_acesso;
   const cls = typeof janelaClassificarFrequencia === 'function'
-    ? janelaClassificarFrequencia(m.ultimo_acesso) : { label: '—', acao: '—' };
-  const dias = typeof janelaFmtDiasSemAcessar === 'function'
-    ? janelaFmtDiasSemAcessar(m.ultimo_acesso).txt : '—';
+    ? janelaClassificarFrequencia(iso) : { label: '—', acao: '—' };
+  const dias = matriculadosFmtDiasMatricula(m).txt;
   let jornada = 'Pendente';
   if (matriculadosJornadaCompleta(m)) jornada = 'Completa';
   else if (m.avaliacao_atrasada) jornada = 'Bio atrasada';
@@ -1582,7 +1744,11 @@ function matriculadosLinhaExportacao(m) {
     bio: m.avaliacao_label || (m.avaliacao_realizada ? 'Realizada' : m.avaliacao_atrasada ? 'Atrasada' : '—'),
     com_treino: m.com_treino ? 'Sim' : 'Não',
     situacao_treino: m.treino_status || m.status_treino || '',
-    ultimo_acesso: matriculadosFmtDataCurta(m.ultimo_acesso),
+    ultimo_acesso: m.sem_visita_desde_matricula
+      ? (m.acesso_anterior_matricula
+        ? `Antes matr. (${matriculadosFmtDataCurta(m.ultimo_acesso_bruto)})`
+        : 'Sem visita desde matr.')
+      : matriculadosFmtDataCurta(m.ultimo_acesso),
     dias_sem_vir: dias,
     frequencia: cls.label,
     frequencia_id: m.frequencia_id || 'sem_registro',

@@ -1833,6 +1833,11 @@ tbody tr:last-child td{border-bottom:none;}
 .janela-busca:focus{outline:none;border-color:var(--accent);}
 .janela-tw{margin-bottom:0;}
 .janela-tw table{min-width:820px;}
+.janela-th-sort{cursor:pointer;user-select:none;white-space:nowrap;transition:background .12s;}
+.janela-th-sort:hover{background:rgba(26,58,92,.12);}
+.janela-th-sort-on{background:rgba(55,138,221,.12)!important;color:#1a3a5c;}
+.janela-sort-ico{font-size:9px;opacity:.55;margin-left:3px;font-weight:700;}
+.janela-th-sort-on .janela-sort-ico{opacity:1;color:#378add;}
 .janela-nome-aluno{
   cursor:help;
   border-bottom:1px dotted var(--border3);
