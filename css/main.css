@@ -1668,6 +1668,26 @@ tbody tr:last-child td{border-bottom:none;}
 #dashJanelaTreino,#dashMatriculadosMes{margin-top:14px;}
 .matric-toolbar-comp{margin-bottom:6px;}
 .matric-toolbar-comp .matric-comp-select{min-width:220px;}
+.matric-funil{
+  display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;
+  margin-bottom:16px;padding:12px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:var(--r-lg);
+}
+.matric-funil-step{
+  flex:1;min-width:110px;display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:10px 8px;border-radius:8px;border:1px solid var(--border2);
+  background:var(--surface);cursor:pointer;font-family:Inter,sans-serif;
+  transition:background .15s,border-color .15s,transform .1s;
+}
+.matric-funil-step:hover{background:var(--surface2);border-color:#378add;transform:translateY(-1px);}
+.matric-funil-n{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.1;}
+.matric-funil-lbl{font-size:11px;font-weight:600;color:var(--text);}
+.matric-funil-pct{font-size:10px;color:var(--muted);font-weight:500;}
+.matric-funil-arrow{
+  display:flex;align-items:center;color:var(--muted);font-size:18px;
+  padding:0 2px;align-self:center;
+}
+.matric-view-onboarding,.matric-view-frequencia{animation:janelaFadeIn .2s ease;}
 .janela-card{
   background:var(--surface);
   border:1px solid var(--border);
