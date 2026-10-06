@@ -472,25 +472,49 @@ function matriculadosRenderFreqPill(m) {
 }
 
 function matriculadosOrdenarOnboarding(lista) {
+  return matriculadosOrdenarParaRelatorio(lista);
+}
+
+function matriculadosOrdenarFrequencia(lista) {
+  return matriculadosOrdenarParaRelatorio(lista);
+}
+
+/** Ordem de prioridade para relatório e tabelas: crítico → alerta → acompanhar → normal → sem registro. */
+function matriculadosOrdenarParaRelatorio(lista) {
   return [...(lista || [])].sort((a, b) => {
     const fa = MATRIC_FREQ_ORDEM[a.frequencia_id] ?? 5;
     const fb = MATRIC_FREQ_ORDEM[b.frequencia_id] ?? 5;
     if (fa !== fb) return fa - fb;
+    const da = a.dias_sem_acesso;
+    const db = b.dias_sem_acesso;
+    if (da === null && db === null) {
+      return String(a.nome_aluno || '').localeCompare(String(b.nome_aluno || ''), 'pt-BR');
+    }
+    if (da === null) return 1;
+    if (db === null) return -1;
+    if (da !== db) return db - da;
     const ja = matriculadosJornadaCompleta(a) ? 1 : 0;
     const jb = matriculadosJornadaCompleta(b) ? 1 : 0;
-    return ja - jb;
+    if (ja !== jb) return ja - jb;
+    return String(a.nome_aluno || '').localeCompare(String(b.nome_aluno || ''), 'pt-BR');
   });
 }
 
-function matriculadosOrdenarFrequencia(lista) {
-  return [...(lista || [])].sort((a, b) => {
-    const da = a.dias_sem_acesso;
-    const db = b.dias_sem_acesso;
-    if (da === null && db === null) return 0;
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return db - da;
+const MATRIC_REL_GRUPOS = [
+  { id: 'critico', titulo: 'Crítico — ação imediata', faixa: '31+ dias', cor: '#f05c5c' },
+  { id: 'alerta', titulo: 'Alerta — resgatar', faixa: '16–30 dias', cor: '#f5a623' },
+  { id: 'acompanhar', titulo: 'Acompanhar', faixa: '7–15 dias', cor: '#378add' },
+  { id: 'normal', titulo: 'Normal', faixa: '0–6 dias', cor: '#34c47c' },
+  { id: 'sem_registro', titulo: 'Sem registro de acesso', faixa: '—', cor: '#6b7280' },
+];
+
+function matriculadosAgruparPorFrequencia(alunos) {
+  const map = Object.fromEntries(MATRIC_REL_GRUPOS.map(g => [g.id, []]));
+  (alunos || []).forEach(a => {
+    const id = a.frequencia_id || 'sem_registro';
+    (map[id] || map.sem_registro).push(a);
   });
+  return MATRIC_REL_GRUPOS.map(g => ({ ...g, alunos: map[g.id] || [] })).filter(g => g.alunos.length);
 }
 
 function matriculadosRenderFunil(lista) {
@@ -1561,6 +1585,7 @@ function matriculadosLinhaExportacao(m) {
     ultimo_acesso: matriculadosFmtDataCurta(m.ultimo_acesso),
     dias_sem_vir: dias,
     frequencia: cls.label,
+    frequencia_id: m.frequencia_id || 'sem_registro',
     acao_sugerida: cls.acao,
     professor: m.nome_professor || '',
     programa: m.nome_programa || '',
@@ -1592,7 +1617,7 @@ function matriculadosMontarPayloadRelatorio(unidId, lista, tipo, opts) {
     resumo_mes: matriculadosMontarResumoRelatorio(lista),
     resumo_detalhe: matriculadosMontarResumoRelatorio(detalhe),
     novos_semana: listaSemana.length,
-    alunos: detalhe.map(matriculadosLinhaExportacao),
+    alunos: matriculadosOrdenarParaRelatorio(detalhe).map(matriculadosLinhaExportacao),
     total_mes: lista.length,
     total_detalhe: detalhe.length,
   };
@@ -1608,9 +1633,16 @@ function matriculadosExportarCSV(payload) {
     ['professor', 'Professor'], ['programa', 'Programa'],
   ];
   const header = cols.map(([, lbl]) => matriculadosCsvEsc(lbl)).join(';');
-  const rows = (payload.alunos || []).map(a =>
-    cols.map(([k]) => matriculadosCsvEsc(a[k])).join(';')
-  );
+  const rows = [];
+  matriculadosAgruparPorFrequencia(payload.alunos || []).forEach(gr => {
+    rows.push(cols.map((_, i) => matriculadosCsvEsc(i === 0
+      ? `— ${gr.titulo} (${gr.faixa}) · ${gr.alunos.length} aluno(s) —`
+      : '')).join(';'));
+    gr.alunos.forEach(a => {
+      rows.push(cols.map(([k]) => matriculadosCsvEsc(a[k])).join(';'));
+    });
+    rows.push('');
+  });
   const bom = '\uFEFF';
   const blob = new Blob([bom + header + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -1629,7 +1661,11 @@ function matriculadosHtmlRelatorio(payload) {
     : `Relatório mensal — ${matriculadosFmtCompetencia(payload.competencia)}`;
   const escH = (s) => (typeof esc === 'function' ? esc(String(s ?? '')) : String(s ?? ''));
 
-  const tblRows = (payload.alunos || []).slice(0, 200).map(a => `<tr>
+  const tblHead = `<thead><tr>
+    <th>Aluno</th><th>Matrícula</th><th>Matrícula em</th><th>Jornada</th><th>Bio</th><th>Treino</th><th>Dias s/ vir</th><th>Ação</th>
+  </tr></thead>`;
+
+  const tblRow = (a) => `<tr>
     <td>${escH(a.nome)}</td>
     <td>${escH(a.matricula)}</td>
     <td>${escH(a.data_matricula)}</td>
@@ -1637,9 +1673,19 @@ function matriculadosHtmlRelatorio(payload) {
     <td>${escH(a.bio)}</td>
     <td>${escH(a.com_treino)}</td>
     <td>${escH(a.dias_sem_vir)}</td>
-    <td>${escH(a.frequencia)}</td>
     <td>${escH(a.acao_sugerida)}</td>
-  </tr>`).join('');
+  </tr>`;
+
+  const secoes = matriculadosAgruparPorFrequencia(payload.alunos || []).map(gr => {
+    const acao = gr.alunos[0]?.acao_sugerida || '';
+    return `<div class="grp" style="page-break-inside:avoid;margin-bottom:18px;">
+      <div class="grp-hd" style="border-left:4px solid ${gr.cor};padding:8px 12px;background:#f9fafb;margin-bottom:6px;border-radius:0 6px 6px 0;">
+        <div class="grp-tit" style="font-size:10pt;font-weight:700;color:${gr.cor};">${escH(gr.titulo)} <span style="color:#666;font-weight:600;">(${escH(gr.faixa)})</span></div>
+        <div class="grp-sub" style="font-size:8pt;color:#666;margin-top:2px;">${gr.alunos.length} aluno${gr.alunos.length !== 1 ? 's' : ''}${acao ? ` · ${escH(acao)}` : ''}</div>
+      </div>
+      <table>${tblHead}<tbody>${gr.alunos.map(tblRow).join('')}</tbody></table>
+    </div>`;
+  }).join('');
 
   const extraSem = payload.tipo === 'semanal'
     ? `<p class="sub">Novos matriculados na semana: <strong>${payload.novos_semana}</strong> · Total do mês: <strong>${payload.total_mes}</strong></p>`
@@ -1660,7 +1706,8 @@ function matriculadosHtmlRelatorio(payload) {
   th,td{border:1px solid #e5e7eb;padding:5px 6px;text-align:left;}
   th{background:#1a3a5c;color:#fff;}
   tr:nth-child(even){background:#f9fafb;}
-  @media print{body{margin:12mm;} .no-print{display:none;}}
+  .grp table{margin-bottom:0;}
+  @media print{body{margin:12mm;} .no-print{display:none;} .grp{page-break-inside:avoid;}}
 </style></head><body>
   <h1>${escH(tituloTipo)}</h1>
   <p class="sub">${escH(payload.unidade_nome)} · Gerado em ${matriculadosFmtData(payload.gerado_em)}${extraSem}</p>
@@ -1678,11 +1725,8 @@ function matriculadosHtmlRelatorio(payload) {
     <div class="kpi"><div class="kpi-v" style="color:#f05c5c;font-size:14pt">${f.critico ?? 0}</div><div class="kpi-l">31+ dias</div></div>
     <div class="kpi"><div class="kpi-v" style="font-size:14pt">${f.sem_registro ?? 0}</div><div class="kpi-l">Sem registro</div></div>
   </div>
-  <div class="sec">Detalhamento (${payload.alunos.length} aluno${payload.alunos.length !== 1 ? 's' : ''})</div>
-  <table><thead><tr>
-    <th>Aluno</th><th>Matrícula</th><th>Matrícula em</th><th>Jornada</th><th>Bio</th><th>Treino</th><th>Dias s/ vir</th><th>Frequência</th><th>Ação</th>
-  </tr></thead><tbody>${tblRows || '<tr><td colspan="9">Nenhum aluno</td></tr>'}</tbody></table>
-  ${payload.alunos.length > 200 ? '<p class="sub">Exibidos 200 primeiros — exporte CSV para lista completa.</p>' : ''}
+  <div class="sec">Detalhamento por frequência (${payload.alunos.length} aluno${payload.alunos.length !== 1 ? 's' : ''}) — crítico → alerta → acompanhar → normal → sem registro</div>
+  ${secoes || '<p class="sub">Nenhum aluno</p>'}
   <p class="sub no-print" style="margin-top:20px;">Use Ctrl+P ou o botão Imprimir para salvar em PDF.</p>
 </body></html>`;
 }
