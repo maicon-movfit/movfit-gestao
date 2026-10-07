@@ -1712,6 +1712,9 @@ tbody tr:last-child td{border-bottom:none;}
 }
 .matric-rel-body{padding:16px 18px 20px;}
 .matric-rel-tipo{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.matric-rel-ano{display:flex;align-items:center;gap:10px;margin:-6px 0 14px;padding:10px 12px;background:rgba(55,138,221,.06);border:1px solid rgba(55,138,221,.2);border-radius:8px;}
+.matric-rel-ano-lbl{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;}
+.matric-rel-ano-select{min-width:100px;font-size:11px;}
 .matric-rel-radio{font-size:12px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:8px;}
 .matric-rel-preview{
   background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;

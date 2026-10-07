@@ -79,6 +79,20 @@ function matriculadosLista(unidade) {
   return unidade?.matriculados || unidade?.alunos || unidade?.contratos || [];
 }
 
+/**
+ * Escopo de controle: somente planos anual recorrente e anual parcelado.
+ * Exclui mensal avulso, semanal, quinzenal e demais.
+ */
+function matriculadosPlanoElegivel(m) {
+  const p = String(m.plano || '').toUpperCase().trim();
+  if (!p) return false;
+  return /ANUAL\s+(RECORRENTE|PARCELADO)/.test(p);
+}
+
+function matriculadosFiltrarPlanosElegiveis(lista) {
+  return (lista || []).filter(matriculadosPlanoElegivel);
+}
+
 /** Chave única para cruzamento entre webhooks (ignora zeros à esquerda). */
 function matriculadosNormalizarMatricula(mat) {
   if (mat == null || mat === '') return '';
@@ -496,14 +510,33 @@ function matriculadosEnriquecerLista(lista, mapas) {
 
 function matriculadosEnriquecerPayload(data, mapasPorUnid) {
   if (!data?.unidades) return data;
+  let totalElegivel = 0;
+  let totalBruto = 0;
+  const unidades = data.unidades.map(u => {
+    const unidId = matriculadosUnidIdPorCodigo(u.unidade_codigo, u.unidade_nome);
+    const mapas = unidId ? mapasPorUnid[unidId] : null;
+    const bruta = matriculadosLista(u);
+    const elegiveis = matriculadosFiltrarPlanosElegiveis(bruta);
+    const lista = matriculadosEnriquecerLista(elegiveis, mapas);
+    totalBruto += bruta.length;
+    totalElegivel += lista.length;
+    return {
+      ...u,
+      matriculados: lista,
+      matriculados_total_bruto: bruta.length,
+      matriculados_excluidos_plano: Math.max(0, bruta.length - lista.length),
+    };
+  });
   return {
     ...data,
-    unidades: data.unidades.map(u => {
-      const unidId = matriculadosUnidIdPorCodigo(u.unidade_codigo, u.unidade_nome);
-      const mapas = unidId ? mapasPorUnid[unidId] : null;
-      const lista = matriculadosEnriquecerLista(matriculadosLista(u), mapas);
-      return { ...u, matriculados: lista };
-    }),
+    unidades,
+    resumo_geral: {
+      ...(data.resumo_geral || {}),
+      total_alunos_unicos: totalElegivel,
+      total_bruto: totalBruto,
+      excluidos_plano: Math.max(0, totalBruto - totalElegivel),
+      filtro_planos: 'anual_recorrente_parcelado',
+    },
   };
 }
 
@@ -680,6 +713,9 @@ async function matriculadosPersistir(data) {
         sincronizado_em: agora,
         gerado_em: data.gerado_em || null,
         total: lista.length,
+        total_bruto: u.matriculados_total_bruto ?? lista.length,
+        excluidos_plano: u.matriculados_excluidos_plano ?? 0,
+        filtro_planos: 'anual_recorrente_parcelado',
         matriculados: lista,
       }, { merge: true });
     } catch (e) {
@@ -1350,12 +1386,15 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
     : null) || unidade?.unidade_nome || unidId;
   const fonteLabel = fonte === 'historico' ? 'Histórico salvo' : 'Dados ao vivo';
   const mesesSalvos = historico.length;
+  const exclPlanos = unidade?.matriculados_excluidos_plano ?? o.excluidosPlano ?? 0;
+  const filtroPlanoLabel = 'Anual recorrente + parcelado';
 
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
     ['Competência', matriculadosFmtCompetencia(competencia)],
     ['Jornada completa', lista.length ? `${cruz.jornadaCompleta} (${Math.round(cruz.jornadaCompleta / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Bio atrasada', lista.length ? `${cruz.avaliacaoAtrasada} (${Math.round(cruz.avaliacaoAtrasada / lista.length * 100)}%)` : '0', '#f05c5c'],
+    ['Alertas validação', lista.length ? `${cruz.alertas} (${Math.round(cruz.alertas / lista.length * 100)}%)` : '0', cruz.alertas ? '#f5a623' : 'var(--muted)'],
   ]);
 
   const distribuicao = matriculadosTblCol('Jornada', [
@@ -1384,6 +1423,8 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const sinc = matriculadosTblCol('Sincronização', [
     ['Fonte', fonteLabel],
     ['Competência', competencia],
+    ['Escopo planos', filtroPlanoLabel],
+    ...(exclPlanos > 0 ? [['Excluídos do escopo', exclPlanos, '#f5a623']] : []),
     ['Cruzamento', 'Matrícula → Janela + Aval. realizadas/atrasadas'],
     ...linhasAtivos,
     ['Histórico (meses)', mesesSalvos],
@@ -1394,11 +1435,11 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const jsonLista = JSON.stringify(lista).replace(/'/g, '&#39;');
   const aoVivoComp = o.competenciaAoVivo || data.competencia;
 
-  return `<div class="matric-card janela-card" data-modulo="onboarding" data-freq-aba="todos" data-pagina="1" data-status-aba="todos" data-unid-id="${unidId}" data-competencia-sel="${competenciaSel}" data-matriculados='${jsonLista}'>
+  return `<div class="matric-card janela-card" data-modulo="onboarding" data-freq-aba="todos" data-pagina="1" data-status-aba="todos" data-unid-id="${unidId}" data-competencia-sel="${competenciaSel}" data-excluidos-plano="${exclPlanos}" data-matriculados='${jsonLista}'>
     <div class="janela-card-head">
       <div>
         <div class="janela-title">Matriculados no mês — ${typeof esc === 'function' ? esc(nomeUnidade) : nomeUnidade}</div>
-        <div class="janela-sub">${matriculadosFmtCompetencia(competencia)} · ${fonteLabel}${fonte === 'historico' ? ' · consulta ao histórico interno' : ''}${data.gerado_em && fonte === 'live' ? ' · Atualizado ' + matriculadosFmtData(data.gerado_em) : ''}</div>
+        <div class="janela-sub">${matriculadosFmtCompetencia(competencia)} · ${fonteLabel} · ${filtroPlanoLabel}${exclPlanos > 0 ? ` · ${exclPlanos} excl. (avulso/semanal)` : ''}${fonte === 'historico' ? ' · histórico interno' : ''}${data.gerado_em && fonte === 'live' ? ' · Atualizado ' + matriculadosFmtData(data.gerado_em) : ''}</div>
       </div>
       <div class="matric-head-actions">
         <button type="button" class="janela-refresh matric-relatorio-btn" onclick="matriculadosAbrirModalRelatorio('${unidId}')" title="Gerar relatório ou exportar">📄 Relatório</button>
@@ -1481,11 +1522,14 @@ async function matriculadosTrocarCompetencia(select, unidId) {
 
   const listaRaw = histDoc.matriculados || [];
   const mapas = await matriculadosBuscarCruzamentos(unidId, false);
-  const lista = matriculadosEnriquecerLista(listaRaw, mapas);
+  const elegiveis = matriculadosFiltrarPlanosElegiveis(listaRaw);
+  const lista = matriculadosEnriquecerLista(elegiveis, mapas);
   const unidade = {
     unidade_codigo: histDoc.unidade_codigo,
     unidade_nome: histDoc.unidade_nome,
     matriculados: lista,
+    matriculados_total_bruto: listaRaw.length,
+    matriculados_excluidos_plano: Math.max(0, listaRaw.length - elegiveis.length),
   };
   const data = {
     competencia: val,
@@ -1534,7 +1578,7 @@ function matriculadosAtualizarMetrica(unidId, data, lista) {
     matriculadosPreencherMetricCard('dashMetricMatriculados', {
       valor: total.toLocaleString('pt-BR'),
       label: 'Matriculados no mês',
-      sub: subComp,
+      sub: `${subComp} · anual rec./parc.`,
     });
   }
 
@@ -1628,19 +1672,120 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
   }
 
   const historicoAtualizado = historico.length ? historico : await matriculadosListarCompetencias(unidId);
-  el.innerHTML = matriculadosRenderConteudo(data, unidade, unidId, {
+  el.innerHTML = matriculadosRenderConteudo(dataEnriquecida || data, unidade, unidId, {
     lista,
     fonte: 'live',
     competenciaSel: '__live__',
     historico: historicoAtualizado,
     competenciaAoVivo: data.competencia,
+    excluidosPlano: unidade.matriculados_excluidos_plano ?? 0,
   });
-  matriculadosAtualizarMetrica(unidId, data, lista);
+  matriculadosAtualizarMetrica(unidId, dataEnriquecida || data, lista);
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// RELATÓRIOS — mensal / semanal · Firestore · CSV · PDF (impressão)
+// RELATÓRIOS — mensal / semanal / anual · Firestore · CSV · PDF (impressão)
 // ════════════════════════════════════════════════════════════════════════
+
+function matriculadosDedupeChaveAluno(m) {
+  if (m.codigo_contrato != null && m.codigo_contrato !== '') return `c:${m.codigo_contrato}`;
+  const mat = matriculadosNormalizarMatricula(m.matricula);
+  const dt = String(m.data_lancamento || '').slice(0, 10);
+  return `m:${mat}_${dt}`;
+}
+
+function matriculadosDedupeAlunos(lista) {
+  const map = new Map();
+  (lista || []).forEach(m => {
+    const k = matriculadosDedupeChaveAluno(m);
+    const prev = map.get(k);
+    if (!prev) {
+      map.set(k, m);
+      return;
+    }
+    const dta = new Date(m.data_lancamento || 0).getTime();
+    const dtb = new Date(prev.data_lancamento || 0).getTime();
+    if (dta < dtb) map.set(k, m);
+  });
+  return [...map.values()];
+}
+
+function matriculadosAnosDisponiveis(historico, competenciaAoVivo) {
+  const set = new Set();
+  (historico || []).forEach(c => {
+    const y = String(c.competencia || '').slice(0, 4);
+    if (/^\d{4}$/.test(y)) set.add(y);
+  });
+  if (competenciaAoVivo) {
+    const y = String(competenciaAoVivo).slice(0, 4);
+    if (/^\d{4}$/.test(y)) set.add(y);
+  }
+  set.add(String(new Date().getFullYear()));
+  return [...set].sort((a, b) => b.localeCompare(a));
+}
+
+function matriculadosContagemPorMesAno(lista, anoStr) {
+  const porMes = {};
+  for (let m = 1; m <= 12; m++) {
+    porMes[`${anoStr}-${String(m).padStart(2, '0')}`] = 0;
+  }
+  (lista || []).forEach(a => {
+    const cm = String(a.data_lancamento || a.competencia_coleta || '').slice(0, 7);
+    if (porMes[cm] != null) porMes[cm]++;
+  });
+  return Object.entries(porMes).map(([competencia, total]) => ({ competencia, total }));
+}
+
+/** Matriculados do ano: snapshots mensais (Firestore) + mês ao vivo, deduplicados e enriquecidos. */
+async function matriculadosCarregarMatriculadosAno(unidId, ano) {
+  const anoStr = String(ano);
+  const historico = await matriculadosListarCompetencias(unidId);
+  const comps = historico
+    .map(c => c.competencia)
+    .filter(c => String(c).startsWith(`${anoStr}-`));
+  const liveComp = _matriculadosCache.data?.competencia;
+  const mapas = await matriculadosBuscarCruzamentos(unidId, false);
+  let bruta = [];
+
+  const carregarComp = async (comp) => {
+    if (comp === liveComp && _matriculadosCache.data) {
+      const u = matriculadosEncontrarUnidade(_matriculadosCache.data, unidId);
+      return matriculadosFiltrarPlanosElegiveis(matriculadosLista(u) || []);
+    }
+    const doc = await matriculadosCarregarCompetencia(unidId, comp);
+    return matriculadosFiltrarPlanosElegiveis(doc?.matriculados || []);
+  };
+
+  const lotes = await Promise.all(comps.map(async comp => {
+    const raw = await carregarComp(comp);
+    return raw.map(m => ({ ...m, _competencia_snapshot: comp }));
+  }));
+  lotes.forEach(l => { bruta = bruta.concat(l); });
+
+  if (liveComp?.startsWith(`${anoStr}-`) && !comps.includes(liveComp)) {
+    const extra = await carregarComp(liveComp);
+    bruta = bruta.concat(extra.map(m => ({ ...m, _competencia_snapshot: liveComp })));
+  }
+
+  const cardLista = matriculadosObterListaDoCard(unidId);
+  if (cardLista.length && liveComp?.startsWith(`${anoStr}-`)) {
+    cardLista.forEach(m => {
+      bruta.push({ ...m, _competencia_snapshot: liveComp, _from_card: true });
+    });
+  }
+
+  const deduped = matriculadosDedupeAlunos(bruta);
+  const lista = matriculadosEnriquecerLista(deduped, mapas);
+  const porMes = matriculadosContagemPorMesAno(lista, anoStr);
+  const mesesComSnapshot = comps.length + (liveComp?.startsWith(`${anoStr}-`) && !comps.includes(liveComp) ? 1 : 0);
+
+  return {
+    lista,
+    porMes,
+    mesesComSnapshot,
+    competenciasUsadas: [...new Set(comps.concat(liveComp?.startsWith(`${anoStr}-`) ? [liveComp] : []))].filter(Boolean),
+  };
+}
 
 function matriculadosColRelatorios(unidId) {
   if (typeof db === 'undefined' || !unidId) return null;
@@ -1768,30 +1913,70 @@ function matriculadosMontarPayloadRelatorio(unidId, lista, tipo, opts) {
   const o = opts || {};
   const agora = new Date();
   const competencia = o.competencia || _matriculadosCache.data?.competencia || agora.toISOString().slice(0, 7);
-  const periodo = tipo === 'semanal' ? matriculadosIsoSemana(agora) : competencia;
+  const ano = o.ano || String(agora.getFullYear());
+  const periodo = tipo === 'semanal'
+    ? matriculadosIsoSemana(agora)
+    : tipo === 'anual'
+      ? ano
+      : competencia;
   const listaSemana = lista.filter(m => matriculadosAlunoNaSemana(m, agora));
-  const detalhe = lista;
+  const detalhe = lista || [];
   const meta = matriculadosObterMetaDoCard(unidId);
+  const card = document.querySelector(`.matric-card[data-unid-id="${unidId}"]`);
+  const exclPlanos = Number(card?.dataset.excluidosPlano || 0);
+  const linhas = matriculadosOrdenarParaRelatorio(detalhe).map(m => {
+    const row = matriculadosLinhaExportacao(m);
+    if (tipo === 'anual') {
+      const cm = String(m.data_lancamento || '').slice(0, 7);
+      row.competencia_matricula = cm ? matriculadosFmtCompetencia(cm) : '—';
+    }
+    return row;
+  });
   return {
     tipo,
     periodo,
-    competencia,
+    ano: tipo === 'anual' ? ano : undefined,
+    competencia: tipo === 'anual' ? `${ano}-01` : competencia,
     unidadeId: unidId,
     unidade_nome: meta.nomeUnidade,
     gerado_em: agora.toISOString(),
-    fonte: o.fonte || (meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico'),
+    fonte: tipo === 'anual' ? 'historico_agregado' : (o.fonte || (meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico')),
+    filtro_planos: 'Anual recorrente + parcelado',
+    excluidos_plano: exclPlanos,
     resumo_mes: matriculadosMontarResumoRelatorio(lista),
     resumo_detalhe: matriculadosMontarResumoRelatorio(detalhe),
+    por_mes: tipo === 'anual' ? (o.porMes || matriculadosContagemPorMesAno(detalhe, ano)) : null,
+    meses_com_snapshot: tipo === 'anual' ? (o.mesesComSnapshot ?? 0) : null,
     novos_semana: listaSemana.length,
-    alunos: matriculadosOrdenarParaRelatorio(detalhe).map(matriculadosLinhaExportacao),
+    alunos: linhas,
     total_mes: lista.length,
     total_detalhe: detalhe.length,
   };
 }
 
+async function matriculadosMontarPayloadRelatorioAsync(unidId, tipo, opts) {
+  const o = opts || {};
+  if (tipo === 'anual') {
+    const ano = o.ano || matriculadosLerAnoRelatorio();
+    const pack = await matriculadosCarregarMatriculadosAno(unidId, ano);
+    return matriculadosMontarPayloadRelatorio(unidId, pack.lista, tipo, {
+      ...o,
+      ano,
+      porMes: pack.porMes,
+      mesesComSnapshot: pack.mesesComSnapshot,
+    });
+  }
+  const lista = o.lista ?? matriculadosObterListaDoCard(unidId);
+  return matriculadosMontarPayloadRelatorio(unidId, lista, tipo, o);
+}
+
 function matriculadosExportarCSV(payload) {
+  const colsAnual = payload.tipo === 'anual'
+    ? [['competencia_matricula', 'Mês matrícula']]
+    : [];
   const cols = [
     ['nome', 'Aluno'], ['matricula', 'Matrícula'], ['plano', 'Plano'],
+    ...colsAnual,
     ['data_matricula', 'Data matrícula'], ['situacao', 'Situação'], ['jornada', 'Jornada'],
     ['bio', 'Bio'], ['com_treino', 'Com treino'], ['situacao_treino', 'Situação treino'],
     ['ultimo_acesso', 'Último acesso'], ['dias_sem_vir', 'Dias s/ vir'],
@@ -1824,7 +2009,9 @@ function matriculadosHtmlRelatorio(payload) {
   const f = r.frequencia || {};
   const tituloTipo = payload.tipo === 'semanal'
     ? `Relatório semanal — ${matriculadosFmtPeriodoSemana(payload.periodo)}`
-    : `Relatório mensal — ${matriculadosFmtCompetencia(payload.competencia)}`;
+    : payload.tipo === 'anual'
+      ? `Relatório anual — ${payload.ano || payload.periodo}`
+      : `Relatório mensal — ${matriculadosFmtCompetencia(payload.competencia)}`;
   const escH = (s) => (typeof esc === 'function' ? esc(String(s ?? '')) : String(s ?? ''));
 
   const tblHead = `<thead><tr>
@@ -1856,6 +2043,15 @@ function matriculadosHtmlRelatorio(payload) {
   const extraSem = payload.tipo === 'semanal'
     ? `<p class="sub">Novos matriculados na semana: <strong>${payload.novos_semana}</strong> · Total do mês: <strong>${payload.total_mes}</strong></p>`
     : '';
+  const tblMesAnual = payload.tipo === 'anual' && payload.por_mes?.length
+    ? `<div class="sec">Matriculados por mês (${payload.ano || payload.periodo})</div>
+      <table><thead><tr><th>Mês</th><th>Matriculados</th></tr></thead><tbody>
+      ${payload.por_mes.map(m => `<tr><td>${escH(matriculadosFmtCompetencia(m.competencia))}</td><td>${m.total}</td></tr>`).join('')}
+      </tbody></table>
+      ${payload.meses_com_snapshot != null ? `<p class="sub">${payload.meses_com_snapshot} mês(es) com snapshot no histórico · métricas de frequência/jornada na data da geração</p>` : ''}`
+    : '';
+  const lblTotal = payload.tipo === 'anual' ? 'Matriculados no ano' : 'Matriculados no mês';
+  const lblFreq = payload.tipo === 'anual' ? 'Frequência de acesso (situação atual)' : 'Frequência de acesso (mês)';
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>${escH(tituloTipo)}</title>
@@ -1876,14 +2072,15 @@ function matriculadosHtmlRelatorio(payload) {
   @media print{body{margin:12mm;} .no-print{display:none;} .grp{page-break-inside:avoid;}}
 </style></head><body>
   <h1>${escH(tituloTipo)}</h1>
-  <p class="sub">${escH(payload.unidade_nome)} · Gerado em ${matriculadosFmtData(payload.gerado_em)}${extraSem}</p>
+  <p class="sub">${escH(payload.unidade_nome)} · Escopo: ${escH(payload.filtro_planos || 'Anual recorrente + parcelado')}${payload.excluidos_plano ? ` · ${payload.excluidos_plano} excluídos (avulso/semanal)` : ''} · Gerado em ${matriculadosFmtData(payload.gerado_em)}${extraSem}</p>
   <div class="kpis">
-    <div class="kpi"><div class="kpi-v">${rd.total ?? payload.total_detalhe}</div><div class="kpi-l">Matriculados no mês</div></div>
+    <div class="kpi"><div class="kpi-v">${rd.total ?? payload.total_detalhe}</div><div class="kpi-l">${lblTotal}</div></div>
     <div class="kpi"><div class="kpi-v" style="color:#34c47c">${rd.avaliacaoRealizada ?? rd.bio ?? 0}</div><div class="kpi-l">Bio feita</div></div>
     <div class="kpi"><div class="kpi-v" style="color:#378add">${rd.comTreinoMontado ?? rd.treino ?? 0}</div><div class="kpi-l">Com treino</div></div>
     <div class="kpi"><div class="kpi-v" style="color:#34c47c">${rd.jornadaCompleta ?? rd.completa ?? 0}</div><div class="kpi-l">Jornada completa</div></div>
   </div>
-  <div class="sec">Frequência de acesso (mês)</div>
+  ${tblMesAnual}
+  <div class="sec">${lblFreq}</div>
   <div class="kpis" style="grid-template-columns:repeat(5,1fr);">
     <div class="kpi"><div class="kpi-v" style="color:#34c47c;font-size:14pt">${f.normal ?? 0}</div><div class="kpi-l">0–6 dias</div></div>
     <div class="kpi"><div class="kpi-v" style="color:#378add;font-size:14pt">${f.acompanhar ?? 0}</div><div class="kpi-l">7–15 dias</div></div>
@@ -1943,15 +2140,22 @@ function matriculadosRenderPreviewRelatorio(payload) {
   const r = payload.resumo_detalhe;
   const titulo = payload.tipo === 'semanal'
     ? matriculadosFmtPeriodoSemana(payload.periodo)
-    : matriculadosFmtCompetencia(payload.competencia);
+    : payload.tipo === 'anual'
+      ? `Ano ${payload.ano || payload.periodo}`
+      : matriculadosFmtCompetencia(payload.competencia);
+  const tipoLbl = payload.tipo === 'semanal' ? 'Semanal' : payload.tipo === 'anual' ? 'Anual' : 'Mensal';
+  const porMes = payload.tipo === 'anual' && payload.por_mes?.length
+    ? `<span>${payload.por_mes.filter(m => m.total > 0).length} mês(es) com matrículas · ${payload.meses_com_snapshot ?? '—'} snapshot(s) no histórico</span>`
+    : '';
   return `<div class="matric-rel-preview">
-    <div class="matric-rel-preview-hd">${titulo} · ${payload.tipo === 'semanal' ? 'Semanal' : 'Mensal'}</div>
+    <div class="matric-rel-preview-hd">${titulo} · ${tipoLbl}</div>
     <div class="matric-rel-preview-grid">
       <span><strong>${payload.total_detalhe}</strong> alunos no detalhe</span>
       <span><strong style="color:#34c47c">${r.jornadaCompleta ?? r.completa ?? 0}</strong> jornada completa</span>
       <span><strong style="color:#34c47c">${r.avaliacaoRealizada ?? r.bio ?? 0}</strong> bio feita</span>
       <span><strong style="color:#378add">${r.comTreinoMontado ?? r.treino ?? 0}</strong> com treino</span>
       ${payload.tipo === 'semanal' ? `<span><strong>${payload.novos_semana}</strong> novos na semana · ${payload.total_mes} no mês</span>` : ''}
+      ${porMes}
     </div>
   </div>`;
 }
@@ -1963,7 +2167,9 @@ function matriculadosRenderHistoricoRelatorios(items) {
   return `<div class="matric-rel-hist">${items.map(it => {
     const lbl = it.tipo === 'semanal'
       ? matriculadosFmtPeriodoSemana(it.periodo)
-      : matriculadosFmtCompetencia(it.competencia || it.periodo);
+      : it.tipo === 'anual'
+        ? `Ano ${it.ano || it.periodo}`
+        : matriculadosFmtCompetencia(it.competencia || it.periodo);
     const dt = it.salvo_em || it.gerado_em;
     return `<div class="matric-rel-hist-item">
       <span>${lbl} <em>(${it.tipo})</em></span>
@@ -1991,6 +2197,11 @@ function matriculadosEnsureModalRelatorio() {
         <div class="matric-rel-tipo">
           <label class="matric-rel-radio"><input type="radio" name="matricRelTipo" value="mensal" checked> Mensal (competência)</label>
           <label class="matric-rel-radio"><input type="radio" name="matricRelTipo" value="semanal"> Semanal (snapshot + novos na semana)</label>
+          <label class="matric-rel-radio"><input type="radio" name="matricRelTipo" value="anual"> Anual (todos os meses do ano)</label>
+        </div>
+        <div id="matricRelAnoWrap" class="matric-rel-ano" hidden>
+          <label class="matric-rel-ano-lbl">Ano calendário</label>
+          <select id="matricRelAno" class="janela-prof-select matric-rel-ano-select"></select>
         </div>
         <div id="matricRelPreview"></div>
         <div class="matric-rel-acoes">
@@ -2004,42 +2215,90 @@ function matriculadosEnsureModalRelatorio() {
     </div>`;
   document.body.appendChild(el);
   el.querySelectorAll('input[name="matricRelTipo"]').forEach(inp => {
-    inp.addEventListener('change', () => matriculadosAtualizarPreviewRelatorio());
+    inp.addEventListener('change', () => {
+      matriculadosToggleAnoRelatorio();
+      matriculadosAtualizarPreviewRelatorio();
+    });
   });
+  const selAno = el.querySelector('#matricRelAno');
+  if (selAno) selAno.addEventListener('change', () => matriculadosAtualizarPreviewRelatorio());
 }
 
 function matriculadosLerTipoRelatorio() {
   const inp = document.querySelector('#matricRelModal input[name="matricRelTipo"]:checked');
-  return inp?.value === 'semanal' ? 'semanal' : 'mensal';
+  const v = inp?.value;
+  if (v === 'semanal' || v === 'anual') return v;
+  return 'mensal';
 }
 
-function matriculadosAtualizarPreviewRelatorio() {
+function matriculadosLerAnoRelatorio() {
+  const sel = document.getElementById('matricRelAno');
+  if (sel?.value) return sel.value;
+  const comp = _matriculadosCache.data?.competencia;
+  if (comp) return String(comp).slice(0, 4);
+  return String(new Date().getFullYear());
+}
+
+function matriculadosToggleAnoRelatorio() {
+  const wrap = document.getElementById('matricRelAnoWrap');
+  if (!wrap) return;
+  wrap.hidden = matriculadosLerTipoRelatorio() !== 'anual';
+}
+
+function matriculadosPreencherSelectAnoRelatorio(anos) {
+  const sel = document.getElementById('matricRelAno');
+  if (!sel) return;
+  const lista = anos?.length ? anos : matriculadosAnosDisponiveis([], null);
+  sel.innerHTML = lista.map(y => `<option value="${y}">${y}</option>`).join('');
+}
+
+async function matriculadosAtualizarPreviewRelatorio() {
   const unidId = document.getElementById('matricRelModal')?.dataset.unidId;
   if (!unidId) return;
-  const lista = matriculadosObterListaDoCard(unidId);
   const tipo = matriculadosLerTipoRelatorio();
-  const meta = matriculadosObterMetaDoCard(unidId);
-  const payload = matriculadosMontarPayloadRelatorio(unidId, lista, tipo, {
-    competencia: _matriculadosCache.data?.competencia,
-    fonte: meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico',
-  });
+  matriculadosToggleAnoRelatorio();
   const prev = document.getElementById('matricRelPreview');
-  if (prev) prev.innerHTML = matriculadosRenderPreviewRelatorio(payload);
-  document.getElementById('matricRelModal').dataset.payload = JSON.stringify(payload);
+  if (prev) prev.innerHTML = '<div class="matric-rel-preview"><div class="matric-rel-preview-hd">Carregando…</div></div>';
+  const meta = matriculadosObterMetaDoCard(unidId);
+  try {
+    const payload = await matriculadosMontarPayloadRelatorioAsync(unidId, tipo, {
+      competencia: _matriculadosCache.data?.competencia,
+      ano: matriculadosLerAnoRelatorio(),
+      fonte: meta.competenciaSel === '__live__' ? 'ao_vivo' : 'historico',
+    });
+    if (prev) {
+      if (!payload.total_detalhe && tipo !== 'anual') {
+        prev.innerHTML = '<div class="matric-rel-hist-empty">Nenhum aluno para este relatório.</div>';
+      } else if (!payload.total_detalhe && tipo === 'anual') {
+        prev.innerHTML = '<div class="matric-rel-hist-empty">Nenhum matriculado no ano selecionado. Sincronize os meses (↻ Atualizar) para gravar histórico.</div>';
+      } else {
+        prev.innerHTML = matriculadosRenderPreviewRelatorio(payload);
+      }
+    }
+    document.getElementById('matricRelModal').dataset.payload = JSON.stringify(payload);
+  } catch (e) {
+    console.warn('[MATRICULADOS] Preview relatório', e.message);
+    if (prev) prev.innerHTML = '<div class="matric-rel-hist-empty">Erro ao montar relatório.</div>';
+  }
 }
 
 async function matriculadosAbrirModalRelatorio(unidId) {
   matriculadosEnsureModalRelatorio();
   const modal = document.getElementById('matricRelModal');
   const lista = matriculadosObterListaDoCard(unidId);
-  if (!lista.length) {
-    alert('Nenhum matriculado carregado para gerar relatório.');
+  const historicoComp = await matriculadosListarCompetencias(unidId);
+  if (!lista.length && !historicoComp.length) {
+    alert('Nenhum matriculado carregado. Abra a seção e clique em Atualizar, ou aguarde o histórico mensal.');
     return;
   }
   const meta = matriculadosObterMetaDoCard(unidId);
   modal.dataset.unidId = unidId;
   document.getElementById('matricRelSub').textContent = meta.nomeUnidade;
-  matriculadosAtualizarPreviewRelatorio();
+  matriculadosPreencherSelectAnoRelatorio(
+    matriculadosAnosDisponiveis(historicoComp, _matriculadosCache.data?.competencia)
+  );
+  matriculadosToggleAnoRelatorio();
+  await matriculadosAtualizarPreviewRelatorio();
   const hist = await matriculadosListarRelatorios(unidId, 8);
   const histEl = document.getElementById('matricRelHistorico');
   if (histEl) histEl.innerHTML = matriculadosRenderHistoricoRelatorios(hist);
@@ -2061,9 +2320,10 @@ async function matriculadosAcaoRelatorio(acao) {
   } catch (_) {
     payload = null;
   }
-  if (!payload?.alunos) {
-    const lista = matriculadosObterListaDoCard(unidId);
-    payload = matriculadosMontarPayloadRelatorio(unidId, lista, matriculadosLerTipoRelatorio(), {});
+  if (!payload?.alunos?.length) {
+    payload = await matriculadosMontarPayloadRelatorioAsync(unidId, matriculadosLerTipoRelatorio(), {
+      ano: matriculadosLerAnoRelatorio(),
+    });
   }
   if (acao === 'csv') {
     matriculadosExportarCSV(payload);
