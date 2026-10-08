@@ -9,6 +9,7 @@ const _avaliacoesRealizadasCache = { data: null, at: 0 };
 const MATRICULADOS_CACHE_TTL_MS = 3 * 60 * 1000;
 const AVALIACOES_CACHE_TTL_MS = 3 * 60 * 1000;
 const MATRICULADOS_PAGE_SIZE = 10;
+const MATRICULADOS_TIME_ZONE = 'America/Sao_Paulo';
 
 const MATRICULADOS_UNIDADE_MAP = {
   medicilandia: { codigo: 1, slug: 'medicilandia' },
@@ -41,6 +42,23 @@ function matriculadosFmtCompetencia(comp) {
   const d = new Date(Number(y), Number(m) - 1, 1);
   if (Number.isNaN(d.getTime())) return comp;
   return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+/** Competencia civil corrente no fuso da operacao, sem depender do fuso do navegador. */
+function matriculadosCompetenciaAtual() {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MATRICULADOS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const ano = partes.find(p => p.type === 'year')?.value;
+  const mes = partes.find(p => p.type === 'month')?.value;
+  return ano && mes ? `${ano}-${mes}` : new Date().toISOString().slice(0, 7);
+}
+
+function matriculadosCompetenciaEncerrada(competencia) {
+  return /^\d{4}-\d{2}$/.test(String(competencia || ''))
+    && String(competencia) < matriculadosCompetenciaAtual();
 }
 
 /** Aceita payload agrupado ou item único legado. */
@@ -694,7 +712,10 @@ function matriculadosColAlunos(unidId) {
   return db.collection('unidades').doc(unidId).collection('matriculados_alunos');
 }
 
-/** Grava snapshot mensal + ficha de cada aluno (data_lancamento preservada). */
+/**
+ * Grava snapshot mensal + ficha de cada aluno (data_lancamento preservada).
+ * Competencia encerrada e append-only: depois da virada, dados ao vivo nao a sobrescrevem.
+ */
 async function matriculadosPersistir(data) {
   if (typeof db === 'undefined' || !data?.unidades || !data.competencia) return;
   const competencia = data.competencia;
@@ -706,7 +727,8 @@ async function matriculadosPersistir(data) {
     const lista = matriculadosLista(u);
 
     try {
-      await matriculadosColCompetencias(unidId).doc(competencia).set({
+      const refCompetencia = matriculadosColCompetencias(unidId).doc(competencia);
+      const payload = {
         competencia,
         unidade_codigo: u.unidade_codigo,
         unidade_nome: u.unidade_nome,
@@ -717,7 +739,29 @@ async function matriculadosPersistir(data) {
         excluidos_plano: u.matriculados_excluidos_plano ?? 0,
         filtro_planos: 'anual_recorrente_parcelado',
         matriculados: lista,
-      }, { merge: true });
+      };
+      const encerrada = matriculadosCompetenciaEncerrada(competencia);
+
+      await db.runTransaction(async transaction => {
+        const atual = await transaction.get(refCompetencia);
+        if (encerrada && atual.exists) {
+          const salvo = atual.data();
+          if (!salvo.fechado_em || salvo.status !== 'fechado') {
+            transaction.update(refCompetencia, {
+              status: 'fechado',
+              fechado_em: agora,
+              atualizado_em: salvo.sincronizado_em || agora,
+            });
+          }
+          return;
+        }
+        transaction.set(refCompetencia, {
+          ...payload,
+          status: encerrada ? 'fechado' : 'aberto',
+          fechado_em: encerrada ? agora : null,
+          atualizado_em: agora,
+        }, { merge: !encerrada });
+      });
     } catch (e) {
       console.warn('[MATRICULADOS] Erro ao salvar competência', unidId, competencia, e.message);
     }
@@ -778,7 +822,10 @@ async function matriculadosCarregarCompetencia(unidId, competencia) {
 }
 
 function matriculadosRenderSelectCompetencias(unidId, competencias, aoVivo, selecionada) {
-  const opts = [`<option value="__live__"${selecionada === '__live__' ? ' selected' : ''}>${aoVivo ? matriculadosFmtCompetencia(aoVivo) + ' (ao vivo)' : 'Mês atual (ao vivo)'}</option>`];
+  const opts = [];
+  if (aoVivo) {
+    opts.push(`<option value="__live__"${selecionada === '__live__' ? ' selected' : ''}>${matriculadosFmtCompetencia(aoVivo)} (ao vivo)</option>`);
+  }
   (competencias || []).forEach(c => {
     if (c.competencia === aoVivo) return;
     const sel = selecionada === c.competencia ? ' selected' : '';
@@ -1521,9 +1568,10 @@ async function matriculadosTrocarCompetencia(select, unidId) {
   }
 
   const listaRaw = histDoc.matriculados || [];
-  const mapas = await matriculadosBuscarCruzamentos(unidId, false);
   const elegiveis = matriculadosFiltrarPlanosElegiveis(listaRaw);
-  const lista = matriculadosEnriquecerLista(elegiveis, mapas);
+  // O snapshot ja foi enriquecido ao ser gravado. Cruzar novamente com as fontes
+  // atuais alteraria retroativamente bio, treino e frequencia do mes encerrado.
+  const lista = elegiveis;
   const unidade = {
     unidade_codigo: histDoc.unidade_codigo,
     unidade_nome: histDoc.unidade_nome,
@@ -1642,7 +1690,8 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
     : null;
 
   if (dataEnriquecida) {
-    matriculadosPersistir(dataEnriquecida).catch(e => console.warn('[MATRICULADOS] Persistência:', e.message));
+    await matriculadosPersistir(dataEnriquecida)
+      .catch(e => console.warn('[MATRICULADOS] Persistência:', e.message));
   }
 
   if (!data) {
@@ -1652,6 +1701,44 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
       <button type="button" class="btn primary" style="margin-top:12px;" onclick="renderMatriculadosMes('${unidId}', true)">Tentar novamente</button>
     </div>`;
     return;
+  }
+
+  const competenciaAtual = matriculadosCompetenciaAtual();
+  const competenciaRecebida = String(data.competencia || '');
+  const payloadEhAtual = competenciaRecebida === competenciaAtual;
+
+  // Um webhook atrasado nao transforma o mes anterior em dados "ao vivo". Depois
+  // de fechar, renderizamos exatamente o snapshot salvo, sem cruzamentos atuais.
+  if (matriculadosCompetenciaEncerrada(competenciaRecebida)) {
+    const [histDoc, historicoFechado] = await Promise.all([
+      matriculadosCarregarCompetencia(unidId, competenciaRecebida),
+      matriculadosListarCompetencias(unidId),
+    ]);
+    if (histDoc) {
+      const listaFechada = matriculadosFiltrarPlanosElegiveis(histDoc.matriculados || []);
+      const unidadeFechada = {
+        unidade_codigo: histDoc.unidade_codigo,
+        unidade_nome: histDoc.unidade_nome,
+        matriculados: listaFechada,
+        matriculados_total_bruto: histDoc.total_bruto ?? listaFechada.length,
+        matriculados_excluidos_plano: histDoc.excluidos_plano ?? 0,
+      };
+      const dataFechada = {
+        competencia: competenciaRecebida,
+        gerado_em: histDoc.gerado_em || histDoc.sincronizado_em,
+        resumo_geral: { total_alunos_unicos: listaFechada.length },
+      };
+      el.innerHTML = matriculadosRenderConteudo(dataFechada, unidadeFechada, unidId, {
+        lista: listaFechada,
+        fonte: 'historico',
+        competenciaSel: competenciaRecebida,
+        historico: historicoFechado,
+        sincronizado_em: histDoc.sincronizado_em,
+        competenciaAoVivo: null,
+      });
+      matriculadosAtualizarMetrica(unidId, dataFechada, listaFechada);
+      return;
+    }
   }
 
   const unidade = matriculadosEncontrarUnidade(dataEnriquecida || data, unidId);
@@ -1675,9 +1762,9 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
   el.innerHTML = matriculadosRenderConteudo(dataEnriquecida || data, unidade, unidId, {
     lista,
     fonte: 'live',
-    competenciaSel: '__live__',
+    competenciaSel: payloadEhAtual ? '__live__' : competenciaRecebida,
     historico: historicoAtualizado,
-    competenciaAoVivo: data.competencia,
+    competenciaAoVivo: payloadEhAtual ? data.competencia : null,
     excluidosPlano: unidade.matriculados_excluidos_plano ?? 0,
   });
   matriculadosAtualizarMetrica(unidId, dataEnriquecida || data, lista);
