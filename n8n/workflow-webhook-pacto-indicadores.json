@@ -1,0 +1,117 @@
+{
+  "name": "Webhook - Indicadores oficiais Pacto",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pacto_indicadores",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bbc51378-4f18-4640-83f1-6bba53890187",
+      "name": "Entrada indicadores Pacto",
+      "webhookId": "c73fd241-0f0d-4757-ad6c-2b2ba6bdf8b4"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH entrada AS (\n  SELECT COALESCE(\n    NULLIF(BTRIM($1::text), ''),\n    TO_CHAR(date_trunc('month', timezone('America/Sao_Paulo', now())), 'YYYY-MM')\n  ) AS competencia_texto\n), periodo AS (\n  SELECT competencia_texto,\n    CASE WHEN competencia_texto ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'\n      THEN to_date(competencia_texto || '-01', 'YYYY-MM-DD') END AS competencia\n  FROM entrada\n)\nSELECT\n  p.competencia_texto AS competencia_solicitada,\n  CASE WHEN p.competencia IS NULL THEN 'Competencia invalida. Use AAAA-MM.' END AS erro_consulta,\n  i.*\nFROM periodo p\nLEFT JOIN public.pacto_indicadores_mensais i ON i.competencia = p.competencia\nORDER BY i.unidade_codigo;",
+        "options": {
+          "queryReplacement": "={{ [$json.body?.competencia ?? $json.query?.competencia ?? $json.competencia ?? null] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "id": "f625d2ff-1150-4920-bc1e-ee8b86e45341",
+      "name": "Consultar indicadores Pacto",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const linhas = $input.all().map(i => i.json);\nif (!linhas.length) throw new Error('Consulta sem metadados.');\nif (linhas[0].erro_consulta) throw new Error(linhas[0].erro_consulta);\nconst competencia = linhas[0].competencia_solicitada;\nconst atual = $now.setZone('America/Sao_Paulo').toFormat('yyyy-MM');\nconst unidades = linhas.filter(r => r.unidade_codigo != null).map(r => {\n  const { competencia_solicitada, erro_consulta, payload_alunos, payload_contratos, payload_acessos, ...dados } = r;\n  return dados;\n});\nreturn [{json:{sucesso:true,competencia,ao_vivo:competencia===atual,fonte:'pacto_mcp',gerado_em:$now.toUTC().toISO(),total_unidades:unidades.length,unidades}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "4b4c76cf-89b2-4a02-8099-9f3772a5f933",
+      "name": "Montar resposta indicadores Pacto"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        720,
+        0
+      ],
+      "id": "f833b217-828f-4d76-bd7b-1ced1233f7dd",
+      "name": "Responder indicadores Pacto"
+    }
+  ],
+  "connections": {
+    "Entrada indicadores Pacto": {
+      "main": [
+        [
+          {
+            "node": "Consultar indicadores Pacto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar indicadores Pacto": {
+      "main": [
+        [
+          {
+            "node": "Montar resposta indicadores Pacto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar resposta indicadores Pacto": {
+      "main": [
+        [
+          {
+            "node": "Responder indicadores Pacto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

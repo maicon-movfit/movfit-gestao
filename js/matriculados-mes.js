@@ -4,12 +4,57 @@
 // ════════════════════════════════════════════════════════════════════════
 
 const _matriculadosCache = { data: null, at: 0 };
+const _pactoIndicadoresCache = { data: null, at: 0 };
 const _avaliacoesAtrasadasCache = { data: null, at: 0 };
 const _avaliacoesRealizadasCache = { data: null, at: 0 };
 const MATRICULADOS_CACHE_TTL_MS = 3 * 60 * 1000;
 const AVALIACOES_CACHE_TTL_MS = 3 * 60 * 1000;
 const MATRICULADOS_PAGE_SIZE = 10;
 const MATRICULADOS_TIME_ZONE = 'America/Sao_Paulo';
+
+async function pactoIndicadoresBuscar(forceRefresh) {
+  if (typeof N8N_PACTO_INDICADORES_URL === 'undefined' || !N8N_PACTO_INDICADORES_URL) return null;
+  if (!forceRefresh && _pactoIndicadoresCache.data && Date.now() - _pactoIndicadoresCache.at < MATRICULADOS_CACHE_TTL_MS) {
+    return _pactoIndicadoresCache.data;
+  }
+  try {
+    const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
+    if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
+    const resp = await fetch(N8N_PACTO_INDICADORES_URL, { method: 'POST', headers, body: '{}' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    if (!data?.sucesso || !Array.isArray(data.unidades)) throw new Error('Resposta inválida');
+    _pactoIndicadoresCache.data = data;
+    _pactoIndicadoresCache.at = Date.now();
+    return data;
+  } catch (e) {
+    console.warn('[PACTO INDICADORES] Mantendo painel atual:', e.message);
+    return _pactoIndicadoresCache.data;
+  }
+}
+
+async function pactoIndicadoresRender(unidId, forceRefresh) {
+  const el = document.getElementById('dashPactoIndicadores');
+  if (!el) return;
+  const ref = MATRICULADOS_UNIDADE_MAP[unidId];
+  if (!ref) { el.innerHTML = ''; return; }
+  const data = await pactoIndicadoresBuscar(forceRefresh);
+  const d = data?.unidades?.find(u => Number(u.unidade_codigo) === Number(ref.codigo));
+  if (!d) { el.innerHTML = ''; return; }
+  const cards = [
+    ['Alunos ativos', d.alunos_ativos], ['Contratos', d.contratos_total],
+    ['Matriculados no mês', d.matriculados_mes], ['Cancelados no mês', d.cancelados_mes],
+    ['Saldo do mês', d.saldo_mes], ['Acessos hoje', d.acessos_hoje],
+    ['Na academia agora', d.alunos_agora], ['Acessos no mês', d.acessos_mes],
+  ];
+  const nome = (typeof UNIDADES !== 'undefined' && UNIDADES.find(u => u.id === unidId)?.nome) || d.unidade_nome;
+  el.innerHTML = `<div class="janela-card pacto-indicadores-card">
+    <div class="janela-card-head"><div><div class="janela-title">Indicadores oficiais Pacto — ${typeof esc === 'function' ? esc(nome) : nome}</div>
+    <div class="janela-sub">Fonte: relatórios Pacto via MCP · ${matriculadosFmtCompetencia(data.competencia)} · Atualizado ${matriculadosFmtData(d.coletado_em)}</div></div></div>
+    <div class="pacto-indicadores-grid">${cards.map(([l,v]) => `<div class="pacto-indicador"><strong>${v ?? '—'}</strong><span>${l}</span></div>`).join('')}</div>
+    <div class="janela-sub" style="margin-top:10px;">Pico: ${d.dia_pico || '—'} às ${d.horario_pico || '—'} · Churn: ${Number(d.churn || 0).toLocaleString('pt-BR',{maximumFractionDigits:2})}%</div>
+  </div>`;
+}
 
 const MATRICULADOS_UNIDADE_MAP = {
   medicilandia: { codigo: 1, slug: 'medicilandia' },
@@ -1662,10 +1707,16 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
 
   if (!unidId) {
     el.innerHTML = '';
+    const pactoEl = document.getElementById('dashPactoIndicadores');
+    if (pactoEl) pactoEl.innerHTML = '';
     return;
   }
 
+  pactoIndicadoresRender(unidId, forceRefresh);
+
   if (forceRefresh) {
+    _pactoIndicadoresCache.data = null;
+    _pactoIndicadoresCache.at = 0;
     _matriculadosCache.data = null;
     _matriculadosCache.at = 0;
     _avaliacoesAtrasadasCache.data = null;

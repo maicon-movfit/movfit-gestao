@@ -51,7 +51,8 @@ CREATE OR REPLACE FUNCTION public.fechar_coleta_matriculas(
     p_unidade_codigo integer,
     p_competencia date,
     p_registros_esperados integer,
-    p_coletado_em timestamptz
+    p_coletado_em timestamptz,
+    p_contratos_coletados jsonb
 ) RETURNS integer
 LANGUAGE plpgsql
 AS $$
@@ -66,6 +67,30 @@ BEGIN
         RAISE EXCEPTION
             'Competencia encerrada % nao pode ser regravada', v_competencia;
     END IF;
+
+    IF jsonb_typeof(p_contratos_coletados) <> 'array' THEN
+        RAISE EXCEPTION 'A lista de contratos coletados deve ser um array JSON';
+    END IF;
+
+    SELECT count(DISTINCT contrato)::integer INTO v_total
+    FROM jsonb_array_elements_text(p_contratos_coletados) AS lista(contrato);
+
+    IF v_total <> p_registros_esperados THEN
+        RAISE EXCEPTION
+            'Lista de contratos inconsistente da unidade %: esperados %, recebidos %',
+            p_unidade_codigo, p_registros_esperados, v_total;
+    END IF;
+
+    -- Remove apenas registros que desapareceram da API durante a competencia
+    -- corrente. Nenhuma outra unidade ou competencia e modificada.
+    DELETE FROM public.matriculas_mov_fit m
+    WHERE m.unidade_codigo = p_unidade_codigo
+      AND m.competencia_coleta = v_competencia
+      AND NOT EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements_text(p_contratos_coletados) AS lista(contrato)
+          WHERE lista.contrato = m.codigo_contrato::text
+      );
 
     SELECT count(*)::integer INTO v_total
     FROM public.matriculas_mov_fit
@@ -110,4 +135,3 @@ END;
 $$;
 
 COMMIT;
-

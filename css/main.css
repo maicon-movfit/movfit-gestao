@@ -1666,6 +1666,12 @@ tbody tr:last-child td{border-bottom:none;}
    JANELA DE TREINO
 ══════════════════════════════════════════════ */
 #dashJanelaTreino,#dashMatriculadosMes{margin-top:14px;}
+#dashPactoIndicadores{margin-top:14px;}
+.pacto-indicadores-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;}
+.pacto-indicador{padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:var(--card);display:flex;flex-direction:column;gap:4px;}
+.pacto-indicador strong{font-size:23px;color:#378add;line-height:1;}
+.pacto-indicador span{font-size:11px;color:var(--muted);}
+@media(max-width:900px){.pacto-indicadores-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .matric-toolbar-comp{margin-bottom:6px;}
 .matric-toolbar-comp .matric-comp-select{min-width:220px;}
 .matric-funil{

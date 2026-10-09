@@ -26,7 +26,7 @@ function totalAtivosFmtData(iso) {
 
 function totalAtivosNormalizarResposta(raw) {
   if (!raw) return null;
-  if (raw.unidades) return raw;
+  if (raw.sucesso && Array.isArray(raw.unidades)) return raw;
   const item = raw.dados?.[0];
   if (item?.resposta?.unidades) return item.resposta;
   if (item?.unidades) return item;
@@ -43,8 +43,8 @@ function totalAtivosEncontrarUnidade(data, unidId) {
 }
 
 async function totalAtivosBuscarDados(forceRefresh) {
-  if (typeof N8N_TOTAL_ATIVOS_URL === 'undefined' || !N8N_TOTAL_ATIVOS_URL) {
-    console.warn('[ATIVOS] Configure N8N_TOTAL_ATIVOS_URL em js/n8n-config.js');
+  if (typeof N8N_PACTO_INDICADORES_URL === 'undefined' || !N8N_PACTO_INDICADORES_URL) {
+    console.warn('[ATIVOS] Configure N8N_PACTO_INDICADORES_URL em js/n8n-config.js');
     return null;
   }
   if (!forceRefresh && _totalAtivosCache.data &&
@@ -62,7 +62,7 @@ async function totalAtivosBuscarDados(forceRefresh) {
       if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
         headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
       }
-      const resp = await fetch(N8N_TOTAL_ATIVOS_URL, {
+      const resp = await fetch(N8N_PACTO_INDICADORES_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify({}),
@@ -96,6 +96,7 @@ function totalAtivosGetUnidade(unidId, data) {
   if (!src || !unidId) return null;
   const unidade = totalAtivosEncontrarUnidade(src, unidId);
   if (!unidade) return null;
+  if (unidade.alunos_ativos != null) return Number(unidade.alunos_ativos);
   const resumo = unidade.resumo?.total_alunos_ativos;
   if (resumo != null) return Number(resumo);
   const n = (unidade.alunos || []).length;
@@ -104,8 +105,10 @@ function totalAtivosGetUnidade(unidId, data) {
 
 function totalAtivosSubtitulo(unidId, data) {
   const unidade = totalAtivosEncontrarUnidade(data || _totalAtivosCache.data, unidId);
-  const when = totalAtivosFmtData(unidade?.sincronizacao?.ultima_atualizacao);
-  return when ? `Ao vivo · ${when}` : 'Ao vivo';
+  const when = totalAtivosFmtData(
+    unidade?.coletado_em || unidade?.sincronizacao?.ultima_atualizacao
+  );
+  return when ? `Pacto MCP · ${when}` : 'Pacto MCP';
 }
 
 async function atualizarMetricaTotalAtivos(unidId) {

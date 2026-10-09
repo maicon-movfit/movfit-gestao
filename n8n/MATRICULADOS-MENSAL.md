@@ -15,7 +15,8 @@ SELECT public.fechar_coleta_matriculas(
     $1::integer,
     $2::date,
     $3::integer,
-    $4::timestamptz
+    $4::timestamptz,
+    $5::jsonb
 ) AS registros_arquivados;
 ```
 
@@ -26,8 +27,15 @@ Em **Query Parameters**, envie:
   $json.unidade_codigo,
   $json.competencia_coleta,
   $json.total_api,
-  $json.coletado_em
+  $json.coletado_em,
+  JSON.stringify($json.contratos_coletados)
 ] }}
+```
+
+O node `Conferir coleta concluida` deve incluir no objeto de saida:
+
+```js
+contratos_coletados: [...contratos],
 ```
 
 Repita o node após os cinco conferidores. O procedimento:
@@ -66,4 +74,3 @@ ORDER BY unidade_codigo;
 
 Uma competência só deve ser apresentada como completa quando as cinco unidades tiverem
 `status = 'CONCLUIDA'` e `registros_esperados = registros_arquivados`.
-
