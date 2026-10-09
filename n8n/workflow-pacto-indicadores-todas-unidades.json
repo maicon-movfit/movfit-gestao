@@ -1,0 +1,1523 @@
+{
+  "name": "Pacto MCP - Indicadores todas as unidades",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        640
+      ],
+      "id": "ca318687-3dd9-4af4-8ee7-92eaab535388",
+      "name": "A cada 6 horas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nreturn [{json:{unidade_codigo:5,unidade_nome:'santarem_nova_republica',empresa_pacto_id:1,chave_empresa:'519fbd660bd686239efcbc6838408c28',competencia:agora.startOf('month').toISODate()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "b334b959-0e09-43ba-b82d-f3f630b91817",
+      "name": "Configurar Nova Republica"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "alunos_ativos_empresa",
+          "cachedResultName": "alunos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Nova Republica').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Nova Republica').first().json.empresa_pacto_id }}",
+            "listar": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listar",
+              "displayName": "listar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "af15ebb5-abf9-4505-af7c-502f316797e8",
+      "name": "Pacto - Alunos ativos",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "numero_contratos_ativos_empresa",
+          "cachedResultName": "numero_contratos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Nova Republica').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Nova Republica').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        720,
+        0
+      ],
+      "id": "0ab70174-b6b3-4b85-a851-4b58daa78125",
+      "name": "Pacto - Contratos",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gestao_acessos_empresa",
+          "cachedResultName": "gestao_acessos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Nova Republica').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Nova Republica').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        960,
+        0
+      ],
+      "id": "dad9b8d8-02eb-4f50-9b60-690a4cff6409",
+      "name": "Pacto - Acessos",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function dados(nome) {\n  const original = $(nome).first().json;\n  let valor = original.structuredContent\n    ?? original.result?.structuredContent\n    ?? original.result\n    ?? original;\n\n  if (Array.isArray(valor.content)) {\n    const blocoTexto = valor.content.find(bloco => bloco?.type === 'text');\n    valor = blocoTexto?.text ?? valor;\n  }\n\n  if (typeof valor === 'string') {\n    try {\n      valor = JSON.parse(valor);\n    } catch {\n      throw new Error(`Resposta textual invalida no node ${nome}.`);\n    }\n  }\n\n  return valor;\n}\n\nconst cfg = $('Configurar Nova Republica').first().json;\nconst alunos = dados('Pacto - Alunos ativos');\nconst contratos = dados('Pacto - Contratos');\nconst acessos = dados('Pacto - Acessos');\nif (alunos.total_ativos == null || contratos.total == null || acessos.acessos_mes_atual == null) {\n  throw new Error('Resposta MCP incompleta; confira a saida dos tres nodes Pacto.');\n}\nconst momento = String(acessos.momento || '').replace(' ', 'T') + ':00-03:00';\nreturn [{json:{...cfg,alunos_ativos:alunos.total_ativos,contratos_total:contratos.total,contratos_ativos:contratos.breakdown.ativos_fim_mes_atual,contratos_vencidos:contratos.breakdown.vencidos_mes_atual,fechamento_anterior:contratos.fechamento_mes_anterior.total,matriculados_mes:contratos.movimentacao_mes.matriculados.ate_hoje,rematriculados_mes:contratos.movimentacao_mes.rematriculados.ate_hoje,cancelados_mes:contratos.movimentacao_mes.cancelados.ate_hoje,desistencias_mes:contratos.movimentacao_mes.desistencias.ate_hoje,saldo_mes:contratos.movimentacao_mes.saldo_mes,churn:contratos.churn_rate,acessos_hoje:acessos.acessos_realizados_hoje,alunos_agora:acessos.alunos_em_tempo_real,acessos_mes:acessos.acessos_mes_atual,acessos_ultimos_30_dias:acessos.total_acessos_ultimos_30_dias,dia_pico:acessos.dia_mais_acessos_mes,horario_pico:acessos.horario_mais_acessos_mes,momento_pacto:momento,payload_alunos:alunos,payload_contratos:contratos,payload_acessos:acessos}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "03915662-89d0-4e6c-888f-00d2eda43a3a",
+      "name": "Normalizar indicadores Pacto"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (public.salvar_indicadores_pacto($1::jsonb)).*;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        0
+      ],
+      "id": "156d4e55-a9c7-4b11-979c-b80daf69127f",
+      "name": "Salvar indicadores oficiais",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nreturn [{json:{unidade_codigo:3,unidade_nome:'santarem_24h',empresa_pacto_id:1,chave_empresa:'546c67bafa5678856869c0f8d43c1a05',competencia:agora.startOf('month').toISODate()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        320
+      ],
+      "id": "d815f569-6d3b-465b-bfaf-d7c2447d59c7",
+      "name": "Configurar Santarem 24h"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "alunos_ativos_empresa",
+          "cachedResultName": "alunos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Santarem 24h').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Santarem 24h').first().json.empresa_pacto_id }}",
+            "listar": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listar",
+              "displayName": "listar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        480,
+        320
+      ],
+      "id": "94795b1b-2f53-40c0-af1e-f1b632c65ba0",
+      "name": "Pacto - Alunos ativos Santarem 24h",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "numero_contratos_ativos_empresa",
+          "cachedResultName": "numero_contratos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Santarem 24h').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Santarem 24h').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        720,
+        320
+      ],
+      "id": "ccbbf0e4-3ac2-4fa7-849f-af4c19765064",
+      "name": "Pacto - Contratos Santarem 24h",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gestao_acessos_empresa",
+          "cachedResultName": "gestao_acessos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Santarem 24h').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Santarem 24h').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        960,
+        320
+      ],
+      "id": "1f192eb3-882b-4c2f-b881-18b43a90ba8d",
+      "name": "Pacto - Acessos Santarem 24h",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function dados(nome) {\n  const original = $(nome).first().json;\n  let valor = original.structuredContent\n    ?? original.result?.structuredContent\n    ?? original.result\n    ?? original;\n\n  if (Array.isArray(valor.content)) {\n    const blocoTexto = valor.content.find(bloco => bloco?.type === 'text');\n    valor = blocoTexto?.text ?? valor;\n  }\n\n  if (typeof valor === 'string') {\n    try {\n      valor = JSON.parse(valor);\n    } catch {\n      throw new Error(`Resposta textual invalida no node ${nome}.`);\n    }\n  }\n\n  return valor;\n}\n\nconst cfg = $('Configurar Santarem 24h').first().json;\nconst alunos = dados('Pacto - Alunos ativos Santarem 24h');\nconst contratos = dados('Pacto - Contratos Santarem 24h');\nconst acessos = dados('Pacto - Acessos Santarem 24h');\nif (alunos.total_ativos == null || contratos.total == null || acessos.acessos_mes_atual == null) {\n  throw new Error('Resposta MCP incompleta; confira a saida dos tres nodes Pacto.');\n}\nconst momento = String(acessos.momento || '').replace(' ', 'T') + ':00-03:00';\nreturn [{json:{...cfg,alunos_ativos:alunos.total_ativos,contratos_total:contratos.total,contratos_ativos:contratos.breakdown.ativos_fim_mes_atual,contratos_vencidos:contratos.breakdown.vencidos_mes_atual,fechamento_anterior:contratos.fechamento_mes_anterior.total,matriculados_mes:contratos.movimentacao_mes.matriculados.ate_hoje,rematriculados_mes:contratos.movimentacao_mes.rematriculados.ate_hoje,cancelados_mes:contratos.movimentacao_mes.cancelados.ate_hoje,desistencias_mes:contratos.movimentacao_mes.desistencias.ate_hoje,saldo_mes:contratos.movimentacao_mes.saldo_mes,churn:contratos.churn_rate,acessos_hoje:acessos.acessos_realizados_hoje,alunos_agora:acessos.alunos_em_tempo_real,acessos_mes:acessos.acessos_mes_atual,acessos_ultimos_30_dias:acessos.total_acessos_ultimos_30_dias,dia_pico:acessos.dia_mais_acessos_mes,horario_pico:acessos.horario_mais_acessos_mes,momento_pacto:momento,payload_alunos:alunos,payload_contratos:contratos,payload_acessos:acessos}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        320
+      ],
+      "id": "907cd5fb-e8e6-4c97-bc8f-e44b55b09894",
+      "name": "Normalizar indicadores Pacto Santarem 24h"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (public.salvar_indicadores_pacto($1::jsonb)).*;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        320
+      ],
+      "id": "4f5ca75f-266a-40bb-b3c2-5dd0a0120462",
+      "name": "Salvar indicadores oficiais Santarem 24h",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nreturn [{json:{unidade_codigo:2,unidade_nome:'itaituba',empresa_pacto_id:1,chave_empresa:'b599c7f369f33460597a86ec40ab16b5',competencia:agora.startOf('month').toISODate()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        640
+      ],
+      "id": "a4f728ef-081c-4640-a6f3-3d4e0e57ab88",
+      "name": "Configurar Itaituba"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "alunos_ativos_empresa",
+          "cachedResultName": "alunos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Itaituba').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Itaituba').first().json.empresa_pacto_id }}",
+            "listar": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listar",
+              "displayName": "listar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        480,
+        640
+      ],
+      "id": "1ca169f5-0139-4043-8e55-bc61abfdd1ec",
+      "name": "Pacto - Alunos ativos Itaituba",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "numero_contratos_ativos_empresa",
+          "cachedResultName": "numero_contratos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Itaituba').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Itaituba').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        720,
+        640
+      ],
+      "id": "e4e64de4-6cd1-40b2-83c9-ad14196e8b20",
+      "name": "Pacto - Contratos Itaituba",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gestao_acessos_empresa",
+          "cachedResultName": "gestao_acessos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Itaituba').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Itaituba').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        960,
+        640
+      ],
+      "id": "d2bf6df0-3f34-45a4-8f18-1e32a22b5633",
+      "name": "Pacto - Acessos Itaituba",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function dados(nome) {\n  const original = $(nome).first().json;\n  let valor = original.structuredContent\n    ?? original.result?.structuredContent\n    ?? original.result\n    ?? original;\n\n  if (Array.isArray(valor.content)) {\n    const blocoTexto = valor.content.find(bloco => bloco?.type === 'text');\n    valor = blocoTexto?.text ?? valor;\n  }\n\n  if (typeof valor === 'string') {\n    try {\n      valor = JSON.parse(valor);\n    } catch {\n      throw new Error(`Resposta textual invalida no node ${nome}.`);\n    }\n  }\n\n  return valor;\n}\n\nconst cfg = $('Configurar Itaituba').first().json;\nconst alunos = dados('Pacto - Alunos ativos Itaituba');\nconst contratos = dados('Pacto - Contratos Itaituba');\nconst acessos = dados('Pacto - Acessos Itaituba');\nif (alunos.total_ativos == null || contratos.total == null || acessos.acessos_mes_atual == null) {\n  throw new Error('Resposta MCP incompleta; confira a saida dos tres nodes Pacto.');\n}\nconst momento = String(acessos.momento || '').replace(' ', 'T') + ':00-03:00';\nreturn [{json:{...cfg,alunos_ativos:alunos.total_ativos,contratos_total:contratos.total,contratos_ativos:contratos.breakdown.ativos_fim_mes_atual,contratos_vencidos:contratos.breakdown.vencidos_mes_atual,fechamento_anterior:contratos.fechamento_mes_anterior.total,matriculados_mes:contratos.movimentacao_mes.matriculados.ate_hoje,rematriculados_mes:contratos.movimentacao_mes.rematriculados.ate_hoje,cancelados_mes:contratos.movimentacao_mes.cancelados.ate_hoje,desistencias_mes:contratos.movimentacao_mes.desistencias.ate_hoje,saldo_mes:contratos.movimentacao_mes.saldo_mes,churn:contratos.churn_rate,acessos_hoje:acessos.acessos_realizados_hoje,alunos_agora:acessos.alunos_em_tempo_real,acessos_mes:acessos.acessos_mes_atual,acessos_ultimos_30_dias:acessos.total_acessos_ultimos_30_dias,dia_pico:acessos.dia_mais_acessos_mes,horario_pico:acessos.horario_mais_acessos_mes,momento_pacto:momento,payload_alunos:alunos,payload_contratos:contratos,payload_acessos:acessos}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        640
+      ],
+      "id": "d5a3152a-48ee-4f2a-831e-a2479cb884c3",
+      "name": "Normalizar indicadores Pacto Itaituba"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (public.salvar_indicadores_pacto($1::jsonb)).*;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        640
+      ],
+      "id": "19e5fb2f-ea28-49ba-90d5-d72d7ace2900",
+      "name": "Salvar indicadores oficiais Itaituba",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nreturn [{json:{unidade_codigo:1,unidade_nome:'medicilandia',empresa_pacto_id:1,chave_empresa:'3b9baed057b6aae89853e3826862fd9b',competencia:agora.startOf('month').toISODate()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        960
+      ],
+      "id": "4592160c-fa57-4f27-a298-b8141c44beff",
+      "name": "Configurar Medicilandia"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "alunos_ativos_empresa",
+          "cachedResultName": "alunos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Medicilandia').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Medicilandia').first().json.empresa_pacto_id }}",
+            "listar": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listar",
+              "displayName": "listar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        480,
+        960
+      ],
+      "id": "bd1d9e34-64b5-49c8-ace3-331f65c9e27f",
+      "name": "Pacto - Alunos ativos Medicilandia",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "numero_contratos_ativos_empresa",
+          "cachedResultName": "numero_contratos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Medicilandia').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Medicilandia').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        720,
+        960
+      ],
+      "id": "de1d487c-5e35-4f41-8a07-2613e346d485",
+      "name": "Pacto - Contratos Medicilandia",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gestao_acessos_empresa",
+          "cachedResultName": "gestao_acessos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Medicilandia').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Medicilandia').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        960,
+        960
+      ],
+      "id": "88f2484f-f8cf-49ae-93f4-d64af4c0f687",
+      "name": "Pacto - Acessos Medicilandia",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function dados(nome) {\n  const original = $(nome).first().json;\n  let valor = original.structuredContent\n    ?? original.result?.structuredContent\n    ?? original.result\n    ?? original;\n\n  if (Array.isArray(valor.content)) {\n    const blocoTexto = valor.content.find(bloco => bloco?.type === 'text');\n    valor = blocoTexto?.text ?? valor;\n  }\n\n  if (typeof valor === 'string') {\n    try {\n      valor = JSON.parse(valor);\n    } catch {\n      throw new Error(`Resposta textual invalida no node ${nome}.`);\n    }\n  }\n\n  return valor;\n}\n\nconst cfg = $('Configurar Medicilandia').first().json;\nconst alunos = dados('Pacto - Alunos ativos Medicilandia');\nconst contratos = dados('Pacto - Contratos Medicilandia');\nconst acessos = dados('Pacto - Acessos Medicilandia');\nif (alunos.total_ativos == null || contratos.total == null || acessos.acessos_mes_atual == null) {\n  throw new Error('Resposta MCP incompleta; confira a saida dos tres nodes Pacto.');\n}\nconst momento = String(acessos.momento || '').replace(' ', 'T') + ':00-03:00';\nreturn [{json:{...cfg,alunos_ativos:alunos.total_ativos,contratos_total:contratos.total,contratos_ativos:contratos.breakdown.ativos_fim_mes_atual,contratos_vencidos:contratos.breakdown.vencidos_mes_atual,fechamento_anterior:contratos.fechamento_mes_anterior.total,matriculados_mes:contratos.movimentacao_mes.matriculados.ate_hoje,rematriculados_mes:contratos.movimentacao_mes.rematriculados.ate_hoje,cancelados_mes:contratos.movimentacao_mes.cancelados.ate_hoje,desistencias_mes:contratos.movimentacao_mes.desistencias.ate_hoje,saldo_mes:contratos.movimentacao_mes.saldo_mes,churn:contratos.churn_rate,acessos_hoje:acessos.acessos_realizados_hoje,alunos_agora:acessos.alunos_em_tempo_real,acessos_mes:acessos.acessos_mes_atual,acessos_ultimos_30_dias:acessos.total_acessos_ultimos_30_dias,dia_pico:acessos.dia_mais_acessos_mes,horario_pico:acessos.horario_mais_acessos_mes,momento_pacto:momento,payload_alunos:alunos,payload_contratos:contratos,payload_acessos:acessos}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        960
+      ],
+      "id": "95d3c9e4-592c-45b9-a111-5536465254b5",
+      "name": "Normalizar indicadores Pacto Medicilandia"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (public.salvar_indicadores_pacto($1::jsonb)).*;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        960
+      ],
+      "id": "261bba93-ae64-4a14-ac1c-84e8047cd470",
+      "name": "Salvar indicadores oficiais Medicilandia",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nreturn [{json:{unidade_codigo:6,unidade_nome:'novo_progresso',empresa_pacto_id:1,chave_empresa:'2a1214c12272bdfac8118b2d61406eb0',competencia:agora.startOf('month').toISODate()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1280
+      ],
+      "id": "88d155bf-9788-4688-97b6-e3eb9875617c",
+      "name": "Configurar Novo Progresso"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "alunos_ativos_empresa",
+          "cachedResultName": "alunos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Novo Progresso').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Novo Progresso').first().json.empresa_pacto_id }}",
+            "listar": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "listar",
+              "displayName": "listar",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        480,
+        1280
+      ],
+      "id": "8480ab4f-067f-4b4b-a953-29d4b2e5e949",
+      "name": "Pacto - Alunos ativos Novo Progresso",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "numero_contratos_ativos_empresa",
+          "cachedResultName": "numero_contratos_ativos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Novo Progresso').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Novo Progresso').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        720,
+        1280
+      ],
+      "id": "233ee064-1c3c-439e-887b-dc2177f3fda9",
+      "name": "Pacto - Contratos Novo Progresso",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp-reports.conversas.ai/mcp",
+        "authentication": "mcpOAuth2Api",
+        "tool": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gestao_acessos_empresa",
+          "cachedResultName": "gestao_acessos_empresa"
+        },
+        "parameters": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chave_empresa": "={{ $('Configurar Novo Progresso').first().json.chave_empresa }}",
+            "empresa_id": "={{ $('Configurar Novo Progresso').first().json.empresa_pacto_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "chave_empresa",
+              "displayName": "chave_empresa",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa_id",
+              "displayName": "empresa_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClient",
+      "typeVersion": 1,
+      "position": [
+        960,
+        1280
+      ],
+      "id": "54f963fd-605e-48f9-a725-b2750a423ae2",
+      "name": "Pacto - Acessos Novo Progresso",
+      "credentials": {
+        "mcpOAuth2Api": {
+          "id": "xmlKsRsiEoB7201o",
+          "name": "Pacto MCP OAuth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function dados(nome) {\n  const original = $(nome).first().json;\n  let valor = original.structuredContent\n    ?? original.result?.structuredContent\n    ?? original.result\n    ?? original;\n\n  if (Array.isArray(valor.content)) {\n    const blocoTexto = valor.content.find(bloco => bloco?.type === 'text');\n    valor = blocoTexto?.text ?? valor;\n  }\n\n  if (typeof valor === 'string') {\n    try {\n      valor = JSON.parse(valor);\n    } catch {\n      throw new Error(`Resposta textual invalida no node ${nome}.`);\n    }\n  }\n\n  return valor;\n}\n\nconst cfg = $('Configurar Novo Progresso').first().json;\nconst alunos = dados('Pacto - Alunos ativos Novo Progresso');\nconst contratos = dados('Pacto - Contratos Novo Progresso');\nconst acessos = dados('Pacto - Acessos Novo Progresso');\nif (alunos.total_ativos == null || contratos.total == null || acessos.acessos_mes_atual == null) {\n  throw new Error('Resposta MCP incompleta; confira a saida dos tres nodes Pacto.');\n}\nconst momento = String(acessos.momento || '').replace(' ', 'T') + ':00-03:00';\nreturn [{json:{...cfg,alunos_ativos:alunos.total_ativos,contratos_total:contratos.total,contratos_ativos:contratos.breakdown.ativos_fim_mes_atual,contratos_vencidos:contratos.breakdown.vencidos_mes_atual,fechamento_anterior:contratos.fechamento_mes_anterior.total,matriculados_mes:contratos.movimentacao_mes.matriculados.ate_hoje,rematriculados_mes:contratos.movimentacao_mes.rematriculados.ate_hoje,cancelados_mes:contratos.movimentacao_mes.cancelados.ate_hoje,desistencias_mes:contratos.movimentacao_mes.desistencias.ate_hoje,saldo_mes:contratos.movimentacao_mes.saldo_mes,churn:contratos.churn_rate,acessos_hoje:acessos.acessos_realizados_hoje,alunos_agora:acessos.alunos_em_tempo_real,acessos_mes:acessos.acessos_mes_atual,acessos_ultimos_30_dias:acessos.total_acessos_ultimos_30_dias,dia_pico:acessos.dia_mais_acessos_mes,horario_pico:acessos.horario_mais_acessos_mes,momento_pacto:momento,payload_alunos:alunos,payload_contratos:contratos,payload_acessos:acessos}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        1280
+      ],
+      "id": "68891301-447a-4a44-911f-b26dbe276e1f",
+      "name": "Normalizar indicadores Pacto Novo Progresso"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (public.salvar_indicadores_pacto($1::jsonb)).*;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        1280
+      ],
+      "id": "a77dae6a-de78-475b-9872-090ac66135bc",
+      "name": "Salvar indicadores oficiais Novo Progresso",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "A cada 6 horas": {
+      "main": [
+        [
+          {
+            "node": "Configurar Nova Republica",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Configurar Santarem 24h",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Configurar Itaituba",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Configurar Medicilandia",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Configurar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Alunos ativos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Alunos ativos": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Contratos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Contratos": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Acessos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Acessos": {
+      "main": [
+        [
+          {
+            "node": "Normalizar indicadores Pacto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar indicadores Pacto": {
+      "main": [
+        [
+          {
+            "node": "Salvar indicadores oficiais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Alunos ativos Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Alunos ativos Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Contratos Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Contratos Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Acessos Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Acessos Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Normalizar indicadores Pacto Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar indicadores Pacto Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Salvar indicadores oficiais Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Alunos ativos Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Alunos ativos Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Contratos Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Contratos Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Acessos Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Acessos Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Normalizar indicadores Pacto Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar indicadores Pacto Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Salvar indicadores oficiais Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Alunos ativos Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Alunos ativos Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Contratos Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Contratos Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Acessos Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Acessos Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Normalizar indicadores Pacto Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar indicadores Pacto Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Salvar indicadores oficiais Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Alunos ativos Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Alunos ativos Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Contratos Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Contratos Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Pacto - Acessos Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pacto - Acessos Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Normalizar indicadores Pacto Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar indicadores Pacto Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Salvar indicadores oficiais Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "Instalar indicadores oficiais Pacto",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "BEGIN;\n\nCREATE TABLE IF NOT EXISTS public.pacto_indicadores_mensais (\n    unidade_codigo integer NOT NULL,\n    unidade_nome text NOT NULL,\n    empresa_pacto_id integer NOT NULL,\n    competencia date NOT NULL,\n    alunos_ativos integer NOT NULL,\n    contratos_total integer NOT NULL,\n    contratos_ativos integer NOT NULL,\n    contratos_vencidos integer NOT NULL,\n    fechamento_anterior integer NOT NULL,\n    matriculados_mes integer NOT NULL,\n    rematriculados_mes integer NOT NULL,\n    cancelados_mes integer NOT NULL,\n    desistencias_mes integer NOT NULL,\n    saldo_mes integer NOT NULL,\n    churn numeric(10,4) NOT NULL,\n    acessos_hoje integer NOT NULL,\n    alunos_agora integer NOT NULL,\n    acessos_mes integer NOT NULL,\n    acessos_ultimos_30_dias integer NOT NULL,\n    dia_pico text,\n    horario_pico text,\n    momento_pacto timestamptz,\n    payload_alunos jsonb NOT NULL,\n    payload_contratos jsonb NOT NULL,\n    payload_acessos jsonb NOT NULL,\n    coletado_em timestamptz NOT NULL DEFAULT now(),\n    atualizado_em timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (unidade_codigo, competencia)\n);\n\nCREATE INDEX IF NOT EXISTS idx_pacto_indicadores_competencia\n    ON public.pacto_indicadores_mensais (competencia DESC, unidade_codigo);\n\nCREATE OR REPLACE FUNCTION public.salvar_indicadores_pacto(p_dados jsonb)\nRETURNS public.pacto_indicadores_mensais\nLANGUAGE plpgsql\nAS $$\nDECLARE\n    v_competencia date := date_trunc('month', (p_dados->>'competencia')::date)::date;\n    v_mes_atual date := date_trunc('month', timezone('America/Sao_Paulo', now()))::date;\n    v_resultado public.pacto_indicadores_mensais;\nBEGIN\n    IF v_competencia <> v_mes_atual THEN\n        RAISE EXCEPTION 'Somente a competencia atual pode ser atualizada: %', v_competencia;\n    END IF;\n\n    INSERT INTO public.pacto_indicadores_mensais (\n        unidade_codigo, unidade_nome, empresa_pacto_id, competencia,\n        alunos_ativos, contratos_total, contratos_ativos, contratos_vencidos,\n        fechamento_anterior, matriculados_mes, rematriculados_mes,\n        cancelados_mes, desistencias_mes, saldo_mes, churn, acessos_hoje,\n        alunos_agora, acessos_mes, acessos_ultimos_30_dias, dia_pico,\n        horario_pico, momento_pacto, payload_alunos, payload_contratos,\n        payload_acessos, coletado_em, atualizado_em\n    ) VALUES (\n        (p_dados->>'unidade_codigo')::integer, p_dados->>'unidade_nome',\n        (p_dados->>'empresa_pacto_id')::integer, v_competencia,\n        (p_dados->>'alunos_ativos')::integer, (p_dados->>'contratos_total')::integer,\n        (p_dados->>'contratos_ativos')::integer, (p_dados->>'contratos_vencidos')::integer,\n        (p_dados->>'fechamento_anterior')::integer, (p_dados->>'matriculados_mes')::integer,\n        (p_dados->>'rematriculados_mes')::integer, (p_dados->>'cancelados_mes')::integer,\n        (p_dados->>'desistencias_mes')::integer, (p_dados->>'saldo_mes')::integer,\n        (p_dados->>'churn')::numeric, (p_dados->>'acessos_hoje')::integer,\n        (p_dados->>'alunos_agora')::integer, (p_dados->>'acessos_mes')::integer,\n        (p_dados->>'acessos_ultimos_30_dias')::integer, p_dados->>'dia_pico',\n        p_dados->>'horario_pico', (p_dados->>'momento_pacto')::timestamptz,\n        p_dados->'payload_alunos', p_dados->'payload_contratos',\n        p_dados->'payload_acessos', now(), now()\n    )\n    ON CONFLICT (unidade_codigo, competencia) DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_pacto_id = EXCLUDED.empresa_pacto_id,\n        alunos_ativos = EXCLUDED.alunos_ativos,\n        contratos_total = EXCLUDED.contratos_total,\n        contratos_ativos = EXCLUDED.contratos_ativos,\n        contratos_vencidos = EXCLUDED.contratos_vencidos,\n        fechamento_anterior = EXCLUDED.fechamento_anterior,\n        matriculados_mes = EXCLUDED.matriculados_mes,\n        rematriculados_mes = EXCLUDED.rematriculados_mes,\n        cancelados_mes = EXCLUDED.cancelados_mes,\n        desistencias_mes = EXCLUDED.desistencias_mes,\n        saldo_mes = EXCLUDED.saldo_mes,\n        churn = EXCLUDED.churn,\n        acessos_hoje = EXCLUDED.acessos_hoje,\n        alunos_agora = EXCLUDED.alunos_agora,\n        acessos_mes = EXCLUDED.acessos_mes,\n        acessos_ultimos_30_dias = EXCLUDED.acessos_ultimos_30_dias,\n        dia_pico = EXCLUDED.dia_pico,\n        horario_pico = EXCLUDED.horario_pico,\n        momento_pacto = EXCLUDED.momento_pacto,\n        payload_alunos = EXCLUDED.payload_alunos,\n        payload_contratos = EXCLUDED.payload_contratos,\n        payload_acessos = EXCLUDED.payload_acessos,\n        coletado_em = now(),\n        atualizado_em = now()\n    RETURNING * INTO v_resultado;\n\n    RETURN v_resultado;\nEND;\n$$;\n\nCOMMIT;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "57f7eb04-753e-4fd2-b2bf-755dba8dc8fe",
+      "name": "Instalar estrutura Pacto",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

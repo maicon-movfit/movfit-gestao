@@ -20,10 +20,14 @@ const N8N_PROXY_TOKEN = 'movfit_proxy_k7x9m2pQ4wR9';
 const N8N_JANELA_URL = 'https://n8n2.mov.pro.br/webhook/janela_de_treino';
 
 /** Webhook de alunos ativos por unidade (POST). */
-const N8N_TOTAL_ATIVOS_URL = 'https://n8n2.mov.pro.br/webhook/total_ativos';
+// Legado descontinuado: alunos ativos agora vêm de N8N_PACTO_INDICADORES_URL.
+const N8N_TOTAL_ATIVOS_URL = '';
 
 /** Webhook de matriculados no mês por unidade (POST). */
 const N8N_MATRICULADOS_URL = 'https://n8n2.mov.pro.br/webhook/matriculados_mes';
+
+/** Indicadores gerenciais oficiais consultados pelo MCP da Pacto. */
+const N8N_PACTO_INDICADORES_URL = 'https://n8n2.mov.pro.br/webhook/pacto_indicadores';
 
 /** Webhook de avaliações físicas atrasadas por unidade (POST). */
 const N8N_AVALIACOES_ATRASADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes_atrasadas';
