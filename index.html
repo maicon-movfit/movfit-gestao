@@ -3162,6 +3162,8 @@ async function entrarUnidade(unidId) {
   _gradeModoEdicao=false;
   _gradeInitMes=null;
   unidadeAtual=unid;
+  // Evita exibir o mês/unidade anterior enquanto a nova unidade ainda carrega.
+  atualizarCtxBar(null);
   document.getElementById('headerGeral').style.display='none';
   const hu=document.getElementById('headerUnidade'); hu.style.display='flex';
   document.getElementById('headerUnidadeDot').style.background=unid.cor;
