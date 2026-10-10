@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════
-// TOTAL DE ALUNOS ATIVOS — webhook n8n
+// INDICADORES OFICIAIS DA PACTO — MCP persistido e exposto pelo webhook n8n
 // Config: js/n8n-config.js
 // ════════════════════════════════════════════════════════════════════════
 
