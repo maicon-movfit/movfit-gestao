@@ -752,9 +752,6 @@
     <!-- Janela de Treino (dados ao vivo via webhook) -->
     <div id="dashJanelaTreino"></div>
 
-    <!-- Indicadores oficiais dos relatórios Pacto via MCP -->
-    <div id="dashPactoIndicadores"></div>
-
     <!-- Matriculados no mês (dados ao vivo via webhook) -->
     <div id="dashMatriculadosMes"></div>
 
@@ -1632,8 +1629,8 @@ async function salvarMetasFirestore() {
 <script src="js/n8n-config.js"></script>
 <script src="js/pacto.js"></script>
 <script src="js/total-ativos.js?v=20261009-2"></script>
-<script src="js/janela-treino.js"></script>
-<script src="js/matriculados-mes.js?v=20261009-1"></script>
+<script src="js/janela-treino.js?v=20261009-1"></script>
+<script src="js/matriculados-mes.js?v=20261009-3"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════════════════
@@ -10646,6 +10643,9 @@ async function renderHome(){
 
 async function renderHomeCockpit() {
   const isAdmin = usuarioLogado && usuarioLogado.papel === 'admin';
+  const pactoIndicadores = typeof totalAtivosBuscarDados === 'function'
+    ? await totalAtivosBuscarDados().catch(() => null)
+    : null;
 
   // ── Coletar dados base de todas as unidades ───────────────────────────────
   const dadosUnidades = UNIDADES.map(u => {
@@ -10653,7 +10653,11 @@ async function renderHomeCockpit() {
     if(!hist.length) return { u, hasData: false };
     const ultimo = hist[hist.length-1];
     const prev   = hist.length > 1 ? hist[hist.length-2] : null;
-    const tot    = ultimo.professores.reduce((s,p)=>s+p.total,0);
+    const totalHistorico = ultimo.professores.reduce((s,p)=>s+p.total,0);
+    const totalOficial = typeof totalAtivosGetUnidade === 'function'
+      ? totalAtivosGetUnidade(u.id, pactoIndicadores)
+      : null;
+    const tot    = totalOficial ?? totalHistorico;
     const emDia  = ultimo.professores.reduce((s,p)=>s+p.emDia,0);
     const venc   = ultimo.professores.reduce((s,p)=>s+p.vencido,0);
     const com    = ultimo.professores.reduce((s,p)=>s+p.comTreino,0);

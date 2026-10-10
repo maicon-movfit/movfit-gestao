@@ -4,57 +4,12 @@
 // ════════════════════════════════════════════════════════════════════════
 
 const _matriculadosCache = { data: null, at: 0 };
-const _pactoIndicadoresCache = { data: null, at: 0 };
 const _avaliacoesAtrasadasCache = { data: null, at: 0 };
 const _avaliacoesRealizadasCache = { data: null, at: 0 };
 const MATRICULADOS_CACHE_TTL_MS = 3 * 60 * 1000;
 const AVALIACOES_CACHE_TTL_MS = 3 * 60 * 1000;
 const MATRICULADOS_PAGE_SIZE = 10;
 const MATRICULADOS_TIME_ZONE = 'America/Sao_Paulo';
-
-async function pactoIndicadoresBuscar(forceRefresh) {
-  if (typeof N8N_PACTO_INDICADORES_URL === 'undefined' || !N8N_PACTO_INDICADORES_URL) return null;
-  if (!forceRefresh && _pactoIndicadoresCache.data && Date.now() - _pactoIndicadoresCache.at < MATRICULADOS_CACHE_TTL_MS) {
-    return _pactoIndicadoresCache.data;
-  }
-  try {
-    const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
-    if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-    const resp = await fetch(N8N_PACTO_INDICADORES_URL, { method: 'POST', headers, body: '{}' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    if (!data?.sucesso || !Array.isArray(data.unidades)) throw new Error('Resposta inválida');
-    _pactoIndicadoresCache.data = data;
-    _pactoIndicadoresCache.at = Date.now();
-    return data;
-  } catch (e) {
-    console.warn('[PACTO INDICADORES] Mantendo painel atual:', e.message);
-    return _pactoIndicadoresCache.data;
-  }
-}
-
-async function pactoIndicadoresRender(unidId, forceRefresh) {
-  const el = document.getElementById('dashPactoIndicadores');
-  if (!el) return;
-  const ref = MATRICULADOS_UNIDADE_MAP[unidId];
-  if (!ref) { el.innerHTML = ''; return; }
-  const data = await pactoIndicadoresBuscar(forceRefresh);
-  const d = data?.unidades?.find(u => Number(u.unidade_codigo) === Number(ref.codigo));
-  if (!d) { el.innerHTML = ''; return; }
-  const cards = [
-    ['Alunos ativos', d.alunos_ativos], ['Contratos', d.contratos_total],
-    ['Matriculados no mês', d.matriculados_mes], ['Cancelados no mês', d.cancelados_mes],
-    ['Saldo do mês', d.saldo_mes], ['Acessos hoje', d.acessos_hoje],
-    ['Na academia agora', d.alunos_agora], ['Acessos no mês', d.acessos_mes],
-  ];
-  const nome = (typeof UNIDADES !== 'undefined' && UNIDADES.find(u => u.id === unidId)?.nome) || d.unidade_nome;
-  el.innerHTML = `<div class="janela-card pacto-indicadores-card">
-    <div class="janela-card-head"><div><div class="janela-title">Indicadores oficiais Pacto — ${typeof esc === 'function' ? esc(nome) : nome}</div>
-    <div class="janela-sub">Fonte: relatórios Pacto via MCP · ${matriculadosFmtCompetencia(data.competencia)} · Atualizado ${matriculadosFmtData(d.coletado_em)}</div></div></div>
-    <div class="pacto-indicadores-grid">${cards.map(([l,v]) => `<div class="pacto-indicador"><strong>${v ?? '—'}</strong><span>${l}</span></div>`).join('')}</div>
-    <div class="janela-sub" style="margin-top:10px;">Pico: ${d.dia_pico || '—'} às ${d.horario_pico || '—'} · Churn: ${Number(d.churn || 0).toLocaleString('pt-BR',{maximumFractionDigits:2})}%</div>
-  </div>`;
-}
 
 const MATRICULADOS_UNIDADE_MAP = {
   medicilandia: { codigo: 1, slug: 'medicilandia' },
@@ -1483,10 +1438,8 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
 
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
-    ['Competência', matriculadosFmtCompetencia(competencia)],
     ['Jornada completa', lista.length ? `${cruz.jornadaCompleta} (${Math.round(cruz.jornadaCompleta / lista.length * 100)}%)` : '0', '#34c47c'],
     ['Bio atrasada', lista.length ? `${cruz.avaliacaoAtrasada} (${Math.round(cruz.avaliacaoAtrasada / lista.length * 100)}%)` : '0', '#f05c5c'],
-    ['Alertas validação', lista.length ? `${cruz.alertas} (${Math.round(cruz.alertas / lista.length * 100)}%)` : '0', cruz.alertas ? '#f5a623' : 'var(--muted)'],
   ]);
 
   const distribuicao = matriculadosTblCol('Jornada', [
@@ -1526,6 +1479,16 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
 
   const jsonLista = JSON.stringify(lista).replace(/'/g, '&#39;');
   const aoVivoComp = o.competenciaAoVivo || data.competencia;
+  const atualizadoEm = resumo.ultima_atualizacao || o.sincronizado_em || data.gerado_em;
+  const alertaHtml = cruz.alertas ? `<div class="matric-alerta-validacao">
+    <div><strong>${cruz.alertas.toLocaleString('pt-BR')} de ${lista.length.toLocaleString('pt-BR')} matriculados com pendência</strong>
+    <span>Use o filtro “Validação” para priorizar as correções.</span></div>
+    <span class="matric-alerta-pct">${lista.length ? Math.round(cruz.alertas / lista.length * 100) : 0}%</span>
+  </div>` : '';
+  const syncDetails = `<details class="janela-details">
+    <summary><span><i></i> ${fonteLabel}</span><span>Atualizado ${atualizadoEm ? matriculadosFmtData(atualizadoEm) : '—'} · Ver detalhes</span></summary>
+    <div class="janela-details-body">${sinc}</div>
+  </details>`;
 
   return `<div class="matric-card janela-card" data-modulo="onboarding" data-freq-aba="todos" data-pagina="1" data-status-aba="todos" data-unid-id="${unidId}" data-competencia-sel="${competenciaSel}" data-excluidos-plano="${exclPlanos}" data-matriculados='${jsonLista}'>
     <div class="janela-card-head">
@@ -1538,8 +1501,10 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
         <button type="button" class="janela-refresh" onclick="renderMatriculadosMes('${unidId}', true)" title="Atualizar ao vivo">↻ Atualizar</button>
       </div>
     </div>
-    <div class="janela-tables">${indicador}${distribuicao}${sinc}</div>
+    ${syncDetails}
+    <div class="janela-tables janela-tables-2">${indicador}${distribuicao}</div>
     ${funil}
+    ${alertaHtml}
     <div class="janela-modulo-nav">
       <button type="button" class="janela-modulo-btn matric-modulo-btn janela-modulo-on" data-modulo="onboarding" onclick="matriculadosTrocarModulo(this,'onboarding')">Onboarding (bio + treino)</button>
       <button type="button" class="janela-modulo-btn matric-modulo-btn" data-modulo="frequencia" onclick="matriculadosTrocarModulo(this,'frequencia')">Frequência de acesso</button>
@@ -1707,16 +1672,10 @@ async function renderMatriculadosMes(unidId, forceRefresh) {
 
   if (!unidId) {
     el.innerHTML = '';
-    const pactoEl = document.getElementById('dashPactoIndicadores');
-    if (pactoEl) pactoEl.innerHTML = '';
     return;
   }
 
-  pactoIndicadoresRender(unidId, forceRefresh);
-
   if (forceRefresh) {
-    _pactoIndicadoresCache.data = null;
-    _pactoIndicadoresCache.at = 0;
     _matriculadosCache.data = null;
     _matriculadosCache.at = 0;
     _avaliacoesAtrasadasCache.data = null;

@@ -642,16 +642,19 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
   const venc = r.vencidos || 0;
   const sem = r.sem_treino || 0;
   const sync = unidade.sincronizacao || {};
+  const alunosTodos = janelaMontarAlunosTodos(unidade);
   const nomeUnidade = (typeof UNIDADES !== 'undefined'
     ? UNIDADES.find(u => u.id === unidId)?.nome
     : null) || unidade.unidade_nome || unidId;
 
-  const pctEm = total > 0 ? Math.round(emDia / total * 100) : 0;
-  const pctAV = total > 0 ? Math.round(aVencer / total * 100) : 0;
-  const pctVen = total > 0 ? Math.round(venc / total * 100) : 0;
-  const pctSem = total > 0 ? Math.round(sem / total * 100) : 0;
-
-  const alunosTodos = janelaMontarAlunosTodos(unidade);
+  // A barra representa a lista de treino. Usar o cadastro de ativos como
+  // denominador fazia os segmentos ultrapassarem 100% quando os escopos diferiam.
+  const totalDistribuicao = alunosTodos.length || (emDia + aVencer + venc + sem);
+  const pctExato = n => totalDistribuicao > 0 ? n / totalDistribuicao * 100 : 0;
+  const pctEm = Math.round(pctExato(emDia));
+  const pctAV = Math.round(pctExato(aVencer));
+  const pctVen = Math.round(pctExato(venc));
+  const pctSem = Math.round(pctExato(sem));
 
   const indicador = janelaTblCol('Indicador', [
     [totalAtivos != null ? 'Alunos ativos' : 'Total de alunos', total],
@@ -672,11 +675,17 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
     ['Sem identificação', semIdent, 'var(--muted)'],
   ]);
 
-  const sinc = janelaTblCol('Sincronização', [
-    ['Última coleta', sync.ultima_coleta ? janelaFmtData(sync.ultima_coleta) : '—'],
-    ['Atualizado em', sync.ultima_atualizacao ? janelaFmtData(sync.ultima_atualizacao) : '—'],
-    ['Alunos na lista', alunosTodos.length],
-  ]);
+  const diferencaLista = alunosTodos.length - total;
+  const syncHtml = `<div class="janela-sync-strip">
+    <span class="janela-sync-status"><i></i> Dados sincronizados</span>
+    <span>Atualizado ${sync.ultima_atualizacao ? janelaFmtData(sync.ultima_atualizacao) : '—'}</span>
+    <span>${alunosTodos.length.toLocaleString('pt-BR')} registros na lista de treino</span>
+  </div>`;
+  const escopoHtml = diferencaLista === 0 ? '' : `<div class="janela-scope-note">
+    <strong>Escopos diferentes:</strong> ${total.toLocaleString('pt-BR')} alunos ativos no cadastro oficial e
+    ${alunosTodos.length.toLocaleString('pt-BR')} registros na lista de treino
+    (${Math.abs(diferencaLista).toLocaleString('pt-BR')} ${diferencaLista > 0 ? 'a mais na lista' : 'a menos na lista'}).
+  </div>`;
 
   const tabs = [
     { id: 'todos', label: 'Todos', n: alunosTodos.length },
@@ -733,12 +742,14 @@ function janelaRenderConteudo(unidade, unidId, totalAtivos) {
     </div>
 
     <div class="janela-view-treino">
-      <div class="janela-tables">${indicador}${distribuicao}${sinc}</div>
+      ${syncHtml}
+      ${escopoHtml}
+      <div class="janela-tables janela-tables-2">${indicador}${distribuicao}</div>
       <div class="janela-bars">
-        <div class="janela-bar" style="width:${pctEm}%;background:#34c47c;" title="Em dia ${pctEm}%"></div>
-        <div class="janela-bar" style="width:${pctAV}%;background:#eab308;" title="A vencer ${pctAV}%"></div>
-        <div class="janela-bar" style="width:${pctVen}%;background:#f05c5c;" title="Vencidos ${pctVen}%"></div>
-        <div class="janela-bar" style="width:${pctSem}%;background:#f5a623;" title="Sem treino ${pctSem}%"></div>
+        <div class="janela-bar" style="width:${pctExato(emDia).toFixed(3)}%;background:#34c47c;" title="Em dia ${pctEm}%"></div>
+        <div class="janela-bar" style="width:${pctExato(aVencer).toFixed(3)}%;background:#eab308;" title="A vencer ${pctAV}%"></div>
+        <div class="janela-bar" style="width:${pctExato(venc).toFixed(3)}%;background:#f05c5c;" title="Vencidos ${pctVen}%"></div>
+        <div class="janela-bar" style="width:${pctExato(sem).toFixed(3)}%;background:#f5a623;" title="Sem treino ${pctSem}%"></div>
       </div>
       <div class="janela-bar-legend">
         <span><i style="background:#34c47c"></i> Em dia ${pctEm}%</span>
