@@ -169,13 +169,7 @@ async function janelaBuscarDados() {
 
   window._janelaInflightPromise = (async () => {
     try {
-      const headers = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      };
-      if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
-        headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-      }
+      const headers = await n8nAuthHeaders();
       const resp = await fetch(N8N_JANELA_URL, {
         method: 'POST',
         headers,

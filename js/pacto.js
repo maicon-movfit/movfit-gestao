@@ -54,23 +54,35 @@ async function pactoViaN8n(tipo, body = {}) {
 
   _pactoInflight[cacheKey] = (async () => {
     try {
-      const resp = await fetch(N8N_PACTO_BASE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Movfit-Proxy': N8N_PROXY_TOKEN,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) {
-        console.error('[PACTO] Proxy n8n HTTP', resp.status, action, tipo);
-        return null;
+      const headers = await n8nAuthHeaders();
+      const endpoints = [];
+      if (headers.Authorization && typeof N8N_PACTO_FIREBASE_URL === 'string' && N8N_PACTO_FIREBASE_URL) {
+        endpoints.push(N8N_PACTO_FIREBASE_URL);
       }
-      const data = await resp.json();
-      _pactoCache[cacheKey] = data;
-      _pactoCacheAt[cacheKey] = Date.now();
-      return data;
+      endpoints.push(N8N_PACTO_BASE);
+
+      for (const endpoint of [...new Set(endpoints)]) {
+        try {
+          const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+          });
+          if (!resp.ok) {
+            console.warn('[PACTO] Proxy n8n HTTP', resp.status, endpoint, action, tipo);
+            continue;
+          }
+          const data = await resp.json();
+          _pactoCache[cacheKey] = data;
+          _pactoCacheAt[cacheKey] = Date.now();
+          return data;
+        } catch (endpointError) {
+          console.warn('[PACTO] Endpoint indisponível:', endpoint, endpointError.message);
+        }
+      }
+
+      console.error('[PACTO] Nenhum endpoint respondeu com sucesso.', action, tipo);
+      return null;
     } catch (e) {
       console.error('[PACTO] Erro de conexão com n8n:', e.message, action, tipo);
       return null;

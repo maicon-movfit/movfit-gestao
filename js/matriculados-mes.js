@@ -156,13 +156,7 @@ async function avaliacoesBuscarWebhook(url, cache, tag, forceRefresh) {
 
   window[inflightKey] = (async () => {
     try {
-      const headers = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      };
-      if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
-        headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-      }
+      const headers = await n8nAuthHeaders();
       const resp = await fetch(url, {
         method: 'POST',
         headers,
@@ -862,13 +856,7 @@ async function matriculadosBuscarDados(forceRefresh) {
 
   window._matriculadosInflightPromise = (async () => {
     try {
-      const headers = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      };
-      if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
-        headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-      }
+      const headers = await n8nAuthHeaders();
       const resp = await fetch(N8N_MATRICULADOS_URL, {
         method: 'POST',
         headers,
@@ -1499,8 +1487,12 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const pacto = fonte === 'live' && typeof totalAtivosEncontrarUnidade === 'function'
     ? totalAtivosEncontrarUnidade(_totalAtivosCache?.data, unidId)
     : null;
+  const pactoStatus = pacto && typeof pactoIndicadoresStatus === 'function'
+    ? pactoIndicadoresStatus(pacto)
+    : null;
   const pactoAtual = pacto && typeof pactoIndicadoresCompetenciaAtual === 'function'
-    && pactoIndicadoresCompetenciaAtual(pacto) ? pacto : null;
+    && pactoIndicadoresCompetenciaAtual(pacto)
+    && pactoStatus?.valido ? pacto : null;
   const pactoNumero = campo => {
     if (!pactoAtual || typeof pactoIndicadoresGetNumero !== 'function') return null;
     return pactoIndicadoresGetNumero(unidId, campo, _totalAtivosCache.data);
@@ -1553,6 +1545,10 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
     ['Acessos nos últimos 30 dias', pactoFmt('acessos_ultimos_30_dias')],
     ['Pico de movimento', pacto.dia_pico && pacto.horario_pico ? `${pacto.dia_pico}, ${pacto.horario_pico}` : '—'],
     ['Coleta oficial', pacto.coletado_em ? matriculadosFmtData(pacto.coletado_em) : '—'],
+  ] : pacto ? [
+    ['Pacto MCP', typeof totalAtivosSubtitulo === 'function'
+      ? totalAtivosSubtitulo(unidId, _totalAtivosCache?.data)
+      : 'Dados oficiais indisponiveis', '#f05c5c'],
   ] : [];
 
   const sinc = matriculadosTblCol('Sincronização', [
