@@ -73,6 +73,36 @@ async function pactoViaN8n(tipo, body = {}) {
             continue;
           }
           const data = await resp.json();
+
+          // A versão Firebase só é aceita quando preserva o contrato do BI:
+          // unidade correta, lista não vazia e coleta recente. Se qualquer
+          // requisito falhar, continua automaticamente para o proxy legado.
+          if (endpoint === N8N_PACTO_FIREBASE_URL) {
+            const envelope = Array.isArray(data) && data.length === 1 ? data[0] : data;
+            const unidadeRecebida = String(envelope?.unidade || '').trim();
+            if (!unidadeCache || unidadeRecebida !== String(unidadeCache)) {
+              console.warn('[PACTO] Resposta Firebase descartada: unidade divergente.', {
+                esperada: unidadeCache,
+                recebida: unidadeRecebida || '(ausente)',
+              });
+              continue;
+            }
+
+            const listaRecebida = pactoExtrairLista(data);
+            if (!listaRecebida.length) {
+              console.warn('[PACTO] Resposta Firebase descartada: lista de professores vazia.');
+              continue;
+            }
+
+            const atualizadoEm = pactoExtrairAtualizadoEm(listaRecebida);
+            const atualizadoMs = atualizadoEm ? new Date(atualizadoEm).getTime() : NaN;
+            const idadeMs = Date.now() - atualizadoMs;
+            if (!Number.isFinite(atualizadoMs) || idadeMs > 24 * 60 * 60 * 1000) {
+              console.warn('[PACTO] Resposta Firebase descartada: cache ausente ou antigo.', atualizadoEm || null);
+              continue;
+            }
+          }
+
           _pactoCache[cacheKey] = data;
           _pactoCacheAt[cacheKey] = Date.now();
           return data;
