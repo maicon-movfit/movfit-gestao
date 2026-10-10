@@ -1,5 +1,6 @@
 /**
- * Audita cruzamentos matriculados × janela × avaliacoes × ativos.
+ * Audita cruzamentos matriculados × janela × avaliacoes e compara a coorte
+ * mensal com os indicadores oficiais agregados da Pacto (MCP).
  * Uso: node scripts/audit-cruzamentos.js
  */
 const https = require('https');
@@ -9,7 +10,7 @@ const URLS = {
   janela: 'https://n8n2.mov.pro.br/webhook/janela_de_treino',
   avaliacoesAtrasadas: 'https://n8n2.mov.pro.br/webhook/avaliacoes_atrasadas',
   avaliacoesRealizadas: 'https://n8n2.mov.pro.br/webhook/avaliacoes_realizadas',
-  ativos: 'https://n8n2.mov.pro.br/webhook/total_ativos',
+  indicadoresPacto: 'https://n8n2.mov.pro.br/webhook/pacto_indicadores',
 };
 
 const UNIDADE_MAP = {
@@ -95,12 +96,12 @@ function matriculadosLista(u) {
 
 async function main() {
   console.log('Buscando webhooks…');
-  const [matric, janela, avalAtr, avalReal, ativos] = await Promise.all([
+  const [matric, janela, avalAtr, avalReal, indicadoresPacto] = await Promise.all([
     post(URLS.matriculados),
     post(URLS.janela),
     post(URLS.avaliacoesAtrasadas),
     post(URLS.avaliacoesRealizadas),
-    post(URLS.ativos),
+    post(URLS.indicadoresPacto),
   ]);
 
   console.log('\n=== RESUMO WEBHOOKS ===');
@@ -108,14 +109,14 @@ async function main() {
   console.log('Janela:', janela?.unidades?.length, 'unidades');
   console.log('Avaliações atrasadas:', avalAtr?.total_alunos, 'alunos,', avalAtr?.total_unidades, 'unidades');
   console.log('Avaliações realizadas:', avalReal?.total_alunos ?? (avalReal?.unidades ? 'ok' : 'ERRO'), avalReal?.code != null ? `(HTTP erro: ${avalReal.message || avalReal.code})` : '');
-  console.log('Ativos:', ativos?.unidades?.length, 'unidades');
+  console.log('Indicadores Pacto MCP:', indicadoresPacto?.unidades?.length, 'unidades, competencia', indicadoresPacto?.competencia);
 
   for (const [unidId, ref] of Object.entries(UNIDADE_MAP)) {
     const um = findUnit(matric, unidId);
     const uj = findUnit(janela, unidId);
     const uaAtr = findUnit(avalAtr, unidId);
     const uaReal = findUnit(avalReal, unidId);
-    const ut = findUnit(ativos, unidId);
+    const pacto = findUnit(indicadoresPacto, unidId);
     const lista = matriculadosLista(um);
     if (!lista.length) {
       console.log(`\n--- ${unidId}: sem matriculados ---`);
@@ -129,9 +130,7 @@ async function main() {
     const aAtrMap = { map: buildMapDedup(uaAtr?.alunos, 'matricula'), dups: aAtrNaive.dups };
     const aRealNaive = buildMapNaive(uaReal?.alunos, 'matricula');
     const aRealMap = { map: buildMapDedup(uaReal?.alunos, 'matricula'), dups: aRealNaive.dups };
-    const tMap = { map: buildMapDedup(ut?.alunos, 'matricula'), dups: buildMapNaive(ut?.alunos, 'matricula').dups };
-
-    let hitJ = 0, hitAtr = 0, hitReal = 0, hitT = 0;
+    let hitJ = 0, hitAtr = 0, hitReal = 0;
     let atrasada = 0, realizada = 0, semAv = 0;
     const semJanela = [];
     const temReal = aRealMap.map.size > 0;
@@ -145,14 +144,23 @@ async function main() {
       if (isAtr) { hitAtr++; atrasada++; }
       else if (isReal) { hitReal++; realizada++; }
       else if (temReal || temAtr) semAv++;
-      if (tMap.map.has(k)) hitT++;
     });
 
     console.log(`\n--- ${unidId} (${ref.slug}) — ${lista.length} matriculados ---`);
     console.log(`  Janela: ${hitJ}/${lista.length} (${Math.round(hitJ / lista.length * 100)}%) | mapa=${jMap.map.size} dups=${jMap.dups.length}`);
     console.log(`  Aval. atrasadas: ${hitAtr}/${lista.length} | mapa=${aAtrMap.map.size}`);
     console.log(`  Aval. realizadas: ${hitReal}/${lista.length} | mapa=${aRealMap.map.size}${!temReal ? ' (webhook indisponível?)' : ''}`);
-    console.log(`  Sem avaliação: ${semAv} | Ativos: ${hitT}/${lista.length}`);
+    console.log(`  Sem avaliação: ${semAv}`);
+    const ativosOficiais = Number(pacto?.alunos_ativos);
+    if (Number.isFinite(ativosOficiais)) {
+      const diferenca = ativosOficiais - lista.length;
+      console.log(
+        `  Pacto MCP: ${ativosOficiais} alunos ativos | ` +
+        `coorte matriculados no mês: ${lista.length} | diferença: ${diferenca >= 0 ? '+' : ''}${diferenca}`
+      );
+    } else {
+      console.log('  Pacto MCP: total oficial indisponível para esta unidade');
+    }
     if (jMap.dups.length) console.log('  ⚠ matrículas duplicadas janela:', [...new Set(jMap.dups)].slice(0, 5));
     if (semJanela.length <= 5) console.log('  Sem janela:', semJanela.join(', '));
     else console.log(`  Sem janela: ${semJanela.length} (ex: ${semJanela.slice(0, 3).join(', ')})`);

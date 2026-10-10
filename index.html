@@ -1530,7 +1530,7 @@
 
 <script>
 // ── Helpers globais ──────────────────────────────────────────────────────────
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function esc(s){return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 // ══ INVESTIGAÇÃO FORENSE — handlers globais ══
 window.addEventListener('error', function(e) {
@@ -2264,10 +2264,13 @@ async function fazerLogin() {
   catch(e) { err.textContent='E-mail ou senha incorretos.'; btn.disabled=false; btn.textContent='Entrar'; }
 }
 
-function fazerLogout(){ auth.signOut(); }
+function fazerLogout(){
+  limparSessaoLocal();
+  auth.signOut();
+}
 
 auth.onAuthStateChanged(async user => {
-  if(!user){ usuarioLogado=null; mostrarLogin(); return; }
+  if(!user){ limparSessaoLocal(); usuarioLogado=null; mostrarLogin(); return; }
   const config = USUARIOS_CONFIG[user.email];
   if(!config){ await auth.signOut(); document.getElementById('loginError').textContent='Acesso não autorizado.'; return; }
 
@@ -2306,6 +2309,7 @@ function adicionarBotaoLogout(){
   btn.style.cssText='font-size:11px;border-color:rgba(240,92,92,.3);color:var(--red);';
   btn.onclick=fazerLogout;
   const badge=document.createElement('span');
+  badge.id='usuarioBadge';
   badge.style.cssText='font-size:11px;color:var(--muted);margin-right:4px;';
   badge.textContent=usuarioLogado.email.split('@')[0];
   const hr=document.getElementById('headerRight')||document.querySelector('.header-right'); if(!hr)return;
@@ -2328,6 +2332,26 @@ const UNIDADES = [
 let unidadeAtual = null;
 const _cache = {};
 const _listeners = {};
+
+function encerrarListenersTempoReal() {
+  Object.keys(_listeners).forEach(unidId => {
+    const unsubscribe = _listeners[unidId];
+    if (typeof unsubscribe === 'function') {
+      try { unsubscribe(); } catch (e) { console.warn('[listener] encerrar:', unidId, e); }
+    }
+    delete _listeners[unidId];
+  });
+}
+
+function limparSessaoLocal() {
+  encerrarListenersTempoReal();
+  Object.keys(_cache).forEach(key => delete _cache[key]);
+  Object.keys(_inativosHistMeta).forEach(key => delete _inativosHistMeta[key]);
+  unidadeAtual = null;
+  clearTimeout(window._syncTimer);
+  document.getElementById('btnLogout')?.remove();
+  document.getElementById('usuarioBadge')?.remove();
+}
 /**
  * Meta de inativos por unidade — usada só na leitura do histórico/relatórios.
  * Em cada mês: oculta o professor se o mês for >= mês da exclusão (removidoEm).
@@ -2516,9 +2540,10 @@ async function limparInativosDosMesesHistorico(unidId) {
 }
 
 function ativarListenerTempoReal(unidId) {
-  if(_listeners[unidId]) return;
+  if(_listeners[unidId]) return _listeners[unidId];
   const ref = db.collection('unidades').doc(unidId).collection('meses').orderBy('nome');
   _listeners[unidId] = ref.onSnapshot(snap => {
+    if (!usuarioLogado) return;
     const hist = snap.docs.map(d => d.data()).sort((a,b)=>compararMeses(a.nome,b.nome));
     _cache[unidId] = hist;
     const refreshUi = () => {
@@ -2530,7 +2555,11 @@ function ativarListenerTempoReal(unidId) {
     } else {
       refreshUi();
     }
-  }, err => console.warn('Listener error:', err));
+  }, err => {
+    delete _listeners[unidId];
+    console.warn('Listener error:', err);
+  });
+  return _listeners[unidId];
 }
 
 function mostrarBadgeSync() {
@@ -4082,7 +4111,7 @@ async function limparCiclosTeste(colabId) {
           <div>
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--c-purple);margin-bottom:8px;">🧪 Limpar ciclos de teste</div>
             <div style="font-size:13px;font-weight:700;color:var(--text);">
-              ${isRapida ? 'Histórico de: ' + (perfilColabAtual?.nome || colabId) : 'Ferramenta Admin — todas as unidades'}
+              ${isRapida ? 'Histórico de: ' + esc(perfilColabAtual?.nome || colabId) : 'Ferramenta Admin — todas as unidades'}
             </div>
           </div>
           <button id="btnFecharLimpeza" style="background:rgba(255,255,255,.06);border:1px solid var(--border2);border-radius:10px;color:#888;padding:6px 12px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;">✕</button>
@@ -8081,7 +8110,7 @@ function radarAnimarRevelacao(notas, onComplete) {
 }
 
 // ── mostrarTelaReflexao ───────────────────────────────────────────────────────
-function mostrarTelaReflexao(notas) {
+function mostrarTelaReflexaoLegado(notas) {
   // Remover a box de boas-vindas se ainda existir
   document.body.querySelectorAll('div[style*="z-index:99999"]').forEach(el => {
     if (el.id !== 'globalLoading') el.remove();
@@ -8118,7 +8147,7 @@ function mostrarTelaReflexao(notas) {
     // ── RADAR PROTAGONISTA ──
     '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 16px 18px;text-align:center;">' +
     '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;">SEU RADAR DE AUTOIMAGEM</div>' +
-    '<canvas id="radarReflexaoCanvas" width="360" height="360" style="display:block;margin:0 auto;max-width:100%;"></canvas>' +
+    '<canvas id="radarReflexaoCanvasLegado" width="360" height="360" style="display:block;margin:0 auto;max-width:100%;"></canvas>' +
     '<div style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
     '<div style="font-size:32px;font-weight:700;color:#e01f2d;font-family:\'DM Mono\',monospace;line-height:1.2;">' + media + '</div>' +
     '<div style="text-align:left;">' +
@@ -8161,7 +8190,7 @@ function mostrarTelaReflexao(notas) {
     '</div>' +
 
     // ── BOTÃO PRINCIPAL ──
-    '<button id="btnConcluirAutoav" ' +
+    '<button id="btnConcluirAutoavLegado" ' +
     'style="width:100%;background:#e01f2d;color:#fff;border:none;border-radius:10px;' +
     'padding:15px;font-size:13px;font-weight:700;cursor:pointer;font-family:\'Inter\',sans-serif;' +
     'letter-spacing:.06em;transition:opacity .15s;">CONCLUIR E ENCERRAR</button>' +
@@ -8172,11 +8201,11 @@ function mostrarTelaReflexao(notas) {
 
   // Desenhar radar (setTimeout apenas para garantir que o DOM renderizou)
   setTimeout(() => {
-    _desenharRadarCanvas(document.getElementById('radarReflexaoCanvas'), notas);
+    _desenharRadarCanvas(document.getElementById('radarReflexaoCanvasLegado'), notas);
   }, 60);
 
   // ── Botão: exibe tela de agradecimento (sem auto-close) ──
-  document.getElementById('btnConcluirAutoav').addEventListener('click', () => {
+  document.getElementById('btnConcluirAutoavLegado').addEventListener('click', () => {
 
     tela.innerHTML =
       '<div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;' +
@@ -8210,7 +8239,7 @@ function mostrarTelaReflexao(notas) {
       '</div>' +
 
       // Botão FECHAR
-      '<button id="btnFecharAutoav" ' +
+      '<button id="btnFecharAutoavLegado" ' +
       'style="background:rgba(255,255,255,.06);color:#888;border:1px solid var(--border2);border-radius:10px;' +
       'padding:11px 36px;font-size:13px;font-weight:600;cursor:pointer;font-family:\'Inter\',sans-serif;letter-spacing:.04em;">' +
       'FECHAR' +
@@ -8222,7 +8251,7 @@ function mostrarTelaReflexao(notas) {
       '</div>';
 
     // Botão FECHAR — sem auto-close, sem timeout, sem redirect
-    document.getElementById('btnFecharAutoav').addEventListener('click', () => {
+    document.getElementById('btnFecharAutoavLegado').addEventListener('click', () => {
       tela.remove();
     });
   });
@@ -9452,7 +9481,7 @@ function _aplicarRankModo(mes){
     const pBio=(()=>{const bt=(p.bioEmDia||0)+(p.bioVencida||0)+(p.bioSemAval||0);return bt>0?pct(p.bioEmDia||0,bt):null;})();
     const ant=prev?prev.professores.find(a=>a.nome===p.nome):null;
     const delta=ant?pe-pct(ant.emDia,ant.comTreino):null;
-    return`<tr><td style="font-family:'DM Mono',monospace;color:var(--muted)">${i+1}</td><td style="font-weight:600">${p.nome}</td><td style="font-family:'DM Mono',monospace">${p.total}</td><td style="font-family:'DM Mono',monospace">${p.comTreino}</td><td style="font-family:'DM Mono',monospace;color:#2ecc71">${p.emDia}</td><td><span style="font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${corPct(pe)}">${pe}%</span></td><td style="font-family:'DM Mono',monospace;color:#e01f2d">${p.vencido}</td><td style="font-family:'DM Mono',monospace;color:#f5a623">${pv}%</td><td style="font-family:'DM Mono',monospace;color:#f5a623">${p.semTreino}</td><td style="font-family:'DM Mono',monospace">${p.duracao}d</td><td style="font-family:'DM Mono',monospace;color:#a78bfa">${pBio!==null?pBio+'%':'—'}</td><td><span class="pill ${_b.cls}">${_b.label}</span></td></tr>`;
+    return`<tr><td style="font-family:'DM Mono',monospace;color:var(--muted)">${i+1}</td><td style="font-weight:600">${esc(p.nome)}</td><td style="font-family:'DM Mono',monospace">${p.total}</td><td style="font-family:'DM Mono',monospace">${p.comTreino}</td><td style="font-family:'DM Mono',monospace;color:#2ecc71">${p.emDia}</td><td><span style="font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${corPct(pe)}">${pe}%</span></td><td style="font-family:'DM Mono',monospace;color:#e01f2d">${p.vencido}</td><td style="font-family:'DM Mono',monospace;color:#f5a623">${pv}%</td><td style="font-family:'DM Mono',monospace;color:#f5a623">${p.semTreino}</td><td style="font-family:'DM Mono',monospace">${p.duracao}d</td><td style="font-family:'DM Mono',monospace;color:#a78bfa">${pBio!==null?pBio+'%':'—'}</td><td><span class="pill ${_b.cls}">${_b.label}</span></td></tr>`;
   }).join('');
 }
 
@@ -9478,7 +9507,7 @@ function renderRanking(mesNome){const mes=getHistorico().find(m=>m.nome===mesNom
           <div style="font-size:${isFirst?'22px':'16px'};margin-bottom:8px;">${icons[i]}</div>
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">${ranks[i]}º lugar</div>
           <div style="width:${isFirst?'40px':'32px'};height:${isFirst?'40px':'32px'};border-radius:50%;background:${CORES_AV[avIdx]};display:flex;align-items:center;justify-content:center;font-size:${isFirst?'13px':'11px'};font-weight:700;color:#fff;margin:0 auto 6px;">${ini}</div>
-          <div style="font-size:${isFirst?'12px':'11px'};font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px;">${p.shortName}</div>
+          <div style="font-size:${isFirst?'12px':'11px'};font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px;">${esc(p.shortName)}</div>
           <div style="font-size:${isFirst?'24px':'18px'};font-weight:700;color:${isFirst?'#e01f2d':corPct(pe)};line-height:1.2;">${pe}%</div>
           ${delta!==null?`<div style="font-size:10px;font-weight:600;color:${delta>=0?'#34c47c':'#f05c5c'};margin-top:3px;">${delta>=0?'+':''}${delta} pts</div>`:''}
           ${(()=>{const _ph=getHistorico();let _stk=0;for(let _mi=_ph.length-1;_mi>=0;_mi--){const _mp=_ph[_mi].professores.find(x=>x.nome===p.nome);if(_mp&&pct(_mp.emDia,_mp.comTreino)>=TH.BOM_PCT)_stk++;else break;}return _stk>=2?`<div style="font-size:10px;font-weight:600;color:var(--green);margin-top:3px;">🔥 ${_stk}x seguidos</div>`:'';})()}
@@ -9486,7 +9515,7 @@ function renderRanking(mesNome){const mes=getHistorico().find(m=>m.nome===mesNom
       }).join('')}
     </div>`;
   }document.getElementById('rankH').style.height=(srt.length*40+80)+'px';const bc=srt.map(p=>{const v=pct(p.emDia,p.comTreino);return corPct(v);});dc('c3');charts['c3']=new Chart(document.getElementById('c3'),{type:'bar',data:{labels:srt.map(p=>p.shortName),datasets:[{data:srt.map(p=>pct(p.emDia,p.comTreino)),backgroundColor:bc,borderWidth:0,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.x}%`}}},scales:{x:{max:100,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,0.06)'}},y:{ticks:{font:{size:11}},grid:{display:false}}}}});document.getElementById('rankTb').innerHTML=srt.map((p,i)=>{const pe=pct(p.emDia,p.comTreino),pv=pct(p.vencido,p.comTreino);let st='',sc='';const _b=badgePct(pe,p.vencido);st=_b.label;sc=_b.cls;const pBio=p.bioEmDia!==undefined?(()=>{const bt=(p.bioEmDia||0)+(p.bioVencida||0)+(p.bioSemAval||0);return bt>0?pct(p.bioEmDia||0,bt):null;})():null;
-return`<tr><td style="color:var(--muted);font-family:'DM Mono',monospace">${i+1}</td><td style="font-weight:500">${p.shortName}</td><td>${p.total}</td><td>${p.comTreino}</td><td>${p.emDia}</td><td><span class="pill ${badgePct(pe).cls}">${pe}%</span></td><td>${p.vencido}</td><td><span class="pill ${pv<=20?'pg':pv<=40?'pa':'pr'}">${pv}%</span></td><td>${p.semTreino}</td><td style="font-family:'DM Mono',monospace">${p.duracao}d</td><td style="color:var(--c-purple);font-family:'DM Mono',monospace">${pBio!==null?pBio+'%':'—'}</td><td><span class="pill ${sc}">${st}</span></td></tr>`;}).join('');}
+ return`<tr><td style="color:var(--muted);font-family:'DM Mono',monospace">${i+1}</td><td style="font-weight:500">${esc(p.shortName)}</td><td>${p.total}</td><td>${p.comTreino}</td><td>${p.emDia}</td><td><span class="pill ${badgePct(pe).cls}">${pe}%</span></td><td>${p.vencido}</td><td><span class="pill ${pv<=20?'pg':pv<=40?'pa':'pr'}">${pv}%</span></td><td>${p.semTreino}</td><td style="font-family:'DM Mono',monospace">${p.duracao}d</td><td style="color:var(--c-purple);font-family:'DM Mono',monospace">${pBio!==null?pBio+'%':'—'}</td><td><span class="pill ${sc}">${st}</span></td></tr>`;}).join('');}
 
 // ======================== COMPARATIVO ========================
 let _compViewMode='abs';
@@ -9683,7 +9712,7 @@ function renderComparativo(){
     (regrediram.length?`<tr><td colspan="7" style="padding:6px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--red);background:rgba(240,92,92,.06);">↓ Regrediram (${regrediram.length})</td></tr>${buildRows(regrediram)}`:'');
 }
 
-function setTlModo(modo, btn){
+function setTlModoLegado(modo, btn){
   _tlModo=modo; _tlCmpA=null; _tlCmpB=null;
   document.querySelectorAll('#tl-content .rank-modo-btn').forEach(b=>{b.classList.remove('rank-modo-on');});
   btn.classList.add('rank-modo-on');
@@ -9691,7 +9720,7 @@ function setTlModo(modo, btn){
   if(hist.length>=2) renderTimeline(hist);
 }
 
-function setTlIndicador(ind, btn){
+function setTlIndicadorLegado(ind, btn){
   _tlIndicador=ind;
   document.querySelectorAll('#tl-content .rank-filtro-btn').forEach(b=>{b.classList.remove('rank-filtro-on');b.style.background='';b.style.color='';});
   btn.classList.add('rank-filtro-on');
@@ -16040,9 +16069,9 @@ async function ativarPortalEst(cicloId) {
   const unidId = unidadeAtual.id, estId = perfilEstAtual.id;
   showLoading(true);
   try {
-    const _msgQ1 = (document.getElementById('portalMsgQ1')||{}).value||null;
-    const _msgQ2 = (document.getElementById('portalMsgQ2')||{}).value||null;
-    const _msgQ3 = (document.getElementById('portalMsgQ3')||{}).value||null;
+    const _msgQ1 = (document.getElementById('estPortalMsgQ1')||{}).value||null;
+    const _msgQ2 = (document.getElementById('estPortalMsgQ2')||{}).value||null;
+    const _msgQ3 = (document.getElementById('estPortalMsgQ3')||{}).value||null;
     const _msgTem = (_msgQ1&&_msgQ1.trim().length>=10)||(_msgQ2&&_msgQ2.trim().length>=10)||(_msgQ3&&_msgQ3.trim().length>=10);
     await ciclosEstRef(unidId,estId).doc(cicloId).update({
       portalToken: token, portalStatus:'ativo', portalCriadoEm: new Date().toISOString(),
@@ -16094,13 +16123,13 @@ async function pdiConfirmarAgoraEst(cicloId) {
   if(!unidadeAtual||!perfilEstAtual) return;
   const ciclo = perfilEstAtual.ciclos?perfilEstAtual.ciclos.find(c=>c.id===cicloId):null;
   if(!ciclo) return;
-  const focoIdx   = (document.getElementById('pdiFocoPrincipalSel')||{}).value||null;
-  const acRt      = ((document.getElementById('pdiFocoAcaoRtTA')||{}).value||'').trim();
-  const obsDevol  = ((document.getElementById('pdiObsDevolutiva')||{}).value||'').trim();
-  const sec1Idx   = (document.getElementById('pdiSec1Sel')||{}).value||null;
-  const sec2Idx   = (document.getElementById('pdiSec2Sel')||{}).value||null;
-  const checkInDt = (document.getElementById('pdiCheckInDataInput')||{}).value||null;
-  const errEl     = document.getElementById('pdiValidErro');
+  const focoIdx   = (document.getElementById('estPdiFocoPrincipalSel')||{}).value||null;
+  const acRt      = ((document.getElementById('estPdiFocoAcaoRtTA')||{}).value||'').trim();
+  const obsDevol  = ((document.getElementById('estPdiObsDevolutiva')||{}).value||'').trim();
+  const sec1Idx   = (document.getElementById('estPdiSec1Sel')||{}).value||null;
+  const sec2Idx   = (document.getElementById('estPdiSec2Sel')||{}).value||null;
+  const checkInDt = (document.getElementById('estPdiCheckInDataInput')||{}).value||null;
+  const errEl     = document.getElementById('estPdiValidErro');
 
   // Validar campos obrigatórios
   const erros = [];
@@ -16152,7 +16181,7 @@ async function pdiCiclarStatusEst(cicloId, idx) {
   try {
     await ciclosEstRef(unidadeAtual.id,perfilEstAtual.id).doc(cicloId).update({pdiItens:itens});
     ciclo.pdiItens = itens;
-    const btn = document.getElementById('pdiStatusBtn_'+idx);
+    const btn = document.getElementById('estPdiStatusBtn_'+idx);
     const STATUS_CONFIG = {'nao_iniciado':{label:'Não iniciado',cor:'#76768a',bg:'rgba(255,255,255,.05)',icon:'○'},'em_andamento':{label:'Em andamento',cor:'#f5a623',bg:'rgba(245,166,35,.1)',icon:'◐'},'concluido':{label:'Concluído',cor:'#2ecc71',bg:'rgba(46,204,113,.1)',icon:'●'}};
     const s = STATUS_CONFIG[prox];
     if(btn){ btn.style.cssText=`padding:6px 14px;border-radius:99px;border:1px solid ${s.cor};background:${s.bg};color:${s.cor};font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;`; btn.textContent=s.icon+s.label; }
@@ -16180,7 +16209,7 @@ function pdiTrocarPrioridadeEst(idx, cicloId) {
   const sugestao = gerarSugestaoPDIEst(ciclo);
   const selecionados = ciclo._rascPrioridadesEst || sugestao.map(p => p.dimIdx);
 
-  const card = document.getElementById(`pdiPrioCard_${idx}`);
+  const card = document.getElementById(`estPdiPrioCard_${idx}`);
   if(!card) return;
 
   const corP = idx === 0 ? '#e01f2d' : idx === 1 ? '#f5a623' : '#4f8ef7';
@@ -16340,14 +16369,14 @@ async function abrirPerfilEstagiario(estId) {
 
       <!-- TABS -->
       <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface2);padding:0 20px;overflow-x:auto;scrollbar-width:none;" id="perfilEstTabs">
-        <button onclick="estGoTab('resumo')"        id="petab-resumo"        class="perfil-tab active-ptab">📋 Resumo</button>
-        <button onclick="estGoTab('radar')"         id="petab-radar"         class="perfil-tab">📡 Radar</button>
-        <button onclick="estGoTab('resultado')"     id="petab-resultado"     class="perfil-tab">📊 Resultado</button>
-        <button onclick="estGoTab('comparativo')"   id="petab-comparativo"   class="perfil-tab">⚖️ Comparativo</button>
-        <button onclick="estGoTab('pdi')"           id="petab-pdi"           class="perfil-tab">🎯 PDI</button>
-        <button onclick="estGoTab('acompanhamento')" id="petab-acompanhamento" class="perfil-tab">💬 Acompanhamento</button>
-        <button onclick="estGoTab('timeline')"      id="petab-timeline"      class="perfil-tab">📅 Timeline</button>
-        <button onclick="estGoTab('historico')"     id="petab-historico"     class="perfil-tab">🗂 Histórico</button>
+        <button onclick="estGoTab('resumo')"        id="esttab-resumo"        class="perfil-tab active-ptab">📋 Resumo</button>
+        <button onclick="estGoTab('radar')"         id="esttab-radar"         class="perfil-tab">📡 Radar</button>
+        <button onclick="estGoTab('resultado')"     id="esttab-resultado"     class="perfil-tab">📊 Resultado</button>
+        <button onclick="estGoTab('comparativo')"   id="esttab-comparativo"   class="perfil-tab">⚖️ Comparativo</button>
+        <button onclick="estGoTab('pdi')"           id="esttab-pdi"           class="perfil-tab">🎯 PDI</button>
+        <button onclick="estGoTab('acompanhamento')" id="esttab-acompanhamento" class="perfil-tab">💬 Acompanhamento</button>
+        <button onclick="estGoTab('timeline')"      id="esttab-timeline"      class="perfil-tab">📅 Timeline</button>
+        <button onclick="estGoTab('historico')"     id="esttab-historico"     class="perfil-tab">🗂 Histórico</button>
       </div>
 
       <!-- CONTENT -->
@@ -16386,7 +16415,7 @@ function fecharPerfilEst() {
 function estGoTab(tab) {
   perfilEstTabAtual = tab;
   document.querySelectorAll('#perfilEstTabs .perfil-tab').forEach(btn => {
-    btn.classList.toggle('active-ptab', btn.id === 'petab-'+tab);
+    btn.classList.toggle('active-ptab', btn.id === 'esttab-'+tab);
   });
   renderPerfilEstConteudo();
 }
@@ -17149,10 +17178,10 @@ function renderPerfilEstConteudo() {
 
       <!-- SELETOR DE PRIORIDADES (rascunho + RT) -->
       ${!confirmado&&podeAvaliar?`
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;" id="pdiSeletor">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;" id="estPdiSeletor">
           <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:12px;">Prioridades sugeridas — clique para alterar</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="pdiPrioCards">
-            ${prioridadesExibir.map((p,idx)=>`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;" id="pdiPrioCard_${idx}" onclick="pdiTrocarPrioridadeEst(${idx},'${ultimoCiclo.id}')" title="Clique para alterar esta prioridade"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:${idx===0?'#e01f2d':idx===1?'#f5a623':'#4f8ef7'};margin-bottom:8px;">P${idx+1} · nota ${p.nota}/10</div><div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px;">${p.dim.title}</div><div style="font-size:10px;color:var(--muted);">${p.dim.bloco}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic;">✎ alterar</div></div>`).join('')}
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="estPdiPrioCards">
+            ${prioridadesExibir.map((p,idx)=>`<div style="background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;" id="estPdiPrioCard_${idx}" onclick="pdiTrocarPrioridadeEst(${idx},'${ultimoCiclo.id}')" title="Clique para alterar esta prioridade"><div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:${idx===0?'#e01f2d':idx===1?'#f5a623':'#4f8ef7'};margin-bottom:8px;">P${idx+1} · nota ${p.nota}/10</div><div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px;">${p.dim.title}</div><div style="font-size:10px;color:var(--muted);">${p.dim.bloco}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic;">✎ alterar</div></div>`).join('')}
           </div>
         </div>`:''}
 
@@ -17183,7 +17212,7 @@ function renderPerfilEstConteudo() {
                 <div style="font-size:11px;color:var(--muted);margin-top:2px;">${p.dim.bloco}</div>
               </div>
               ${confirmado
-                ?`<button onclick="pdiCiclarStatusEst('${ultimoCiclo.id}',${idx})" id="pdiStatusBtn_${idx}" style="padding:6px 14px;border-radius:99px;border:1px solid ${corStatus(statusAtual)};background:${bgStatus(statusAtual)};color:${corStatus(statusAtual)};font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">${icoStatus(statusAtual)} ${lblStatus(statusAtual)}</button>`
+                ?`<button onclick="pdiCiclarStatusEst('${ultimoCiclo.id}',${idx})" id="estPdiStatusBtn_${idx}" style="padding:6px 14px;border-radius:99px;border:1px solid ${corStatus(statusAtual)};background:${bgStatus(statusAtual)};color:${corStatus(statusAtual)};font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">${icoStatus(statusAtual)} ${lblStatus(statusAtual)}</button>`
                 :`<span style="padding:6px 14px;border-radius:99px;background:var(--border);color:var(--muted);font-size:11px;font-weight:600;">○ Não iniciado (após confirmação)</span>`}
             </div>
           </div>
@@ -17212,7 +17241,7 @@ function renderPerfilEstConteudo() {
             <div>
               <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;">Observações ${confirmado?'(editável)':'(disponível após confirmação)'}</div>
               ${confirmado
-                ?`<textarea id="pdiObs_${idx}" placeholder="Adicione observações..." onblur="atualizarObsPDIEst('${ultimoCiclo.id}',${idx},this.value)" onfocus="this.style.borderColor='rgba(224,31,45,.4)'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;padding:10px 12px;resize:none;outline:none;min-height:72px;transition:border-color .15s;box-sizing:border-box;">${obsAtual}</textarea>`
+                ?`<textarea id="estPdiObs_${idx}" placeholder="Adicione observações..." onblur="atualizarObsPDIEst('${ultimoCiclo.id}',${idx},this.value)" onfocus="this.style.borderColor='rgba(224,31,45,.4)'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;padding:10px 12px;resize:none;outline:none;min-height:72px;transition:border-color .15s;box-sizing:border-box;">${obsAtual}</textarea>`
                 :`<div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);font-style:italic;min-height:48px;">Confirme o PDI para adicionar observações.</div>`}
             </div>
           </div>
@@ -17248,9 +17277,9 @@ function renderPerfilEstConteudo() {
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
             <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px;">Mensagem para o estagiário <span style="font-weight:400;">(opcional)</span></div>
-            <textarea id="portalMsgQ1" maxlength="180" rows="2" placeholder="Ex: Sua pontualidade e presença no salão se destacaram neste ciclo..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
-            <textarea id="portalMsgQ2" maxlength="180" rows="2" placeholder="Ex: Quero que você desenvolva mais iniciativa nas rondas sem precisar ser lembrado..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
-            <textarea id="portalMsgQ3" maxlength="140" rows="2" placeholder="Ex: Que você complete o checklist operacional sem falhar por 4 semanas seguidas..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
+            <textarea id="estPortalMsgQ1" maxlength="180" rows="2" placeholder="Ex: Sua pontualidade e presença no salão se destacaram neste ciclo..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
+            <textarea id="estPortalMsgQ2" maxlength="180" rows="2" placeholder="Ex: Quero que você desenvolva mais iniciativa nas rondas sem precisar ser lembrado..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
+            <textarea id="estPortalMsgQ3" maxlength="140" rows="2" placeholder="Ex: Que você complete o checklist operacional sem falhar por 4 semanas seguidas..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea>
           </div>
           <button id="btnAtivarPortalSoEst" style="width:100%;padding:11px;border-radius:10px;border:none;background:var(--c-purple);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">🌐 Ativar portal do estagiário</button>
         </div>`;
@@ -17265,43 +17294,43 @@ function renderPerfilEstConteudo() {
         <div style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.18);border-radius:10px;padding:14px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:14px;">💬</span><div><div style="font-size:12px;font-weight:700;color:var(--c-purple);">Mensagem para o estagiário</div><div style="font-size:10px;color:var(--muted);margin-top:1px;">Será a primeira coisa que verá ao abrir o portal. <em>Opcional.</em></div></div></div>
           <div style="display:flex;flex-direction:column;gap:8px;">
-            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que reconheço em você neste ciclo</div><textarea id="portalMsgQ1" maxlength="180" rows="2" placeholder="Ex: Sua pontualidade e presença no salão se destacaram neste ciclo..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="portalMsgQ1c">0 / 180</div></div>
-            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que quero ajudar você a desenvolver</div><textarea id="portalMsgQ2" maxlength="180" rows="2" placeholder="Ex: Quero que você desenvolva mais iniciativa nas rondas sem precisar ser lembrado..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="portalMsgQ2c">0 / 180</div></div>
-            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que espero de você até o próximo ciclo</div><textarea id="portalMsgQ3" maxlength="140" rows="2" placeholder="Ex: Que você complete o checklist operacional sem falhar por 4 semanas seguidas..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="portalMsgQ3c">0 / 140</div></div>
+            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que reconheço em você neste ciclo</div><textarea id="estPortalMsgQ1" maxlength="180" rows="2" placeholder="Ex: Sua pontualidade e presença no salão se destacaram neste ciclo..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="estPortalMsgQ1c">0 / 180</div></div>
+            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que quero ajudar você a desenvolver</div><textarea id="estPortalMsgQ2" maxlength="180" rows="2" placeholder="Ex: Quero que você desenvolva mais iniciativa nas rondas sem precisar ser lembrado..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="estPortalMsgQ2c">0 / 180</div></div>
+            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que espero de você até o próximo ciclo</div><textarea id="estPortalMsgQ3" maxlength="140" rows="2" placeholder="Ex: Que você complete o checklist operacional sem falhar por 4 semanas seguidas..." style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="estPortalMsgQ3c">0 / 140</div></div>
           </div>
         </div>
         <div style="background:rgba(46,204,113,.05);border:1px solid rgba(46,204,113,.18);border-radius:10px;padding:14px 16px;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span>🎯</span><div><div style="font-size:12px;font-weight:700;color:var(--green);">Foco do desenvolvimento</div><div style="font-size:10px;color:var(--muted);margin-top:1px;">A Biblioteca MOV FIT define o desenvolvimento. Você confirma e acompanha.</div></div></div>
-          <div id="pdiBibLeituraBloco" style="background:var(--bg);border:1px solid rgba(79,142,247,.18);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+          <div id="estPdiBibLeituraBloco" style="background:var(--bg);border:1px solid rgba(79,142,247,.18);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
             <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin-bottom:8px;">O que a Biblioteca definiu para este foco</div>
-            <div id="pdiBibConteudo" style="font-size:11px;color:var(--muted);font-style:italic;">Selecione o foco abaixo para ver o conteúdo da Biblioteca.</div>
+            <div id="estPdiBibConteudo" style="font-size:11px;color:var(--muted);font-style:italic;">Selecione o foco abaixo para ver o conteúdo da Biblioteca.</div>
           </div>
           <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Foco principal <span style="color:#e01f2d;">*</span></div>
-          <select id="pdiFocoPrincipalSel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;"><option value="">— confirme ou ajuste o foco sugerido —</option></select>
-          <div id="pdiFocoSugeridoLabel" style="font-size:10px;color:var(--green);margin-top:3px;display:none;">✦ Sugerido com base no maior gap das notas deste ciclo</div></div>
+          <select id="estPdiFocoPrincipalSel" style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;"><option value="">— confirme ou ajuste o foco sugerido —</option></select>
+          <div id="estPdiFocoSugeridoLabel" style="font-size:10px;color:var(--green);margin-top:3px;display:none;">✦ Sugerido com base no maior gap das notas deste ciclo</div></div>
           <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:12px;margin-top:4px;">
             <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Sua contribuição como RT</div>
-            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Seu comprometimento com este estagiário <span style="color:#e01f2d;">*</span></div><textarea id="pdiFocoAcaoRtTA" rows="2" maxlength="200" placeholder="Ex: Vou observar as rondas duas vezes por semana e dar feedback específico até o check-in." style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="pdiFocoAcaoRtC">0 / 200</div></div>
-            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que emergiu da devolutiva <span style="font-size:10px;font-weight:400;">(opcional)</span></div><textarea id="pdiObsDevolutiva" rows="2" maxlength="400" placeholder="Contexto da conversa — obstáculo identificado, potencial percebido..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;opacity:.85;"></textarea></div>
-            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Dimensões também em desenvolvimento <span style="font-size:10px;font-weight:400;">(opcional — até 2)</span></div><div style="display:flex;gap:8px;"><select id="pdiSec1Sel" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;opacity:.85;"><option value="">— nenhuma —</option></select><select id="pdiSec2Sel" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;opacity:.85;"><option value="">— nenhuma —</option></select></div></div>
-            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Data do check-in <span style="color:#e01f2d;">*</span></div><input type="date" id="pdiCheckInDataInput" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;" min="${new Date().toISOString().split('T')[0]}"></div>
+            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Seu comprometimento com este estagiário <span style="color:#e01f2d;">*</span></div><textarea id="estPdiFocoAcaoRtTA" rows="2" maxlength="200" placeholder="Ex: Vou observar as rondas duas vezes por semana e dar feedback específico até o check-in." style="width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;"></textarea><div style="text-align:right;font-size:10px;color:var(--muted);margin-top:2px;" id="estPdiFocoAcaoRtC">0 / 200</div></div>
+            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">O que emergiu da devolutiva <span style="font-size:10px;font-weight:400;">(opcional)</span></div><textarea id="estPdiObsDevolutiva" rows="2" maxlength="400" placeholder="Contexto da conversa — obstáculo identificado, potencial percebido..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;resize:none;line-height:1.5;outline:none;box-sizing:border-box;opacity:.85;"></textarea></div>
+            <div style="margin-bottom:8px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Dimensões também em desenvolvimento <span style="font-size:10px;font-weight:400;">(opcional — até 2)</span></div><div style="display:flex;gap:8px;"><select id="estPdiSec1Sel" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;opacity:.85;"><option value="">— nenhuma —</option></select><select id="estPdiSec2Sel" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:Inter,sans-serif;padding:7px 8px;outline:none;opacity:.85;"><option value="">— nenhuma —</option></select></div></div>
+            <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;">Data do check-in <span style="color:#e01f2d;">*</span></div><input type="date" id="estPdiCheckInDataInput" style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r-sm);color:var(--text);font-size:12px;font-family:Inter,sans-serif;padding:8px 10px;outline:none;" min="${new Date().toISOString().split('T')[0]}"></div>
           </div>
         </div>
-        <div id="pdiValidErro" style="font-size:11px;color:#e01f2d;display:none;background:rgba(224,31,45,.06);border-radius:6px;padding:8px 12px;margin-bottom:8px;line-height:1.5;"></div>
+        <div id="estPdiValidErro" style="font-size:11px;color:#e01f2d;display:none;background:rgba(224,31,45,.06);border-radius:6px;padding:8px 12px;margin-bottom:8px;line-height:1.5;"></div>
         <div style="display:flex;justify-content:flex-end;">
-          <button id="btnAtivarPortalF1" style="background:rgba(167,139,250,.12);color:var(--c-purple);border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:9px 20px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;">🌐 Confirmar PDI e ativar portal</button>
+          <button id="btnAtivarPortalF1Est" style="background:rgba(167,139,250,.12);color:var(--c-purple);border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:9px 20px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;">🌐 Confirmar PDI e ativar portal</button>
         </div>`;
       el.appendChild(_pWrap);
 
       // Contadores de caracteres
       ['Q1','Q2','Q3'].forEach(q=>{
-        const ta=document.getElementById('portalMsg'+q);
-        const cnt=document.getElementById('portalMsg'+q+'c');
+        const ta=document.getElementById('estPortalMsg'+q);
+        const cnt=document.getElementById('estPortalMsg'+q+'c');
         const max=q==='Q3'?140:180;
         if(ta&&cnt){ta.addEventListener('input',()=>{const n=ta.value.length;cnt.textContent=n+' / '+max;cnt.style.color=n>=max?'#e01f2d':n>=max*.85?'#f5a623':'#76768a';});}
       });
-      const taRt=document.getElementById('pdiFocoAcaoRtTA');
-      const cntRt=document.getElementById('pdiFocoAcaoRtC');
+      const taRt=document.getElementById('estPdiFocoAcaoRtTA');
+      const cntRt=document.getElementById('estPdiFocoAcaoRtC');
       if(taRt&&cntRt){taRt.addEventListener('input',()=>{const n=taRt.value.length;cntRt.textContent=n+' / 200';cntRt.style.color=n>=200?'#e01f2d':n>=170?'#f5a623':'#76768a';});}
 
       // Inicialização do select de foco
@@ -17314,32 +17343,32 @@ function renderPerfilEstConteudo() {
           scores.sort((a,b)=>a.nota-b.nota);
           if(scores.length>0) sugeridoIdx=String(scores[0].i);
         }
-        ['pdiFocoPrincipalSel','pdiSec1Sel','pdiSec2Sel'].forEach(id=>{
+        ['estPdiFocoPrincipalSel','estPdiSec1Sel','estPdiSec2Sel'].forEach(id=>{
           const sel=document.getElementById(id); if(!sel) return;
           dims.forEach((d,i)=>{
             const opt=document.createElement('option');
             opt.value=String(i); opt.textContent=d.title;
-            if(id==='pdiFocoPrincipalSel'&&String(i)===sugeridoIdx){opt.textContent+=' ✦';opt.selected=true;}
+            if(id==='estPdiFocoPrincipalSel'&&String(i)===sugeridoIdx){opt.textContent+=' ✦';opt.selected=true;}
             sel.appendChild(opt);
           });
         });
-        if(sugeridoIdx!==null){const lbl=document.getElementById('pdiFocoSugeridoLabel');if(lbl)lbl.style.display='block';}
+        if(sugeridoIdx!==null){const lbl=document.getElementById('estPdiFocoSugeridoLabel');if(lbl)lbl.style.display='block';}
 
         // Biblioteca — conteúdo ao selecionar foco
         function atualizarBibliotecaEst(focoIdx){
-          const bibDiv=document.getElementById('pdiBibConteudo'); if(!bibDiv) return;
+          const bibDiv=document.getElementById('estPdiBibConteudo'); if(!bibDiv) return;
           const idx=parseInt(focoIdx,10);
           const meta=PDI_META_EST[idx];
           if(!meta){bibDiv.innerHTML='<em style="color:var(--muted);">Conteúdo não encontrado para esta dimensão.</em>';return;}
           bibDiv.innerHTML=`<div style="margin-bottom:8px;"><span style="font-size:10px;font-weight:600;color:var(--c-amber);text-transform:uppercase;letter-spacing:.06em;">Objetivo</span><div style="font-size:12px;color:var(--text);margin-top:3px;line-height:1.5;">${meta.objetivo}</div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><span style="font-size:10px;font-weight:600;color:var(--blue);text-transform:uppercase;letter-spacing:.06em;">Leitura</span><div style="font-size:11px;color:#b0b0c0;margin-top:3px;line-height:1.5;">${meta.leitura}</div></div><div><span style="font-size:10px;font-weight:600;color:var(--c-purple);text-transform:uppercase;letter-spacing:.06em;">Prática</span><div style="font-size:11px;color:#b0b0c0;margin-top:3px;line-height:1.5;">${meta.pratica}</div></div></div>`;
         }
-        const selFoco=document.getElementById('pdiFocoPrincipalSel');
+        const selFoco=document.getElementById('estPdiFocoPrincipalSel');
         if(selFoco){
           selFoco.addEventListener('change',()=>atualizarBibliotecaEst(selFoco.value));
           if(sugeridoIdx!==null) atualizarBibliotecaEst(sugeridoIdx);
         }
 
-        const btn=document.getElementById('btnAtivarPortalF1');
+        const btn=document.getElementById('btnAtivarPortalF1Est');
         if(btn) btn.addEventListener('click',()=>pdiConfirmarAgoraEst(ultimoCiclo.id));
         const btnCfm=document.getElementById('btnConfirmarPDIEst');
         if(btnCfm) btnCfm.addEventListener('click',()=>pdiSoConfirmarEst(ultimoCiclo.id));
@@ -17994,7 +18023,7 @@ async function renderPedidosEst(unidId, estId) {
       <!-- VOZ DO ESTAGIÁRIO -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Pedidos deste mês</div>
-        ${tipoMaisFrequente&&tipoMaisFrequente[1]>=2?`<div style="font-size:10px;color:var(--c-amber);">⚠ "${tipoMaisFrequente[0]}" aparece ${tipoMaisFrequente[1]}x — pode ser um padrão</div>`:''}
+        ${tipoMaisFrequente&&tipoMaisFrequente[1]>=2?`<div style="font-size:10px;color:var(--c-amber);">⚠ "${esc(tipoMaisFrequente[0])}" aparece ${tipoMaisFrequente[1]}x — pode ser um padrão</div>`:''}
       </div>
       ${vozes.length===0
         ? `<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;font-size:12px;color:#3a3a42;">Nenhum pedido registrado pelo estagiário este mês.</div>`
@@ -18023,7 +18052,7 @@ async function renderPedidosEst(unidId, estId) {
             <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px;">
               <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px;">${v.status==='corrigir'?'Tente entender de novo':'Como você entendeu o que o estagiário precisa?'}</div>
               <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Escreva com suas próprias palavras. O estagiário vai confirmar se você entendeu.</div>
-              <textarea id="vozEstRTInterpTA" placeholder="Ex: João precisa de orientação sobre como preencher o relatório de ocorrência. Vou mostrar passo a passo na quinta."
+              <textarea id="vozEstRTInterpTA_${v.id}" placeholder="Ex: João precisa de orientação sobre como preencher o relatório de ocorrência. Vou mostrar passo a passo na quinta."
                 style="width:100%;min-height:56px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;padding:10px 12px;resize:none;outline:none;box-sizing:border-box;margin-bottom:8px;"></textarea>
               <button onclick="vozEstRTConfirmarInterpretacao('${unidId}','${estId}','${v.id||''}')"
                 style="width:100%;padding:8px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);color:var(--blue);">
@@ -18039,7 +18068,7 @@ async function renderPedidosEst(unidId, estId) {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
               <div style="font-size:12px;font-weight:600;color:var(--text);">${ti?ti.icone+' '+ti.label:esc(v.tipo||'Pedido')}</div>
               <div style="display:flex;gap:8px;align-items:center;">
-                <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${urgCor}18;color:${urgCor};border:1px solid ${urgCor}40;">${v.urgencia||'média'}</span>
+                <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${urgCor}18;color:${urgCor};border:1px solid ${urgCor}40;">${esc(v.urgencia||'média')}</span>
                 ${stBadge}
               </div>
             </div>
@@ -18059,7 +18088,7 @@ async function renderAprendizadosEst(unidId, estId) {
   try {
     const apSnap=await aprendizadoEstRef(unidId,estId).orderBy('criadoEm','desc').limit(6).get();
     const aprendizados=apSnap.docs.map(d=>d.data());
-    host.innerHTML=aprendizados.length?`<div style="display:flex;flex-direction:column;gap:8px;">${aprendizados.map(a=>`<div style="border-left:2px solid rgba(167,139,250,.4);padding-left:12px;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;">${a.mes||''}</div><div style="font-size:12px;color:#b0b0c0;font-style:italic;line-height:1.5;">"${esc(a.texto)}"</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:#3a3a42;padding:8px 0;text-align:center;">Nenhum aprendizado registrado ainda.</div>';
+    host.innerHTML=aprendizados.length?`<div style="display:flex;flex-direction:column;gap:8px;">${aprendizados.map(a=>`<div style="border-left:2px solid rgba(167,139,250,.4);padding-left:12px;"><div style="font-size:10px;color:var(--muted);margin-bottom:4px;">${esc(a.mes||'')}</div><div style="font-size:12px;color:#b0b0c0;font-style:italic;line-height:1.5;">"${esc(a.texto)}"</div></div>`).join('')}</div>`:'<div style="font-size:12px;color:#3a3a42;padding:8px 0;text-align:center;">Nenhum aprendizado registrado ainda.</div>';
   } catch(e){if(host)host.innerHTML='';}
 }
 
@@ -18196,7 +18225,7 @@ async function renderVozEstRT(el, unidId, estId) {
         <div style="border-top:1px solid var(--border);padding-top:10px;">
           <div style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px;">Como você entendeu o que o estagiário precisa?</div>
           <div style="font-size:10px;color:var(--muted);margin-bottom:8px;">Escreva com suas próprias palavras. O estagiário vai confirmar se você entendeu.</div>
-          <textarea id="vozEstRTInterpTA" placeholder="Ex: João precisa de orientação sobre como preencher o relatório de ocorrência. Vou mostrar passo a passo na quinta."
+          <textarea id="vozEstRTInterpTA_${voz.id}" placeholder="Ex: João precisa de orientação sobre como preencher o relatório de ocorrência. Vou mostrar passo a passo na quinta."
             style="width:100%;min-height:56px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;padding:10px 12px;resize:none;outline:none;box-sizing:border-box;margin-bottom:8px;"></textarea>
           <button onclick="vozEstRTConfirmarInterpretacao('${unidId}','${estId}','${voz.id}')"
             style="width:100%;padding:8px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);color:var(--blue);">
@@ -18221,7 +18250,7 @@ async function renderVozEstRT(el, unidId, estId) {
 }
 
 async function vozEstRTConfirmarInterpretacao(unidId, estId, vozId) {
-  const txt = (document.getElementById('vozEstRTInterpTA')||{}).value||'';
+  const txt = (document.getElementById('vozEstRTInterpTA_'+vozId)||{}).value||'';
   if(!txt.trim()) { mostrarToast('Escreva sua interpretação antes de enviar.'); return; }
   if(!vozId) { mostrarToast('Erro: pedido não identificado.'); return; }
   try {
@@ -20016,7 +20045,7 @@ async function renderAprendizadosRT(unidId, colabId) {
     aprendHost.innerHTML = aprendizados.length ? `<div style="display:flex;flex-direction:column;gap:8px;">
       ${aprendizados.map(a=>`
         <div style="border-left:2px solid rgba(167,139,250,.4);padding-left:12px;">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">${a.mes}</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">${esc(a.mes)}</div>
           <div style="font-size:12px;color:#b0b0c0;font-style:italic;line-height:1.5;">"${esc(a.texto)}"</div>
         </div>`).join('')}
     </div>` : '<div style="font-size:12px;color:#3a3a42;padding:8px 0;text-align:center;">Nenhum aprendizado registrado ainda.</div>';
@@ -26487,7 +26516,7 @@ function gerarLinkEst(estId, cicloId) {
 }
 
 
-function mostrarPerfilProfessor(nomeProf) { abrirPerfilProfessor(nomeProf); }
+// A interface usa a definicao unica de mostrarPerfilProfessor declarada acima.
 
 
 // radarNavegarNovo — navigation wrapper for radar modal buttons
@@ -26675,7 +26704,7 @@ function abrirModalRelatorio(){
   // Unidades
   const uSel=document.getElementById('relUnidadeSelect');
   if(uSel){
-    uSel.innerHTML=UNIDADES.map(u=>`<option value="${u.id}">${u.nome}</option>`).join('');
+    uSel.innerHTML=UNIDADES.map(u=>`<option value="${esc(u.id)}">${esc(u.nome)}</option>`).join('');
     if(isRT && usuarioLogado.unidade){
       uSel.value=usuarioLogado.unidade;
       uSel.disabled=true;
@@ -26815,7 +26844,7 @@ function atualizarProfessoresDoRelatorio(){
   const hist=getHistorico(unidId);
   const ultimo=hist.slice().sort((a,b)=>compararMeses(a.nome,b.nome)).pop();
   const profs=(ultimo?ultimo.professores:[]).map(p=>({id:nomeParaId(p.nome),nome:p.nome}));
-  profSel.innerHTML=profs.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  profSel.innerHTML=profs.map(p=>`<option value="${esc(p.id)}">${esc(p.nome)}</option>`).join('');
 }
 
 function atualizarRTsDoRelatorio(){
@@ -26825,7 +26854,7 @@ function atualizarRTsDoRelatorio(){
   const unidId=unidSel.value;
   const rts=Object.entries(USUARIOS_CONFIG)
     .filter(([,cfg])=>cfg.papel==='rt'&&cfg.unidade===unidId);
-  rtSel.innerHTML=rts.map(([email,cfg])=>`<option value="${email}">${cfg.nome}</option>`).join('');
+  rtSel.innerHTML=rts.map(([email,cfg])=>`<option value="${esc(email)}">${esc(cfg.nome)}</option>`).join('');
   if(_relTipo==='individual') atualizarProfessoresDoRelatorio();
   if(_relTipo==='semanal'||_relTipo==='regional-semanal') atualizarMesesDoRelatorio();
 }
@@ -31385,7 +31414,7 @@ async function renderPainelPulsoRegional(containerEl){
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:12px;">${cards}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">${resumo}</div>`;
   }catch(e){
-    containerEl.innerHTML=`<div style="color:var(--red);font-size:11px;">Erro ao carregar fechamentos: ${e.message}</div>`;
+    containerEl.innerHTML=`<div style="color:var(--red);font-size:11px;">Erro ao carregar fechamentos: ${esc(e.message)}</div>`;
   }
 }
 
@@ -31442,7 +31471,7 @@ async function pulsoRegVerUnid(unidId,nomeUnidade){
       <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.15);border-radius:var(--card-r);padding:10px 13px;margin-top:12px;font-size:11px;color:var(--amber);">
         ⚠ Fechamento sem observações — ainda não enviado pelo RT.
       </div>`}`;
-  }catch(e){const det=document.getElementById('_pulsoRegDetalhe');if(det)det.innerHTML=`<div style="color:var(--red);font-size:11px;">Erro: ${e.message}</div>`;}
+  }catch(e){const det=document.getElementById('_pulsoRegDetalhe');if(det)det.innerHTML=`<div style="color:var(--red);font-size:11px;">Erro: ${esc(e.message)}</div>`;}
 }
 
 
@@ -31870,7 +31899,7 @@ async function renderPulsoHistorico(unidId) {
   } catch(e) {
     console.error('[renderPulsoHistorico]', e);
     const lista = document.getElementById('_pHistLista');
-    if (lista) lista.innerHTML = `<div style="color:var(--red);font-size:11px;padding:16px 0;">Erro ao carregar histórico: ${e.message}</div>`;
+    if (lista) lista.innerHTML = `<div style="color:var(--red);font-size:11px;padding:16px 0;">Erro ao carregar histórico: ${esc(e.message)}</div>`;
   } finally {
     showLoading(false);
   }
@@ -32021,7 +32050,7 @@ async function pulsoHistoricoVerDetalhe(unidId, semanaId) {
     `;
   } catch(e) {
     const corpo = document.getElementById('_phdCorpo');
-    if (corpo) corpo.innerHTML = `<div style="color:var(--red);font-size:11px;">Erro: ${e.message}</div>`;
+    if (corpo) corpo.innerHTML = `<div style="color:var(--red);font-size:11px;">Erro: ${esc(e.message)}</div>`;
   }
 }
 

@@ -10,6 +10,9 @@
 /** Base do webhook (sem barra no final). Ex.: https://n8n.seudominio.com/webhook/movfit/pacto */
 const N8N_PACTO_BASE = 'https://n8n2.mov.pro.br/webhook/movfit/pacto';
 
+/** Versão autenticada pelo Firebase. O cliente tenta esta URL antes do legado. */
+const N8N_PACTO_FIREBASE_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-v2';
+
 /**
  * Token compartilhado com o workflow n8n (header X-Movfit-Proxy).
  * NÃO é a key da Pacto — só autoriza o webhook. Gere um valor longo e rotacione se vazar.
@@ -34,6 +37,34 @@ const N8N_AVALIACOES_ATRASADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes
 
 /** Webhook de avaliações físicas realizadas por unidade (POST). */
 const N8N_AVALIACOES_REALIZADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes_realizadas';
+
+/**
+ * Cabeçalhos usados nas chamadas ao n8n.
+ * Durante a migração, envia a sessão Firebase e mantém o token legado para que
+ * os webhooks ainda não migrados continuem funcionando sem interrupção.
+ */
+async function n8nAuthHeaders() {
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  const usuario = typeof auth !== 'undefined' ? auth.currentUser : null;
+  if (usuario && typeof usuario.getIdToken === 'function') {
+    try {
+      const idToken = await usuario.getIdToken(false);
+      if (idToken) headers.Authorization = `Bearer ${idToken}`;
+    } catch (e) {
+      console.warn('[AUTH N8N] Não foi possível obter a sessão Firebase.', e);
+    }
+  }
+
+  if (typeof N8N_PROXY_TOKEN === 'string' && N8N_PROXY_TOKEN) {
+    headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
+  }
+
+  return headers;
+}
 
 function n8nPactoConfigOk() {
   return !!(N8N_PACTO_BASE && N8N_PROXY_TOKEN);
