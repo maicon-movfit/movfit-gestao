@@ -1496,6 +1496,19 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const mesesSalvos = historico.length;
   const exclPlanos = unidade?.matriculados_excluidos_plano ?? o.excluidosPlano ?? 0;
   const filtroPlanoLabel = 'Anual recorrente + parcelado';
+  const pacto = fonte === 'live' && typeof totalAtivosEncontrarUnidade === 'function'
+    ? totalAtivosEncontrarUnidade(_totalAtivosCache?.data, unidId)
+    : null;
+  const pactoAtual = pacto && typeof pactoIndicadoresCompetenciaAtual === 'function'
+    && pactoIndicadoresCompetenciaAtual(pacto) ? pacto : null;
+  const pactoNumero = campo => {
+    if (!pactoAtual || typeof pactoIndicadoresGetNumero !== 'function') return null;
+    return pactoIndicadoresGetNumero(unidId, campo, _totalAtivosCache.data);
+  };
+  const pactoFmt = campo => {
+    const valor = pactoNumero(campo);
+    return valor == null ? '—' : valor.toLocaleString('pt-BR');
+  };
 
   const indicador = matriculadosTblCol('Indicador', [
     ['Matriculados no mês', lista.length],
@@ -1526,6 +1539,22 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
     ? [['Em alunos ativos', lista.length ? `${cruz.emAtivos} (${Math.round(cruz.emAtivos / lista.length * 100)}%)` : '0', '#378add']]
     : [];
 
+  // Referências agregadas oficiais. Não substituem a lista de onboarding,
+  // cujo escopo é restrito a planos anuais recorrentes e parcelados.
+  const linhasPacto = pactoAtual ? [
+    ['Fonte oficial', 'Pacto MCP'],
+    ['Alunos ativos (oficial)', pactoFmt('alunos_ativos'), '#378add'],
+    ['Contratos ativos / vencidos', `${pactoFmt('contratos_ativos')} / ${pactoFmt('contratos_vencidos')}`],
+    ['Matrículas no mês (geral)', pactoFmt('matriculados_mes')],
+    ['Rematrículas no mês (geral)', pactoFmt('rematriculados_mes')],
+    ['Cancelamentos no mês (geral)', pactoFmt('cancelados_mes')],
+    ['Saldo do mês (geral)', pactoFmt('saldo_mes')],
+    ['Acessos hoje / mês', `${pactoFmt('acessos_hoje')} / ${pactoFmt('acessos_mes')}`],
+    ['Acessos nos últimos 30 dias', pactoFmt('acessos_ultimos_30_dias')],
+    ['Pico de movimento', pacto.dia_pico && pacto.horario_pico ? `${pacto.dia_pico}, ${pacto.horario_pico}` : '—'],
+    ['Coleta oficial', pacto.coletado_em ? matriculadosFmtData(pacto.coletado_em) : '—'],
+  ] : [];
+
   const sinc = matriculadosTblCol('Sincronização', [
     ['Fonte', fonteLabel],
     ['Competência', competencia],
@@ -1533,6 +1562,7 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
     ...(exclPlanos > 0 ? [['Excluídos do escopo', exclPlanos, '#f5a623']] : []),
     ['Cruzamento', 'Matrícula → Janela + Aval. realizadas/atrasadas'],
     ...linhasAtivos,
+    ...linhasPacto,
     ['Histórico (meses)', mesesSalvos],
     ['Gerado em', data.gerado_em ? matriculadosFmtData(data.gerado_em) : (o.sincronizado_em ? matriculadosFmtData(o.sincronizado_em) : '—')],
     ['Atualizado em', resumo.ultima_atualizacao ? matriculadosFmtData(resumo.ultima_atualizacao) : (o.sincronizado_em ? matriculadosFmtData(o.sincronizado_em) : '—')],
