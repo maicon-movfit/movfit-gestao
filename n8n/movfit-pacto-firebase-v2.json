@@ -61,19 +61,18 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ idToken: $('Preparar requisição').first().json.idToken }) }}",
-        "options": {
-          "response": { "response": { "neverError": true, "responseFormat": "json" } }
-        }
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [-32, -96],
       "id": "validar-firebase",
-      "name": "Validar sessão Firebase"
+      "name": "Validar sessão Firebase",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const resposta = $input.first().json;\nconst req = $('Preparar requisição').first().json;\nconst usuario = Array.isArray(resposta.users) ? resposta.users[0] : null;\nconst permitidos = new Set([\n  'ge.maiconoliveira@gmail.com',\n  'plucassayon@gmail.com',\n  'jssbarroslf@gmail.com',\n  'davidmodesto2015@hotmail.com',\n  'elivelton.veto@gmail.com',\n  'ludymylapsantos@gmail.com'\n]);\nconst email = String(usuario?.email || '').toLowerCase();\nconst autorizado = Boolean(usuario && !usuario.disabled && permitidos.has(email));\nreturn [{ json: { ...req, idToken: undefined, autorizado, uid: usuario?.localId || null, email: email || null } }];"
+        "jsCode": "const resposta = $input.first().json;\nconst req = $('Preparar requisição').first().json;\n\nfunction objeto(valor) {\n  if (!valor) return null;\n  if (typeof valor === 'object') return valor;\n  if (typeof valor === 'string') {\n    try { return JSON.parse(valor); } catch (_) { return null; }\n  }\n  return null;\n}\n\nlet payload = objeto(resposta.body) || objeto(resposta.data) || resposta;\n\n// Compatibilidade com a saída em stream observada no n8n 2.15.\nif (!Array.isArray(payload?.users)) {\n  const partes = resposta?._readableState?.buffer || [];\n  const bytes = partes.flatMap(parte => Array.isArray(parte?.data) ? parte.data : []);\n  if (bytes.length) {\n    try { payload = JSON.parse(Buffer.from(bytes).toString('utf8')); } catch (_) {}\n  }\n}\n\nconst usuario = Array.isArray(payload?.users) ? payload.users[0] : null;\nconst permitidos = new Set([\n  'ge.maiconoliveira@gmail.com',\n  'plucassayon@gmail.com',\n  'jssbarroslf@gmail.com',\n  'davidmodesto2015@hotmail.com',\n  'elivelton.veto@gmail.com',\n  'ludymylapsantos@gmail.com'\n]);\nconst email = String(usuario?.email || '').toLowerCase();\nconst autorizado = Boolean(usuario && !usuario.disabled && permitidos.has(email));\nreturn [{ json: {\n  ...req,\n  idToken: undefined,\n  autorizado,\n  uid: usuario?.localId || null,\n  email: email || null,\n  motivoNegado: autorizado ? null : (payload?.error?.message || 'Usuário não encontrado ou não permitido')\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
