@@ -10,8 +10,11 @@
 /** Base do webhook (sem barra no final). Ex.: https://n8n.seudominio.com/webhook/movfit/pacto */
 const N8N_PACTO_BASE = 'https://n8n2.mov.pro.br/webhook/movfit/pacto';
 
-/** Versão autenticada pelo Firebase. O cliente tenta esta URL antes do legado. */
-const N8N_PACTO_FIREBASE_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-v2';
+/**
+ * Versão Firebase em validação. Mantida desativada no painel de produção até
+ * comprovarmos que a resposta preserva integralmente o contrato do BI legado.
+ */
+const N8N_PACTO_FIREBASE_URL = '';
 
 /**
  * Token compartilhado com o workflow n8n (header X-Movfit-Proxy).
