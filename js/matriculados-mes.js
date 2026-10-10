@@ -445,8 +445,7 @@ function matriculadosTemTreinoMontado(j, statusTreino) {
 
 function matriculadosValidacaoIssues(m) {
   const issues = [];
-  const sit = String(m.situacao_cliente_descricao || m.situacao_cliente || '');
-  const ativo = /ativo/i.test(sit);
+  const ativo = matriculadosSituacaoId(m) === 'ativo';
 
   if (!m._cruzamento?.janela) {
     issues.push('Sem registro na Janela de Treino');
@@ -465,10 +464,26 @@ function matriculadosValidacaoIssues(m) {
       ? 'Contrato ativo sem treino na janela'
       : 'Ativo sem treino montado');
   }
-  if (m.precisa_contato && m.status_treino === 'EM_DIA') {
-    issues.push('Marcado para contato, mas treino em dia');
+  if (m.precisa_contato) {
+    issues.push(m.motivo_contato
+      ? `Precisa contato: ${m.motivo_contato}`
+      : 'Precisa contato');
   }
   return issues;
+}
+
+/** Normaliza a situação sem confundir, por exemplo, "ativo" com "inativo". */
+function matriculadosSituacaoId(m) {
+  const sit = String(m?.situacao_cliente_descricao || m?.situacao_cliente || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (!sit) return 'nao_informada';
+  if (/\binativ/.test(sit)) return 'inativo';
+  if (/\bcancel/.test(sit)) return 'cancelado';
+  if (/\bdesist/.test(sit)) return 'desistente';
+  if (/\btranc/.test(sit)) return 'trancado';
+  if (/\bsusp/.test(sit)) return 'suspenso';
+  if (/\bativ/.test(sit)) return 'ativo';
+  return 'outra';
 }
 
 function matriculadosEnriquecerAluno(m, mapas) {
@@ -928,6 +943,7 @@ function matriculadosContarAbas(lista) {
     vencidos: 0,
     sem_treino: 0,
     sem_janela: 0,
+    outros: 0,
   };
   (lista || []).forEach(m => {
     const id = matriculadosStatusAbaId(m);
@@ -936,7 +952,7 @@ function matriculadosContarAbas(lista) {
   return c;
 }
 
-function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada, freqFaixa) {
+function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada, bio, treino, freqFaixa) {
   let out = lista || [];
   const faixa = freqFaixa || 'todos';
   if (faixa !== 'todos') {
@@ -951,8 +967,7 @@ function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao,
     out = out.filter(m => {
       const issues = matriculadosValidacaoIssues(m);
       if (val === 'ok') return !issues.length;
-      if (val === 'sem_janela') return !m._cruzamento?.janela;
-      if (val === 'alertas') return issues.length > 0 && !!m._cruzamento?.janela;
+      if (val === 'alertas') return issues.length > 0;
       if (val === 'contato') return !!m.precisa_contato;
       return true;
     });
@@ -960,23 +975,33 @@ function matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao,
   const sitF = situacao || 'todos';
   if (sitF !== 'todos') {
     out = out.filter(m => {
-      const sit = String(m.situacao_cliente_descricao || m.situacao_cliente || '').toLowerCase();
-      if (sitF === 'ativo') return /ativo/.test(sit);
-      if (sitF === 'trancado') return /tranc/.test(sit);
-      if (sitF === 'suspenso') return /susp/.test(sit);
-      return sit.includes(sitF);
+      return matriculadosSituacaoId(m) === sitF;
     });
   }
   const jor = jornada || 'todos';
   if (jor !== 'todos') {
     out = out.filter(m => {
-      if (jor === 'avaliacao_atrasada') return m.avaliacao_atrasada === true;
-      if (jor === 'avaliacao_realizada') return m.avaliacao_realizada === true;
-      if (jor === 'avaliacao_sem') return m.avaliacao_atrasada === false && m.avaliacao_realizada === false;
-      if (jor === 'avaliacao_nao_verificada') return m.avaliacao_atrasada == null && m.avaliacao_realizada == null;
       if (jor === 'jornada_completa') return matriculadosJornadaCompleta(m);
-      if (jor === 'com_treino') return !!m.com_treino;
-      if (jor === 'sem_treino') return !m.com_treino;
+      if (jor === 'jornada_pendente') return !matriculadosJornadaCompleta(m);
+      return true;
+    });
+  }
+  const bioF = bio || 'todos';
+  if (bioF !== 'todos') {
+    out = out.filter(m => {
+      if (bioF === 'realizada') return m.avaliacao_realizada === true;
+      if (bioF === 'atrasada') return m.avaliacao_atrasada === true;
+      if (bioF === 'sem_bio') return m.avaliacao_atrasada === false && m.avaliacao_realizada === false;
+      if (bioF === 'nao_verificada') return m.avaliacao_atrasada == null && m.avaliacao_realizada == null;
+      return true;
+    });
+  }
+  const treinoF = treino || 'todos';
+  if (treinoF !== 'todos') {
+    out = out.filter(m => {
+      if (treinoF === 'montado') return !!m.com_treino;
+      if (treinoF === 'nao_montado') return !!m._cruzamento?.janela && !m.com_treino;
+      if (treinoF === 'nao_verificado') return !m._cruzamento?.janela;
       return true;
     });
   }
@@ -1001,6 +1026,9 @@ function matriculadosRenderTabsStatus(lista, abaAtiva) {
     { id: 'sem_treino', label: 'Sem treino', n: c.sem_treino, cor: '#f5a623' },
     { id: 'sem_janela', label: 'Sem janela', n: c.sem_janela, cor: '#f5a623' },
   ];
+  if (c.outros > 0) {
+    tabs.push({ id: 'outros', label: 'Não classificado', n: c.outros, cor: '#6b7280' });
+  }
   return tabs.map(t =>
     `<button type="button" class="janela-tab${t.id === abaAtiva ? ' janela-tab-on' : ''}" onclick="matriculadosTrocarAba(this,'${t.id}')">${t.label} <span class="janela-tab-n"${t.cor ? ` style="color:${t.cor}"` : ''}>${t.n}</span></button>`
   ).join('');
@@ -1010,22 +1038,28 @@ function matriculadosRenderSelectValidacao(val) {
   const v = val || 'todos';
   const opts = [
     ['todos', 'Validação: todos'],
-    ['ok', 'Validação: OK'],
-    ['sem_janela', 'Validação: sem janela'],
-    ['alertas', 'Validação: com alertas'],
+    ['ok', 'Validação: sem pendências'],
+    ['alertas', 'Validação: com pendências'],
     ['contato', 'Validação: precisa contato'],
   ];
   return `<select class="janela-prof-select matric-valid-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
 }
 
-function matriculadosRenderSelectSituacao(val) {
+function matriculadosRenderSelectSituacao(val, lista) {
   const v = val || 'todos';
-  const opts = [
+  const disponiveis = new Set((lista || []).map(matriculadosSituacaoId));
+  const todas = [
     ['todos', 'Situação: todas'],
     ['ativo', 'Situação: ativo'],
     ['trancado', 'Situação: trancado'],
     ['suspenso', 'Situação: suspenso'],
+    ['cancelado', 'Situação: cancelado'],
+    ['desistente', 'Situação: desistente'],
+    ['inativo', 'Situação: inativo'],
+    ['nao_informada', 'Situação: não informada'],
+    ['outra', 'Situação: outra'],
   ];
+  const opts = todas.filter(([id]) => id === 'todos' || disponiveis.has(id) || id === v);
   return `<select class="janela-prof-select matric-sit-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
 }
 
@@ -1033,15 +1067,33 @@ function matriculadosRenderSelectJornada(val) {
   const v = val || 'todos';
   const opts = [
     ['todos', 'Jornada: todos'],
-    ['jornada_completa', 'Jornada: bio + treino (completa)'],
-    ['avaliacao_realizada', 'Jornada: bio feita'],
-    ['avaliacao_atrasada', 'Jornada: bio atrasada'],
-    ['avaliacao_sem', 'Jornada: sem bio'],
-    ['avaliacao_nao_verificada', 'Jornada: avaliação não verificada'],
-    ['com_treino', 'Jornada: com treino montado'],
-    ['sem_treino', 'Jornada: sem treino montado'],
+    ['jornada_completa', 'Jornada: completa'],
+    ['jornada_pendente', 'Jornada: pendente'],
   ];
   return `<select class="janela-prof-select matric-jornada-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
+}
+
+function matriculadosRenderSelectBio(val) {
+  const v = val || 'todos';
+  const opts = [
+    ['todos', 'Bio: todas'],
+    ['realizada', 'Bio: feita'],
+    ['atrasada', 'Bio: atrasada'],
+    ['sem_bio', 'Bio: sem avaliação'],
+    ['nao_verificada', 'Bio: não verificada'],
+  ];
+  return `<select class="janela-prof-select matric-bio-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
+}
+
+function matriculadosRenderSelectTreino(val) {
+  const v = val || 'todos';
+  const opts = [
+    ['todos', 'Treino: todos'],
+    ['montado', 'Treino: montado'],
+    ['nao_montado', 'Treino: não montado'],
+    ['nao_verificado', 'Treino: sem registro na janela'],
+  ];
+  return `<select class="janela-prof-select matric-treino-select" onchange="matriculadosTrocarFiltro(this)">${opts.map(([id, lbl]) => `<option value="${id}"${id === v ? ' selected' : ''}>${lbl}</option>`).join('')}</select>`;
 }
 
 function matriculadosLerFiltros(root) {
@@ -1055,6 +1107,8 @@ function matriculadosLerFiltros(root) {
     validacao: root.querySelector('.matric-valid-select')?.value || 'todos',
     situacao: root.querySelector('.matric-sit-select')?.value || 'todos',
     jornada: root.querySelector('.matric-jornada-select')?.value || 'todos',
+    bio: root.querySelector('.matric-bio-select')?.value || 'todos',
+    treino: root.querySelector('.matric-treino-select')?.value || 'todos',
     freqFaixa: root.dataset.freqAba || 'todos',
     modulo,
   };
@@ -1092,8 +1146,15 @@ function matriculadosClicarFunil(btn, filtroJornada) {
   const root = btn.closest('.matric-card');
   if (!root) return;
   matriculadosTrocarModuloUI(root, 'onboarding');
-  const select = root.querySelector('.matric-jornada-select');
-  if (select) select.value = filtroJornada || 'todos';
+  const jornada = root.querySelector('.matric-jornada-select');
+  const bio = root.querySelector('.matric-bio-select');
+  const treino = root.querySelector('.matric-treino-select');
+  if (jornada) jornada.value = 'todos';
+  if (bio) bio.value = 'todos';
+  if (treino) treino.value = 'todos';
+  if (filtroJornada === 'avaliacao_realizada' && bio) bio.value = 'realizada';
+  else if (filtroJornada === 'com_treino' && treino) treino.value = 'montado';
+  else if (jornada) jornada.value = filtroJornada || 'todos';
   matriculadosAtualizarTabela(root, true);
 }
 
@@ -1269,11 +1330,11 @@ function matriculadosRenderAvaliacaoPill(m) {
   return matriculadosPillStatus('—', 'muted');
 }
 
-function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, sortCol, sortDir) {
+function matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, bio, treino, sortCol, sortDir) {
   const sc = sortCol || '';
   const sd = sortDir || 'asc';
   const filtrada = matriculadosAplicarOrdenacao(
-    matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada),
+    matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada, bio, treino),
     sc, sd
   );
   if (!filtrada.length) {
@@ -1331,7 +1392,7 @@ function matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa, so
   const sc = sortCol || '';
   const sd = sortDir || 'asc';
   const filtrada = matriculadosAplicarOrdenacao(
-    matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', freqFaixa),
+    matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', 'todos', 'todos', freqFaixa),
     sc, sd
   );
   if (!filtrada.length) {
@@ -1379,10 +1440,10 @@ function matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa, so
 function matriculadosAtualizarTabela(root, resetPage) {
   if (resetPage) root.dataset.pagina = '1';
   const lista = JSON.parse(root.dataset.matriculados || '[]');
-  const { filtro, statusAba, validacao, situacao, jornada, freqFaixa, modulo } = matriculadosLerFiltros(root);
+  const { filtro, statusAba, validacao, situacao, jornada, bio, treino, freqFaixa, modulo } = matriculadosLerFiltros(root);
   const filtrada = modulo === 'frequencia'
-    ? matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', freqFaixa)
-    : matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada);
+    ? matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', 'todos', 'todos', freqFaixa)
+    : matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada, bio, treino);
   const totalPag = Math.max(1, Math.ceil(filtrada.length / MATRICULADOS_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10);
   pagina = Math.min(Math.max(1, pagina), totalPag);
@@ -1395,7 +1456,7 @@ function matriculadosAtualizarTabela(root, resetPage) {
   if (!wrap) return;
   wrap.innerHTML = modulo === 'frequencia'
     ? matriculadosRenderTabelaFrequencia(lista, filtro, pagina, freqFaixa, sortCol, sortDir)
-    : matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, sortCol, sortDir);
+    : matriculadosRenderTabela(lista, filtro, pagina, statusAba, validacao, situacao, jornada, bio, treino, sortCol, sortDir);
 }
 
 function matriculadosFiltrarBusca(input) {
@@ -1407,10 +1468,10 @@ function matriculadosIrPagina(btn, delta) {
   const root = btn.closest('.matric-card');
   if (!root) return;
   const lista = JSON.parse(root.dataset.matriculados || '[]');
-  const { filtro, statusAba, validacao, situacao, jornada, freqFaixa, modulo } = matriculadosLerFiltros(root);
+  const { filtro, statusAba, validacao, situacao, jornada, bio, treino, freqFaixa, modulo } = matriculadosLerFiltros(root);
   const filtrada = modulo === 'frequencia'
-    ? matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', freqFaixa)
-    : matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada);
+    ? matriculadosFiltrarLista(lista, filtro, 'todos', 'todos', 'todos', 'todos', 'todos', 'todos', freqFaixa)
+    : matriculadosFiltrarLista(lista, filtro, statusAba, validacao, situacao, jornada, bio, treino);
   const totalPag = Math.max(1, Math.ceil(filtrada.length / MATRICULADOS_PAGE_SIZE));
   let pagina = parseInt(root.dataset.pagina || '1', 10) + delta;
   root.dataset.pagina = String(Math.min(Math.max(1, pagina), totalPag));
@@ -1431,7 +1492,7 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
   const nomeUnidade = (typeof UNIDADES !== 'undefined'
     ? UNIDADES.find(u => u.id === unidId)?.nome
     : null) || unidade?.unidade_nome || unidId;
-  const fonteLabel = fonte === 'historico' ? 'Histórico salvo' : 'Dados ao vivo';
+  const fonteLabel = fonte === 'historico' ? 'Histórico salvo' : 'Webhook operacional (ao vivo)';
   const mesesSalvos = historico.length;
   const exclPlanos = unidade?.matriculados_excluidos_plano ?? o.excluidosPlano ?? 0;
   const filtroPlanoLabel = 'Anual recorrente + parcelado';
@@ -1519,12 +1580,14 @@ function matriculadosRenderConteudo(data, unidade, unidId, opts) {
           <div class="janela-tabs matric-status-tabs">${matriculadosRenderTabsStatus(lista, 'todos')}</div>
           <div class="janela-filtros">
             ${matriculadosRenderSelectJornada('todos')}
+            ${matriculadosRenderSelectBio('todos')}
+            ${matriculadosRenderSelectTreino('todos')}
             ${matriculadosRenderSelectValidacao('todos')}
-            ${matriculadosRenderSelectSituacao('todos')}
+            ${matriculadosRenderSelectSituacao('todos', lista)}
             <input type="search" class="janela-busca matric-busca" placeholder="Buscar aluno, matrícula ou plano…" oninput="matriculadosFiltrarBusca(this)">
           </div>
         </div>
-        <div class="matric-alunos-wrap">${matriculadosRenderTabela(lista, '', 1, 'todos', 'todos', 'todos', 'todos')}</div>
+        <div class="matric-alunos-wrap">${matriculadosRenderTabela(lista, '', 1, 'todos', 'todos', 'todos', 'todos', 'todos', 'todos')}</div>
       </div>
     </div>
     <div class="matric-view-frequencia" hidden>
