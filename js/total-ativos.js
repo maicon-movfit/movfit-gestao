@@ -42,6 +42,24 @@ function totalAtivosEncontrarUnidade(data, unidId) {
   ) || null;
 }
 
+function pactoIndicadoresCompetenciaAtual(unidade) {
+  const comp = String(unidade?.competencia || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(comp)) return false;
+  const agora = new Date();
+  const atual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+  return comp === atual;
+}
+
+/** Retorna um indicador oficial somente quando ele pertence à competência atual. */
+function pactoIndicadoresGetNumero(unidId, campo, data) {
+  const unidade = totalAtivosEncontrarUnidade(data || _totalAtivosCache.data, unidId);
+  if (!unidade || !pactoIndicadoresCompetenciaAtual(unidade)) return null;
+  if (unidade[campo] == null || unidade[campo] === '') return null;
+  const valor = Number(unidade[campo]);
+  const permiteNegativo = campo === 'saldo_mes';
+  return Number.isFinite(valor) && (permiteNegativo || valor >= 0) ? valor : null;
+}
+
 async function totalAtivosBuscarDados(forceRefresh) {
   if (typeof N8N_PACTO_INDICADORES_URL === 'undefined' || !N8N_PACTO_INDICADORES_URL) {
     console.warn('[ATIVOS] Configure N8N_PACTO_INDICADORES_URL em js/n8n-config.js');
@@ -95,10 +113,11 @@ function totalAtivosGetUnidade(unidId, data) {
   const src = data || _totalAtivosCache.data;
   if (!src || !unidId) return null;
   const unidade = totalAtivosEncontrarUnidade(src, unidId);
-  if (!unidade) return null;
-  if (unidade.alunos_ativos != null) return Number(unidade.alunos_ativos);
+  if (!unidade || !pactoIndicadoresCompetenciaAtual(unidade)) return null;
+  const oficial = pactoIndicadoresGetNumero(unidId, 'alunos_ativos', src);
+  if (oficial != null) return oficial;
   const resumo = unidade.resumo?.total_alunos_ativos;
-  if (resumo != null) return Number(resumo);
+  if (resumo != null && Number.isFinite(Number(resumo))) return Number(resumo);
   const n = (unidade.alunos || []).length;
   return n > 0 ? n : null;
 }
