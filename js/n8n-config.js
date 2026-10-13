@@ -14,7 +14,7 @@ const N8N_PACTO_BASE = 'https://n8n2.mov.pro.br/webhook/movfit/pacto';
  * Versão Firebase em validação. Mantida desativada no painel de produção até
  * comprovarmos que a resposta preserva integralmente o contrato do BI legado.
  */
-const N8N_PACTO_FIREBASE_URL = '';
+const N8N_PACTO_FIREBASE_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-v2';
 
 /**
  * Token compartilhado com o workflow n8n (header X-Movfit-Proxy).

@@ -16,6 +16,7 @@ const MATRICULADOS_UNIDADE_MAP = {
   itaituba:     { codigo: 2, slug: 'itaituba' },
   premium24:    { codigo: 3, slug: 'santarem_24h' },
   nrexpress:    { codigo: 5, slug: 'santarem_nova_republica' },
+  novoprogresso:{ codigo: 6, slug: 'novo_progresso' },
 };
 
 function matriculadosFmtData(iso) {

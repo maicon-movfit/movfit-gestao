@@ -384,6 +384,7 @@ const PACTO_EMPRESA_POR_UNIDADE = {
   nrexpress: '1',
   itaituba: '1',
   medicilandia: '1',
+  novoprogresso: '1',
 };
 
 /** action enviada ao webhook n8n (seleciona key/fluxo da academia). */
@@ -392,6 +393,7 @@ const PACTO_ACTION_POR_UNIDADE = {
   nrexpress: 'nrexpress',
   itaituba: 'itaituba',
   medicilandia: 'medicilandia',
+  novoprogresso: 'novoprogresso',
 };
 
 /**
@@ -401,8 +403,9 @@ const PACTO_ACTION_POR_UNIDADE = {
 const PACTO_CACHE_UNIDADE = {
   premium24: 'stm_24h',
   nrexpress: 'stm_nova_republica',
-  itaituba: 'stm_itaituba',
-  medicilandia: 'stm_medicilandia',
+  itaituba: 'itaituba',
+  medicilandia: 'medicilandia',
+  novoprogresso: 'novo_progresso',
 };
 
 function pactoEmpresaId(unidId) {

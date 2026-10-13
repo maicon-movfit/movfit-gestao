@@ -1573,6 +1573,7 @@ let META_UNIDADES = {
   nrexpress:    { metaTreino: 70, metaVencidos: 500, metaBio: 55 },
   itaituba:     { metaTreino: 65, metaVencidos: 600, metaBio: 50 },
   medicilandia: { metaTreino: 65, metaVencidos: 600, metaBio: 50 },
+  novoprogresso:{ metaTreino: 65, metaVencidos: 500, metaBio: 50 },
 };
 
 // Helper: retorna meta da unidade atual (com fallback)
@@ -2327,7 +2328,8 @@ const UNIDADES = [
   {"id":"premium24",   "nome":"Premium 24 Horas", "cor":"#e01f2d"},
   {"id":"nrexpress",   "nome":"NR Express",        "cor":"#f5a623"},
   {"id":"itaituba",    "nome":"Itaituba",           "cor":"#2ecc71"},
-  {"id":"medicilandia","nome":"Medicilândia",       "cor":"#a78bfa"}
+  {"id":"medicilandia","nome":"Medicilândia",       "cor":"#a78bfa"},
+  {"id":"novoprogresso","nome":"Novo Progresso",     "cor":"#0ea5a4"}
 ];
 let unidadeAtual = null;
 const _cache = {};
@@ -10753,7 +10755,7 @@ async function renderHomeCockpit() {
 
   if(heroNum) heroNum.textContent = comDados.length ? peMedio : '—';
   if(subEl) subEl.textContent = comDados.length
-    ? `${comDados.length} de 4 unidades com dados · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}`
+    ? `${comDados.length} de ${UNIDADES.length} unidades com dados · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}`
     : 'Salve dados em ao menos uma unidade para começar.';
   if(heroDelta && deltaPe !== null) {
     const cls = deltaPe >= 0 ? 'up' : 'dn';
