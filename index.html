@@ -3535,6 +3535,12 @@ function goTab(id) {
   if(id==='timeline') renderTimeline();
   if(id==='minhaatuacao') renderRTHome();
   if(id==='pulso') renderPulsoTab();
+  // Sempre recalcula o painel ao trocar de unidade/aba. Sem isso, uma unidade
+  // ainda sem mês registrado podia exibir o HTML residual da unidade anterior.
+  if(id==='dash' && unidadeAtual) {
+    const histDash = getHistorico(unidadeAtual.id);
+    renderDash(histDash.length ? histDash[histDash.length-1].nome : null);
+  }
   if(id==='comparativo') atualizarSelects();
   if(id==='historico') renderHistorico();
   if(id==='radar'){renderColabGrid();}
@@ -3653,6 +3659,61 @@ function initGrade(data){
   rows.innerHTML=src.map((r,i)=>buildGradeRow(r,i)).join('');
 }
 
+// Primeiro acesso de uma unidade nova: cria a equipe local a partir do BI da
+// Pacto somente quando ainda não existe nenhum cadastro. O escopo fica restrito
+// a Novo Progresso para não alterar o fluxo consolidado das demais unidades.
+let _bootstrapEquipePactoPromise = null;
+async function importarEquipeInicialNovoProgresso(unidId){
+  if(unidId !== 'novoprogresso') return 0;
+  if(_bootstrapEquipePactoPromise) return _bootstrapEquipePactoPromise;
+
+  _bootstrapEquipePactoPromise = (async()=>{
+    const ref = professoresRef(unidId);
+    const atual = await ref.limit(1).get();
+    if(!atual.empty) return 0;
+
+    const empresaId = typeof pactoEmpresaId === 'function' ? pactoEmpresaId(unidId) : null;
+    if(!empresaId || typeof pactoBuscarProfessoresBI !== 'function') return 0;
+
+    const lista = await pactoBuscarProfessoresBI(empresaId, unidId, { forceRefresh: true });
+    if(!unidadeAtual || unidadeAtual.id !== unidId) return 0;
+    const normalizados = (lista || []).map(pactoNormalizarProfessor).filter(p =>
+      p && p.nome && p.nome !== '?' && p.codigo != null && p.codigo !== ''
+    );
+    if(!normalizados.length) return 0;
+
+    // Evita duplicidade se o webhook repetir um professor/código.
+    const unicos = [];
+    const codigos = new Set();
+    normalizados.forEach(p=>{
+      const codigo = String(p.codigo);
+      if(codigos.has(codigo)) return;
+      codigos.add(codigo);
+      unicos.push(p);
+    });
+
+    const agora = new Date().toISOString();
+    const batch = db.batch();
+    unicos.forEach(p=>{
+      const doc = ref.doc();
+      batch.set(doc, {
+        nome: String(p.nome).trim(),
+        profId: doc.id,
+        codigoPacto: p.codigo,
+        ativo: true,
+        foraTreinoWeb: false,
+        criadoEm: agora,
+        criadoPor: usuarioLogado?.nome || 'Importação Pacto',
+        importadoDaPacto: true
+      });
+    });
+    await batch.commit();
+    return unicos.length;
+  })().finally(()=>{ _bootstrapEquipePactoPromise = null; });
+
+  return _bootstrapEquipePactoPromise;
+}
+
 // Popula a grade de "Registrar mês" com os professores CADASTRADOS nessa
 // unidade (fonte: coleção "professores", não mais o último mês salvo), com
 // os números zerados para o RT preencher. O nome de cada linha é somente
@@ -3670,6 +3731,15 @@ async function inicializarGradeComProfessoresDaUnidade(unidId){
     // enquanto esta função rodava, descarta o resultado em vez de sobrescrever
     // a grade com dados de uma unidade diferente da que está sendo exibida agora.
     if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+    // Novo Progresso nasce sem cadastro local: importa a equipe uma única vez
+    // antes de aplicar a sincronização de status e preencher os indicadores.
+    if(unidId === 'novoprogresso') {
+      const importados = await importarEquipeInicialNovoProgresso(unidId);
+      if(importados && typeof mostrarToast === 'function') {
+        mostrarToast(`✓ ${importados} professor(es) importados da Pacto para Novo Progresso.`);
+      }
+      if(!unidadeAtual || unidadeAtual.id !== unidId) return;
+    }
     // Quem saiu do BI Pacto deixa de aparecer na grade (só quem tem codigoPacto)
     if (typeof pactoEmpresaId === 'function' && pactoEmpresaId(unidId) && typeof sincronizarStatusPactoProfessores === 'function') {
       try { await sincronizarStatusPactoProfessores(unidId, { silent: true }); } catch (e) { console.warn('[grade] syncStatusPacto:', e); }
