@@ -30437,7 +30437,7 @@ function pulsoDias(dom) {
 function pulsoDiaVazio(data, nome) {
   return { data, diaSemana:nome, operou:true, naoOperouMotivo:null,
     bioNovas:0, reavaliacoes:0, treinosRenovados:0, treinosRevisados:0,
-    preenchidoEm:null };
+    preenchidoEm:null, avaliacoesFonte:null, avaliacoesAtualizadoEm:null };
 }
 function pulsoDiaCompleto(d) { return d && (!d.operou || d.preenchidoEm !== null); }
 function pulsoDiaVazioQ(d) {
@@ -30709,6 +30709,74 @@ let _pSemIdPendente = null;
 let _pModoHistorico=false;   // true quando abrindo semana histórica (migração)
 let _pHistoricoUnidId=null;  // unidade em modo histórico
 
+// Cache curto para evitar chamadas repetidas ao trocar/abrir os cards da semana.
+const _pulsoAvaliacoesPactoCache=new Map();
+
+function _pulsoSlugPacto(unidId){
+  if(typeof PACTO_CACHE_UNIDADE!=='undefined'&&PACTO_CACHE_UNIDADE[unidId])return PACTO_CACHE_UNIDADE[unidId];
+  return({premium24:'stm_24h',nrexpress:'stm_nova_republica',itaituba:'itaituba',medicilandia:'medicilandia',novoprogresso:'novo_progresso'})[unidId]||unidId;
+}
+
+async function _pulsoBuscarAvaliacoesPacto(unidId,inicio,fim){
+  if(typeof N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL!=='string'||!N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL)return null;
+  const unidade=_pulsoSlugPacto(unidId);
+  const chave=`${unidade}|${inicio}|${fim}`;
+  const cache=_pulsoAvaliacoesPactoCache.get(chave);
+  if(cache&&Date.now()-cache.em<180000)return cache.valor;
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),15000);
+  try{
+    const headers=typeof n8nAuthHeaders==='function'?await n8nAuthHeaders():{'Content-Type':'application/json'};
+    const resposta=await fetch(N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL,{
+      method:'POST',headers,body:JSON.stringify({unidade,data_inicio:inicio,data_fim:fim}),signal:controller.signal
+    });
+    if(!resposta.ok)throw new Error(`Webhook respondeu HTTP ${resposta.status}`);
+    const json=await resposta.json();
+    if(!json||json.sucesso!==true||!Array.isArray(json.dias))throw new Error('Resposta inválida do webhook de avaliações');
+    const datas=new Set();
+    for(const dia of json.dias){
+      if(!dia||!/^\d{4}-\d{2}-\d{2}$/.test(String(dia.data))||dia.data<inicio||dia.data>fim||datas.has(dia.data))throw new Error('Dias inválidos ou duplicados na resposta');
+      datas.add(dia.data);
+      for(const campo of ['bio_novas','reavaliacoes']){
+        const valor=Number(dia[campo]);
+        if(!Number.isInteger(valor)||valor<0)throw new Error(`Valor inválido em ${campo}`);
+      }
+    }
+    _pulsoAvaliacoesPactoCache.set(chave,{em:Date.now(),valor:json});
+    return json;
+  }finally{clearTimeout(timer);}
+}
+
+async function _pulsoSincronizarAvaliacoesPacto(unidId,pulso){
+  // Histórico e fechamento concluído são imutáveis. A automação atua só na semana corrente.
+  if(!pulso||pulso.isCompleted||_pModoHistorico||pulso.semanaId!==pulsoSemanaId())return pulso;
+  const dados=await _pulsoBuscarAvaliacoesPacto(unidId,pulso.semanaInicio,pulso.semanaFim);
+  if(!dados)return pulso;
+  const atualizacoes={};
+  let alterou=false;
+  for(const origem of dados.dias){
+    if(origem.disponivel!==true)continue;
+    const atual=pulso.dias?.[origem.data]||pulsoDiaVazio(origem.data,'');
+    const bio=Number(origem.bio_novas),reav=Number(origem.reavaliacoes);
+    const atualizadoEm=dados.atualizado_em||dados.gerado_em||new Date().toISOString();
+    const novo={...atual,operou:true,naoOperouMotivo:null,bioNovas:bio,reavaliacoes:reav,
+      preenchidoEm:atual.preenchidoEm||atualizadoEm,avaliacoesFonte:'pacto',avaliacoesAtualizadoEm:atualizadoEm};
+    if(atual.bioNovas!==bio||atual.reavaliacoes!==reav||atual.avaliacoesFonte!=='pacto'||!atual.preenchidoEm){
+      pulso.dias[origem.data]=novo;
+      atualizacoes[`dias.${origem.data}`]=novo;
+      alterou=true;
+    }
+  }
+  if(!alterou)return pulso;
+  pulso.totais=pulsoCalcTotais(pulso);
+  atualizacoes.totais=pulso.totais;
+  atualizacoes.avaliacoesPactoAtualizadoEm=dados.atualizado_em||dados.gerado_em||new Date().toISOString();
+  atualizacoes.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
+  atualizacoes.version=firebase.firestore.FieldValue.increment(1);
+  await _pulsoRef(unidId,pulso.semanaId).update(atualizacoes);
+  return pulso;
+}
+
 // ── RENDER PRINCIPAL — aba Pulso (RT) ─────────────────────────────────────────
 // Popula o seletor de semana no header do pulso
 function _pulsoPopularNavSemanas(semId) {
@@ -30757,6 +30825,11 @@ async function renderPulsoTab(semIdOverride){
       await _pulsoLog('error','carregarPulso',{unidId,semId},e);
       container.innerHTML='<div class="empty-state"><div class="es-icon">📡</div><div>Sem conexão ou sem permissão. Tente novamente.</div></div>';
       showLoading(false);return;
+    }
+    try{pulso=await _pulsoSincronizarAvaliacoesPacto(unidId,pulso);}
+    catch(e){
+      // A indisponibilidade da Pacto nunca bloqueia o fechamento manual.
+      await _pulsoLog('warn','sincronizarAvaliacoesPacto',{unidId,semId},e);
     }
     _pAtual=pulso;
     _renderPulsoUI(container,pulso,unidId,semId);
@@ -30845,7 +30918,7 @@ function _renderPulsoUI(container,pulso,unidId,semId){
       } else {
         const bloq=isConcluido?'disabled':'';
         bodyHtml=`
-          <div class="sec" style="margin-top:12px;">Avaliações do dia</div>
+          <div class="sec" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;">Avaliações do dia${d.avaliacoesFonte==='pacto'?'<span style="font-size:9px;text-transform:none;letter-spacing:0;color:var(--green);">\u2713 Pacto</span>':''}</div>
           <div class="pulso-campos-grid">
             ${_pCampo('bioNovas','Bio novas',d.bioNovas||0,data,isConcluido)}
             ${_pCampo('reavaliacoes','Reavaliações',d.reavaliacoes||0,data,isConcluido)}

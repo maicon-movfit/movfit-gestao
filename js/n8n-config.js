@@ -41,6 +41,9 @@ const N8N_AVALIACOES_ATRASADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes
 /** Webhook de avaliações físicas realizadas por unidade (POST). */
 const N8N_AVALIACOES_REALIZADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoes_realizadas';
 
+/** Avaliações diárias oficiais para preenchimento do Fechamento Semanal. */
+const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/fechamento_semanal_avaliacoes';
+
 /**
  * Cabeçalhos usados nas chamadas ao n8n.
  * Durante a migração, envia a sessão Firebase e mantém o token legado para que
