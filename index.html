@@ -30438,6 +30438,14 @@ function inicializarBotaoConfig(){ inicializarBotoesAdmin(); }
 .pulso-semanal-input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:'DM Mono',monospace;font-size:15px;font-weight:600;padding:8px 12px;outline:none;text-align:center;}
 .pulso-semanal-input:focus{border-color:rgba(167,139,250,.5);}
 .pulso-semanal-input:disabled{opacity:.4;}
+.pulso-semanal-input.pacto-lock{opacity:1;background:rgba(46,204,113,.06);border-color:rgba(46,204,113,.2);color:var(--green);cursor:not-allowed;}
+.pulso-fonte-badge{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:2px 7px;font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+.pulso-fonte-auto{color:var(--green);background:rgba(46,204,113,.09);border:1px solid rgba(46,204,113,.2);}
+.pulso-fonte-manual{color:var(--amber);background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);}
+.pulso-source-banner{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:9px 12px;border-radius:var(--card-r);margin-bottom:12px;font-size:10px;line-height:1.45;}
+.pulso-source-banner.ok{color:var(--green);background:rgba(46,204,113,.06);border:1px solid rgba(46,204,113,.16);}
+.pulso-source-banner.warn{color:var(--amber);background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);}
+.pulso-source-banner.neutral{color:var(--muted);background:var(--surface2);border:1px solid var(--border);}
 
 /* ── Botão "Não operou" ── */
 .pulso-confirmar-zero{display:block;width:100%;margin-top:10px;padding:9px 12px;border-radius:var(--r-md);border:1px solid var(--c-green-bd);background:var(--c-green-bg);color:var(--c-green);font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;text-align:center;}
@@ -30491,25 +30499,28 @@ function inicializarBotaoConfig(){ inicializarBotoesAdmin(); }
 })();
 
 // ── Utilitários de data ───────────────────────────────────────────────────────
+function pulsoDataLocalISO(data=new Date()) {
+  return `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;
+}
 function pulsoGetDomingo(ref) {
   const d = ref ? new Date(ref + 'T12:00:00') : new Date();
   d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().slice(0, 10);
+  return pulsoDataLocalISO(d);
 }
 function pulsoGetSabado(dom) {
   const d = new Date(dom + 'T12:00:00');
   d.setDate(d.getDate() + 6);
-  return d.toISOString().slice(0, 10);
+  return pulsoDataLocalISO(d);
 }
 function pulsoSemanaId() { return pulsoGetDomingo(); }
-function pulsoHoje() { return new Date().toISOString().slice(0, 10); }
+function pulsoHoje() { return pulsoDataLocalISO(); }
 function pulsoDias(dom) {
   const nomes = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
   const abrev = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   return Array.from({length:7}, (_,i) => {
     const d = new Date(dom + 'T12:00:00');
     d.setDate(d.getDate() + i);
-    return { data: d.toISOString().slice(0,10), nome: nomes[i], abrev: abrev[i] };
+    return { data: pulsoDataLocalISO(d), nome: nomes[i], abrev: abrev[i] };
   });
 }
 // pulsoDDF removida — duplicata de pulsoDiaDF
@@ -30948,6 +30959,20 @@ function _renderPulsoUI(container,pulso,unidId,semId){
   const diasSem=pulsoDias(pulso.semanaInicio);
   const totais=pulsoCalcTotais(pulso);
   const ind=pulso.indicadoresSemana||{};
+  const indicadoresPacto=!!pulso.indicadoresPactoAtualizadoEm;
+  const semAvaliacaoPacto=indicadoresPacto&&ind.semSavaliacao!==null&&ind.semSavaliacao!==undefined;
+  const atrasadasPacto=indicadoresPacto&&ind.avaliacoesAtrasadas!==null&&ind.avaliacoesAtrasadas!==undefined;
+  const pactoAtualizadoEm=pulso.avaliacoesPactoAtualizadoEm||pulso.indicadoresPactoAtualizadoEm||null;
+  const pactoMs=pactoAtualizadoEm?new Date(pactoAtualizadoEm).getTime():NaN;
+  const pactoHoras=Number.isFinite(pactoMs)?Math.max(0,(Date.now()-pactoMs)/3600000):null;
+  const pactoDesatualizado=pactoHoras!==null&&pactoHoras>8;
+  const pactoDataFmt=Number.isFinite(pactoMs)
+    ?new Date(pactoMs).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    :null;
+  const pactoItens=[];
+  if(pulso.avaliacoesPactoAtualizadoEm)pactoItens.push('bios e reavaliações');
+  if(semAvaliacaoPacto)pactoItens.push('alunos sem avaliação');
+  if(atrasadasPacto)pactoItens.push('avaliações atrasadas');
 
   // Status — usa .pill existente
   const pillMap={rascunho:'pb',andamento:'pa',concluido:'pg',atraso:'pr'};
@@ -31015,12 +31040,12 @@ function _renderPulsoUI(container,pulso,unidId,semId){
           ${!isConcluido?`<span class="pulso-restaurar" onclick="pulsoRestaurarUI('${data}')">Restaurar dia</span>`:''}
         </div>`;
       } else {
-        const bloq=isConcluido?'disabled':'';
+        const avaliacoesAutomaticas=d.avaliacoesFonte==='pacto';
         bodyHtml=`
-          <div class="sec" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;">Avaliações do dia${d.avaliacoesFonte==='pacto'?'<span style="font-size:9px;text-transform:none;letter-spacing:0;color:var(--green);">\u2713 Pacto</span>':''}</div>
+          <div class="sec" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;">Avaliações do dia${avaliacoesAutomaticas?'<span class="pulso-fonte-badge pulso-fonte-auto">✓ Pacto · automático</span>':'<span class="pulso-fonte-badge pulso-fonte-manual">Preenchimento manual</span>'}</div>
           <div class="pulso-campos-grid">
-            ${_pCampo('bioNovas','Bio novas',d.bioNovas||0,data,isConcluido)}
-            ${_pCampo('reavaliacoes','Reavaliações',d.reavaliacoes||0,data,isConcluido)}
+            ${_pCampo('bioNovas','Bio novas',d.bioNovas||0,data,isConcluido||avaliacoesAutomaticas,avaliacoesAutomaticas)}
+            ${_pCampo('reavaliacoes','Reavaliações',d.reavaliacoes||0,data,isConcluido||avaliacoesAutomaticas,avaliacoesAutomaticas)}
           </div>
 `;  // treinos movidos para seção semanal
         if(!ok&&!isConcluido){
@@ -31063,20 +31088,26 @@ function _renderPulsoUI(container,pulso,unidId,semId){
 
   // Indicadores semanais
   const bloqInd=isConcluido?'disabled':'';
+  const bloqSemAvaliacao=(isConcluido||semAvaliacaoPacto)?'disabled':'';
+  const bloqAtrasadas=(isConcluido||atrasadasPacto)?'disabled':'';
   const semanaisHtml=`
     <div class="mcard" style="border-color:rgba(167,139,250,.2);margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         <div style="width:6px;height:6px;border-radius:50%;background:var(--purple);"></div>
         <div style="font-size:11px;font-weight:600;color:var(--purple);">Indicadores da semana</div>
-        <div style="font-size:10px;color:var(--muted2);">— preenchidos uma vez</div>
+        <div style="font-size:10px;color:var(--muted2);">— oficiais e complementares</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div class="mb" style="grid-column:1/-1;"><div class="mb-lbl">Alunos sem avaliação</div>
-          <input type="number" min="0" class="pulso-semanal-input" ${bloqInd}
+        <div class="mb"><div class="mb-lbl" style="display:flex;justify-content:space-between;gap:6px;">Alunos sem avaliação <span class="pulso-fonte-badge ${semAvaliacaoPacto?'pulso-fonte-auto':'pulso-fonte-manual'}">${semAvaliacaoPacto?'Pacto · automático':'Manual · fallback'}</span></div>
+          <input type="number" min="0" class="pulso-semanal-input${semAvaliacaoPacto?' pacto-lock':''}" ${bloqSemAvaliacao}
             id="p_ind_semSav" value="${ind.semSavaliacao??''}" placeholder="0"
             oninput="pulsoIndUI()" onchange="pulsoIndUI()"></div>
+        <div class="mb"><div class="mb-lbl" style="display:flex;justify-content:space-between;gap:6px;">Avaliações atrasadas <span class="pulso-fonte-badge ${atrasadasPacto?'pulso-fonte-auto':'pulso-fonte-manual'}">${atrasadasPacto?'Pacto · automático':'Manual · fallback'}</span></div>
+          <input type="number" min="0" class="pulso-semanal-input${atrasadasPacto?' pacto-lock':''}" ${bloqAtrasadas}
+            id="p_ind_avalAtrasadas" value="${ind.avaliacoesAtrasadas??''}" placeholder="0"
+            oninput="pulsoIndUI()" onchange="pulsoIndUI()"></div>
         <div class="mb">
-          <div class="mb-lbl">Treinos renovados</div>
+          <div class="mb-lbl" style="display:flex;justify-content:space-between;gap:6px;">Treinos renovados <span class="pulso-fonte-badge pulso-fonte-manual">Manual</span></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
             <button class="pulso-ctrl-btn" ${bloqInd?"disabled":""} onclick="pulsoAltSemanal(\'treinosRenovados\',-1)">−</button>
             <span id="pSemRenov" style="min-width:28px;text-align:center;font-size:16px;font-weight:700;">${ind.treinosRenovados||0}</span>
@@ -31084,7 +31115,7 @@ function _renderPulsoUI(container,pulso,unidId,semId){
           </div>
         </div>
         <div class="mb">
-          <div class="mb-lbl">Treinos revisados</div>
+          <div class="mb-lbl" style="display:flex;justify-content:space-between;gap:6px;">Treinos revisados <span class="pulso-fonte-badge pulso-fonte-manual">Manual</span></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
             <button class="pulso-ctrl-btn" ${bloqInd?"disabled":""} onclick="pulsoAltSemanal(\'treinosRevisados\',-1)">−</button>
             <span id="pSemRevis" style="min-width:28px;text-align:center;font-size:16px;font-weight:700;">${ind.treinosRevisados||0}</span>
@@ -31109,6 +31140,9 @@ function _renderPulsoUI(container,pulso,unidId,semId){
 
   // Banner concluído
   const obs=pulso.observacoesSemana||'';
+  const fonteHtml=pactoAtualizadoEm
+    ?`<div class="pulso-source-banner ${pactoDesatualizado?'warn':'ok'}"><div><strong>${pactoDesatualizado?'⚠ Dados automáticos desatualizados':'✓ Dados automáticos sincronizados'}</strong><br><span>${pactoDesatualizado?'Os valores permanecem disponíveis, mas confirme a execução do n8n antes de concluir.':`${pactoItens.join(', ')||'Os indicadores oficiais'} vieram da Pacto.`}</span></div><span style="white-space:nowrap;">${pactoDataFmt||'horário indisponível'}</span></div>`
+    :`<div class="pulso-source-banner neutral"><div><strong>Preenchimento manual disponível</strong><br><span>A Pacto ainda não retornou dados para esta semana. Os campos desbloqueados podem ser preenchidos manualmente.</span></div></div>`;
   const doneBanner=isConcluido?`
     <div class="pulso-done-banner">
       <span style="font-size:20px;">✅</span>
@@ -31160,6 +31194,7 @@ function _renderPulsoUI(container,pulso,unidId,semId){
       ${_pModoHistorico ? `<div style="background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2);border-radius:var(--card-r);padding:9px 13px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:16px;">📅</span><div><div style="font-size:11px;font-weight:600;color:var(--amber);">Modo de registro histórico</div><div style="font-size:10px;color:var(--muted);margin-top:1px;">Preencha os indicadores desta semana conforme os dados da planilha.</div></div></div>` : ''}
 
       ${doneBanner}
+      ${!_pModoHistorico?fonteHtml:''}
 
       <div class="mcard" style="margin-bottom:12px;">
         <div class="pulso-prog-row">${dotsHtml}</div>
@@ -31183,11 +31218,11 @@ function _renderPulsoUI(container,pulso,unidId,semId){
   _pSaveEl=document.getElementById('_pSaveInd');
 }
 
-function _pCampo(campo,label,valor,data,bloq){
+function _pCampo(campo,label,valor,data,bloq,automatico=false){
   const dId=data.replace(/-/g,'_');
   const v=valor||0;
-  return`<div class="pulso-campo-wrap">
-    <div class="pulso-campo-lbl">${label}</div>
+  return`<div class="pulso-campo-wrap"${automatico?' title="Valor oficial sincronizado pela Pacto"':''}>
+    <div class="pulso-campo-lbl">${label}${automatico?' · oficial':''}</div>
     <div class="pulso-campo-ctrl">
       <button class="pulso-ctrl-btn" onclick="pulsoAlt('${data}','${campo}',-1)" ${bloq?'disabled':''}">−</button>
       <div class="pulso-ctrl-val${v===0?' pv-zero':''}" id="pv_${dId}_${campo}">${v}</div>
@@ -31206,6 +31241,8 @@ function pulsoAlt(data,campo,delta){
   if(!_pAtual||!unidadeAtual||!usuarioLogado)return;
   if(!_pAtual.dias)_pAtual.dias={};
   if(!_pAtual.dias[data])_pAtual.dias[data]=pulsoDiaVazio(data,'');
+  // Dados oficiais sincronizados não devem ser alterados acidentalmente.
+  if(_pAtual.dias[data].avaliacoesFonte==='pacto'&&['bioNovas','reavaliacoes'].includes(campo))return;
   // Capturar valor anterior ANTES de modificar _pAtual — necessário para auditoria sem read Firestore
   const valorAnterior=_pAtual.dias[data][campo]||0;
   const novoVal=Math.max(0,valorAnterior+delta);
@@ -31240,7 +31277,7 @@ function _pulsoAtualizarTotaisDOM(){
   const t=pulsoCalcTotais(_pAtual);
   // Os totais estão em .pulso-card dentro de .pulso-grid — re-render parcial via seletor
   const cards=document.querySelectorAll('.pulso-grid .pulso-val');
-  if(cards.length>=4){cards[0].textContent=t.bioNovas;cards[1].textContent=t.reavaliacoes;cards[2].textContent=t.treinosRenovados;cards[3].textContent=t.treinosRevisados;}
+  if(cards.length>=2){cards[0].textContent=t.bioNovas;cards[1].textContent=t.reavaliacoes;}
   const totEl=document.querySelector('#pulso-container strong[style*="DM Mono"]');
   if(totEl)totEl.textContent=t.totalAvaliacoes;
 }
@@ -31323,8 +31360,13 @@ function pulsoIndUI(){
   clearTimeout(_pIndTimerUI);
   _pMarkSaving();
   const sv=document.getElementById('p_ind_semSav')?.value;
+  const at=document.getElementById('p_ind_avalAtrasadas')?.value;
   if(!_pAtual.indicadoresSemana)_pAtual.indicadoresSemana={};
-  _pAtual.indicadoresSemana.semSavaliacao=sv!==''?Number(sv):null;
+  const possuiFontePacto=!!_pAtual.indicadoresPactoAtualizadoEm;
+  const semAvaliacaoOficial=possuiFontePacto&&_pAtual.indicadoresSemana.semSavaliacao!=null;
+  const atrasadasOficial=possuiFontePacto&&_pAtual.indicadoresSemana.avaliacoesAtrasadas!=null;
+  if(!semAvaliacaoOficial)_pAtual.indicadoresSemana.semSavaliacao=sv!==''?Number(sv):null;
+  if(!atrasadasOficial)_pAtual.indicadoresSemana.avaliacoesAtrasadas=at!==''?Number(at):null;
   _pulsoAtualizarBtnConcluir();
   _pIndTimerUI=setTimeout(()=>_pulsoSalvarIndicadores(unidadeAtual.id,_pAtual.semanaId,_pAtual.indicadoresSemana.semSavaliacao,_pAtual.indicadoresSemana.avaliacoesAtrasadas ?? null),1200);
 }
@@ -31393,8 +31435,9 @@ function pulsoAbrirRevisao(){
         <tfoot><tr><td><strong>Totais</strong></td><td><strong>${totais.bioNovas}</strong></td><td><strong>${totais.reavaliacoes}</strong></td><td><strong>${totais.treinosRenovados}</strong></td><td><strong>${totais.treinosRevisados}</strong></td><td><strong>${totais.totalAvaliacoes} aval.</strong></td></tr></tfoot>
       </table>
 
-      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
         <div class="mcard"><div class="ml">Sem avaliação</div><div class="mv">${ind.semSavaliacao??'—'}</div></div>
+        <div class="mcard"><div class="ml">Avaliações atrasadas</div><div class="mv">${ind.avaliacoesAtrasadas??'—'}</div></div>
       </div>
 
       <div class="pulso-obs-wrap">
@@ -31702,8 +31745,9 @@ async function pulsoRegVerUnid(unidId,nomeUnidade){
         <div class="pulso-card"><div class="pulso-val">${totais.treinosRenovados}</div><div class="pulso-lbl">Renov</div></div>
         <div class="pulso-card"><div class="pulso-val">${totais.treinosRevisados}</div><div class="pulso-lbl">Revis</div></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
         <div class="mcard"><div class="ml">Sem avaliação</div><div class="mv">${ind.semSavaliacao??'—'}</div></div>
+        <div class="mcard"><div class="ml">Avaliações atrasadas</div><div class="mv">${ind.avaliacoesAtrasadas??'—'}</div></div>
       </div>
       <div class="tw"><table style="width:100%;">
         <thead><tr>${['Dia','Bio','Reav','Renov','Revis','Status'].map(h=>`<th>${h}</th>`).join('')}</tr></thead>
@@ -31914,6 +31958,7 @@ ${rod(1)}</div>`;
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px 14px;">
         ${[
           { l: 'Sem avaliação', v: ind.semSavaliacao != null ? ind.semSavaliacao + ' alunos' : '—', c: (ind.semSavaliacao ?? 0) > 50 ? AMB : '#e5e7eb' },
+          { l: 'Avaliações atrasadas', v: ind.avaliacoesAtrasadas != null ? ind.avaliacoesAtrasadas + ' alunos' : '—', c: (ind.avaliacoesAtrasadas ?? 0) > 0 ? AMB : '#e5e7eb' },
           { l: 'Bio novas', v: String(totais.bioNovas), c: totais.bioNovas > 0 ? BOM : '#6b7280' },
           { l: 'Reavaliações', v: String(totais.reavaliacoes), c: totais.reavaliacoes > 0 ? BOM : '#6b7280' },
           { l: 'Treinos renovados', v: String(totais.treinosRenovados), c: totais.treinosRenovados > 0 ? BOM : '#6b7280' },
@@ -32111,6 +32156,7 @@ async function renderPulsoHistorico(unidId) {
                 <div class="phist-t"><strong>${totais.treinosRenovados}</strong> renov.</div>
                 <div class="phist-t"><strong>${totais.treinosRevisados}</strong> revis.</div>
                 ${ind.semSavaliacao != null ? `<div class="phist-t"><strong>${ind.semSavaliacao}</strong> s/aval.</div>` : ''}
+                ${ind.avaliacoesAtrasadas != null ? `<div class="phist-t"><strong>${ind.avaliacoesAtrasadas}</strong> aval. atrasadas</div>` : ''}
               </div>
             </div>
             <div class="phist-actions">
