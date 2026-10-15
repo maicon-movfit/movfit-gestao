@@ -1,0 +1,1735 @@
+{
+  "name": "Pacto - Alunos sem avaliacao - todas as unidades",
+  "nodes": [
+    {
+      "id": "schedule-5",
+      "name": "Agendar Nova Republica",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config-5",
+      "name": "Configurar Nova Republica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nconst inicio = agora.set({ day: 1 });\nconst filtros = { dataInicio: inicio.toMillis(), dataFim: agora.toMillis(), professorId: -1, avaliadorId: -1, indicador: 'IND_AF_ATIVOS_SEM', tipoAvaliacao: 'TODOS_PROFESSORES' };\nreturn [{ json: { unidade_codigo: 5, unidade_nome: 'santarem_nova_republica', tamanho_pagina: 50, indicador: filtros.indicador, filters_json: JSON.stringify(filtros), iniciado_em: agora.toUTC().toISO() } }];"
+      }
+    },
+    {
+      "id": "first-5",
+      "name": "Consultar total Nova Republica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -280,
+        0
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Nova Republica').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "0"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho_pagina }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "pages-5",
+      "name": "Criar paginas Nova Republica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst total = Number(resposta.totalElements ?? resposta.data?.totalElements ?? 0);\nconst cfg = $('Configurar Nova Republica').first().json;\nconst tamanho = Number(cfg.tamanho_pagina || 50);\nif (!Number.isInteger(total) || total < 0) throw new Error('totalElements invalido: ' + total);\nconst paginas = Math.max(1, Math.ceil(total / tamanho));\nreturn Array.from({ length: paginas }, (_, pagina) => ({ json: {\n  pagina, tamanho, total_esperado: total, sem_dados: total === 0\n} }));"
+      }
+    },
+    {
+      "id": "loop-5",
+      "name": "Paginar Nova Republica",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-5",
+      "name": "Buscar pagina Nova Republica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        80
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Nova Republica').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.pagina }}"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "normalize-5",
+      "name": "Normalizar Nova Republica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst controle = $('Paginar Nova Republica').item.json;\nconst cfg = $('Configurar Nova Republica').first().json;\nconst alunos = Array.isArray(resposta.content) ? resposta.content\n  : Array.isArray(resposta.data?.content) ? resposta.data.content : null;\nif (!alunos) throw new Error('Resposta sem content: ' + JSON.stringify(resposta).slice(0, 800));\nif (controle.sem_dados) return [{ json: { controle_sem_dados: true, total_esperado: 0 } }];\nif (!alunos.length) throw new Error('Pagina ' + controle.pagina + ' vazia com total esperado ' + controle.total_esperado);\nconst coletadoEm = new Date().toISOString();\nconst texto = v => v == null || String(v).trim() === '' || String(v).trim() === '-' ? null : String(v).trim();\nconst numero = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);\nreturn alunos.map((a, indice) => {\n  const codigo = numero(a.codCliente ?? a.codigoCliente ?? a.codigo_cliente);\n  const matricula = texto(a.matricula);\n  const nome = texto(a.nome ?? a.nomeAluno ?? a.nome_aluno);\n  if (codigo == null || !matricula || !nome) throw new Error('Aluno invalido na pagina ' + controle.pagina + ', item ' + indice);\n  return { json: {\n    unidade_codigo: cfg.unidade_codigo,\n    unidade_nome: cfg.unidade_nome,\n    codigo_cliente: codigo,\n    matricula,\n    nome_aluno: nome,\n    nome_avaliador: texto(a.avaliador ?? a.nomeAvaliador),\n    nome_professor: texto(a.professor ?? a.nomeProfessor),\n    observacao: texto(a.obs ?? a.observacao),\n    modalidade: texto(a.modalidade),\n    indicador: cfg.indicador,\n    pagina_origem: Number(controle.pagina),\n    coletado_em: coletadoEm,\n    total_esperado: Number(controle.total_esperado)\n  } };\n});"
+      }
+    },
+    {
+      "id": "wait-5",
+      "name": "Aguardar Nova Republica",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        80
+      ],
+      "parameters": {
+        "amount": 1
+      }
+    },
+    {
+      "id": "prepare-5",
+      "name": "Conferir coleta Nova Republica",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Configurar Nova Republica').first().json;\nconst itens = $input.all().map(i => i.json);\nconst semDados = itens.some(i => i.controle_sem_dados === true);\nconst registros = semDados ? [] : itens.filter(i => i.codigo_cliente != null);\nconst esperados = semDados ? 0 : Number(registros[0]?.total_esperado ?? -1);\nconst unicos = new Map();\nfor (const r of registros) unicos.set(String(r.codigo_cliente), r);\nif (esperados < 0 || registros.length !== esperados || unicos.size !== esperados) {\n  throw new Error('Coleta incompleta: esperados=' + esperados + ', recebidos=' + registros.length + ', unicos=' + unicos.size);\n}\nconst alunos = [...unicos.values()].map(({ total_esperado, ...r }) => r);\nreturn [{ json: {\n  unidade_codigo: cfg.unidade_codigo,\n  unidade_nome: cfg.unidade_nome,\n  indicador: cfg.indicador,\n  total_api: esperados,\n  coletado_em: new Date().toISOString(),\n  alunos_json: JSON.stringify(alunos)\n} }];"
+      }
+    },
+    {
+      "id": "save-5",
+      "name": "Salvar sem avaliacao Nova Republica",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        -80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH recebidos AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer, unidade_nome text, codigo_cliente bigint,\n        matricula text, nome_aluno text, nome_avaliador text,\n        nome_professor text, observacao text, modalidade text,\n        indicador text, pagina_origem integer, coletado_em timestamptz\n    )\n), gravados AS (\n    INSERT INTO public.alunos_sem_avaliacao AS destino (\n        unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, atualizado_em\n    )\n    SELECT unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, now()\n    FROM recebidos\n    ON CONFLICT (unidade_codigo, codigo_cliente) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, matricula=EXCLUDED.matricula,\n        nome_aluno=EXCLUDED.nome_aluno, nome_avaliador=EXCLUDED.nome_avaliador,\n        nome_professor=EXCLUDED.nome_professor, observacao=EXCLUDED.observacao,\n        modalidade=EXCLUDED.modalidade, indicador=EXCLUDED.indicador,\n        pagina_origem=EXCLUDED.pagina_origem, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n), removidos AS (\n    DELETE FROM public.alunos_sem_avaliacao a\n    WHERE a.unidade_codigo=$2::integer\n      AND NOT EXISTS (SELECT 1 FROM recebidos r\n        WHERE r.unidade_codigo=a.unidade_codigo AND r.codigo_cliente=a.codigo_cliente)\n    RETURNING 1\n), controle AS (\n    INSERT INTO public.coletas_alunos_sem_avaliacao\n        (unidade_codigo, unidade_nome, indicador, total_api, coletado_em, atualizado_em)\n    VALUES ($2::integer, $3::text, $4::text, $5::integer, $6::timestamptz, now())\n    ON CONFLICT (unidade_codigo) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, indicador=EXCLUDED.indicador,\n        total_api=EXCLUDED.total_api, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n)\nSELECT $2::integer AS unidade_codigo, $3::text AS unidade_nome,\n  (SELECT count(*)::integer FROM gravados) AS registros_gravados,\n  (SELECT count(*)::integer FROM removidos) AS registros_removidos,\n  $5::integer AS total_atual, $6::timestamptz AS coletado_em\nWHERE EXISTS (SELECT 1 FROM controle);",
+        "options": {
+          "queryReplacement": "={{ [$json.alunos_json, $json.unidade_codigo, $json.unidade_nome, $json.indicador, $json.total_api, $json.coletado_em] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "id": "schedule-3",
+      "name": "Agendar Santarem 24h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        320
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6,
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config-3",
+      "name": "Configurar Santarem 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nconst inicio = agora.set({ day: 1 });\nconst filtros = { dataInicio: inicio.toMillis(), dataFim: agora.toMillis(), professorId: -1, avaliadorId: -1, indicador: 'IND_AF_ATIVOS_SEM', tipoAvaliacao: 'TODOS_PROFESSORES' };\nreturn [{ json: { unidade_codigo: 3, unidade_nome: 'santarem_24h', tamanho_pagina: 50, indicador: filtros.indicador, filters_json: JSON.stringify(filtros), iniciado_em: agora.toUTC().toISO() } }];"
+      }
+    },
+    {
+      "id": "first-3",
+      "name": "Consultar total Santarem 24h",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -280,
+        320
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Santarem 24h').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "0"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho_pagina }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "pages-3",
+      "name": "Criar paginas Santarem 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst total = Number(resposta.totalElements ?? resposta.data?.totalElements ?? 0);\nconst cfg = $('Configurar Santarem 24h').first().json;\nconst tamanho = Number(cfg.tamanho_pagina || 50);\nif (!Number.isInteger(total) || total < 0) throw new Error('totalElements invalido: ' + total);\nconst paginas = Math.max(1, Math.ceil(total / tamanho));\nreturn Array.from({ length: paginas }, (_, pagina) => ({ json: {\n  pagina, tamanho, total_esperado: total, sem_dados: total === 0\n} }));"
+      }
+    },
+    {
+      "id": "loop-3",
+      "name": "Paginar Santarem 24h",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        320
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-3",
+      "name": "Buscar pagina Santarem 24h",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        400
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Santarem 24h').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.pagina }}"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "normalize-3",
+      "name": "Normalizar Santarem 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst controle = $('Paginar Santarem 24h').item.json;\nconst cfg = $('Configurar Santarem 24h').first().json;\nconst alunos = Array.isArray(resposta.content) ? resposta.content\n  : Array.isArray(resposta.data?.content) ? resposta.data.content : null;\nif (!alunos) throw new Error('Resposta sem content: ' + JSON.stringify(resposta).slice(0, 800));\nif (controle.sem_dados) return [{ json: { controle_sem_dados: true, total_esperado: 0 } }];\nif (!alunos.length) throw new Error('Pagina ' + controle.pagina + ' vazia com total esperado ' + controle.total_esperado);\nconst coletadoEm = new Date().toISOString();\nconst texto = v => v == null || String(v).trim() === '' || String(v).trim() === '-' ? null : String(v).trim();\nconst numero = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);\nreturn alunos.map((a, indice) => {\n  const codigo = numero(a.codCliente ?? a.codigoCliente ?? a.codigo_cliente);\n  const matricula = texto(a.matricula);\n  const nome = texto(a.nome ?? a.nomeAluno ?? a.nome_aluno);\n  if (codigo == null || !matricula || !nome) throw new Error('Aluno invalido na pagina ' + controle.pagina + ', item ' + indice);\n  return { json: {\n    unidade_codigo: cfg.unidade_codigo,\n    unidade_nome: cfg.unidade_nome,\n    codigo_cliente: codigo,\n    matricula,\n    nome_aluno: nome,\n    nome_avaliador: texto(a.avaliador ?? a.nomeAvaliador),\n    nome_professor: texto(a.professor ?? a.nomeProfessor),\n    observacao: texto(a.obs ?? a.observacao),\n    modalidade: texto(a.modalidade),\n    indicador: cfg.indicador,\n    pagina_origem: Number(controle.pagina),\n    coletado_em: coletadoEm,\n    total_esperado: Number(controle.total_esperado)\n  } };\n});"
+      }
+    },
+    {
+      "id": "wait-3",
+      "name": "Aguardar Santarem 24h",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        400
+      ],
+      "parameters": {
+        "amount": 1
+      }
+    },
+    {
+      "id": "prepare-3",
+      "name": "Conferir coleta Santarem 24h",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Configurar Santarem 24h').first().json;\nconst itens = $input.all().map(i => i.json);\nconst semDados = itens.some(i => i.controle_sem_dados === true);\nconst registros = semDados ? [] : itens.filter(i => i.codigo_cliente != null);\nconst esperados = semDados ? 0 : Number(registros[0]?.total_esperado ?? -1);\nconst unicos = new Map();\nfor (const r of registros) unicos.set(String(r.codigo_cliente), r);\nif (esperados < 0 || registros.length !== esperados || unicos.size !== esperados) {\n  throw new Error('Coleta incompleta: esperados=' + esperados + ', recebidos=' + registros.length + ', unicos=' + unicos.size);\n}\nconst alunos = [...unicos.values()].map(({ total_esperado, ...r }) => r);\nreturn [{ json: {\n  unidade_codigo: cfg.unidade_codigo,\n  unidade_nome: cfg.unidade_nome,\n  indicador: cfg.indicador,\n  total_api: esperados,\n  coletado_em: new Date().toISOString(),\n  alunos_json: JSON.stringify(alunos)\n} }];"
+      }
+    },
+    {
+      "id": "save-3",
+      "name": "Salvar sem avaliacao Santarem 24h",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        240
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH recebidos AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer, unidade_nome text, codigo_cliente bigint,\n        matricula text, nome_aluno text, nome_avaliador text,\n        nome_professor text, observacao text, modalidade text,\n        indicador text, pagina_origem integer, coletado_em timestamptz\n    )\n), gravados AS (\n    INSERT INTO public.alunos_sem_avaliacao AS destino (\n        unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, atualizado_em\n    )\n    SELECT unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, now()\n    FROM recebidos\n    ON CONFLICT (unidade_codigo, codigo_cliente) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, matricula=EXCLUDED.matricula,\n        nome_aluno=EXCLUDED.nome_aluno, nome_avaliador=EXCLUDED.nome_avaliador,\n        nome_professor=EXCLUDED.nome_professor, observacao=EXCLUDED.observacao,\n        modalidade=EXCLUDED.modalidade, indicador=EXCLUDED.indicador,\n        pagina_origem=EXCLUDED.pagina_origem, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n), removidos AS (\n    DELETE FROM public.alunos_sem_avaliacao a\n    WHERE a.unidade_codigo=$2::integer\n      AND NOT EXISTS (SELECT 1 FROM recebidos r\n        WHERE r.unidade_codigo=a.unidade_codigo AND r.codigo_cliente=a.codigo_cliente)\n    RETURNING 1\n), controle AS (\n    INSERT INTO public.coletas_alunos_sem_avaliacao\n        (unidade_codigo, unidade_nome, indicador, total_api, coletado_em, atualizado_em)\n    VALUES ($2::integer, $3::text, $4::text, $5::integer, $6::timestamptz, now())\n    ON CONFLICT (unidade_codigo) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, indicador=EXCLUDED.indicador,\n        total_api=EXCLUDED.total_api, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n)\nSELECT $2::integer AS unidade_codigo, $3::text AS unidade_nome,\n  (SELECT count(*)::integer FROM gravados) AS registros_gravados,\n  (SELECT count(*)::integer FROM removidos) AS registros_removidos,\n  $5::integer AS total_atual, $6::timestamptz AS coletado_em\nWHERE EXISTS (SELECT 1 FROM controle);",
+        "options": {
+          "queryReplacement": "={{ [$json.alunos_json, $json.unidade_codigo, $json.unidade_nome, $json.indicador, $json.total_api, $json.coletado_em] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "id": "schedule-2",
+      "name": "Agendar Itaituba",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        640
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6,
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config-2",
+      "name": "Configurar Itaituba",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        640
+      ],
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nconst inicio = agora.set({ day: 1 });\nconst filtros = { dataInicio: inicio.toMillis(), dataFim: agora.toMillis(), professorId: -1, avaliadorId: -1, indicador: 'IND_AF_ATIVOS_SEM', tipoAvaliacao: 'TODOS_PROFESSORES' };\nreturn [{ json: { unidade_codigo: 2, unidade_nome: 'itaituba', tamanho_pagina: 50, indicador: filtros.indicador, filters_json: JSON.stringify(filtros), iniciado_em: agora.toUTC().toISO() } }];"
+      }
+    },
+    {
+      "id": "first-2",
+      "name": "Consultar total Itaituba",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -280,
+        640
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Itaituba').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "0"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho_pagina }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "pages-2",
+      "name": "Criar paginas Itaituba",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        640
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst total = Number(resposta.totalElements ?? resposta.data?.totalElements ?? 0);\nconst cfg = $('Configurar Itaituba').first().json;\nconst tamanho = Number(cfg.tamanho_pagina || 50);\nif (!Number.isInteger(total) || total < 0) throw new Error('totalElements invalido: ' + total);\nconst paginas = Math.max(1, Math.ceil(total / tamanho));\nreturn Array.from({ length: paginas }, (_, pagina) => ({ json: {\n  pagina, tamanho, total_esperado: total, sem_dados: total === 0\n} }));"
+      }
+    },
+    {
+      "id": "loop-2",
+      "name": "Paginar Itaituba",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        640
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-2",
+      "name": "Buscar pagina Itaituba",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        720
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Itaituba').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.pagina }}"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "normalize-2",
+      "name": "Normalizar Itaituba",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        720
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst controle = $('Paginar Itaituba').item.json;\nconst cfg = $('Configurar Itaituba').first().json;\nconst alunos = Array.isArray(resposta.content) ? resposta.content\n  : Array.isArray(resposta.data?.content) ? resposta.data.content : null;\nif (!alunos) throw new Error('Resposta sem content: ' + JSON.stringify(resposta).slice(0, 800));\nif (controle.sem_dados) return [{ json: { controle_sem_dados: true, total_esperado: 0 } }];\nif (!alunos.length) throw new Error('Pagina ' + controle.pagina + ' vazia com total esperado ' + controle.total_esperado);\nconst coletadoEm = new Date().toISOString();\nconst texto = v => v == null || String(v).trim() === '' || String(v).trim() === '-' ? null : String(v).trim();\nconst numero = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);\nreturn alunos.map((a, indice) => {\n  const codigo = numero(a.codCliente ?? a.codigoCliente ?? a.codigo_cliente);\n  const matricula = texto(a.matricula);\n  const nome = texto(a.nome ?? a.nomeAluno ?? a.nome_aluno);\n  if (codigo == null || !matricula || !nome) throw new Error('Aluno invalido na pagina ' + controle.pagina + ', item ' + indice);\n  return { json: {\n    unidade_codigo: cfg.unidade_codigo,\n    unidade_nome: cfg.unidade_nome,\n    codigo_cliente: codigo,\n    matricula,\n    nome_aluno: nome,\n    nome_avaliador: texto(a.avaliador ?? a.nomeAvaliador),\n    nome_professor: texto(a.professor ?? a.nomeProfessor),\n    observacao: texto(a.obs ?? a.observacao),\n    modalidade: texto(a.modalidade),\n    indicador: cfg.indicador,\n    pagina_origem: Number(controle.pagina),\n    coletado_em: coletadoEm,\n    total_esperado: Number(controle.total_esperado)\n  } };\n});"
+      }
+    },
+    {
+      "id": "wait-2",
+      "name": "Aguardar Itaituba",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        720
+      ],
+      "parameters": {
+        "amount": 1
+      }
+    },
+    {
+      "id": "prepare-2",
+      "name": "Conferir coleta Itaituba",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        560
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Configurar Itaituba').first().json;\nconst itens = $input.all().map(i => i.json);\nconst semDados = itens.some(i => i.controle_sem_dados === true);\nconst registros = semDados ? [] : itens.filter(i => i.codigo_cliente != null);\nconst esperados = semDados ? 0 : Number(registros[0]?.total_esperado ?? -1);\nconst unicos = new Map();\nfor (const r of registros) unicos.set(String(r.codigo_cliente), r);\nif (esperados < 0 || registros.length !== esperados || unicos.size !== esperados) {\n  throw new Error('Coleta incompleta: esperados=' + esperados + ', recebidos=' + registros.length + ', unicos=' + unicos.size);\n}\nconst alunos = [...unicos.values()].map(({ total_esperado, ...r }) => r);\nreturn [{ json: {\n  unidade_codigo: cfg.unidade_codigo,\n  unidade_nome: cfg.unidade_nome,\n  indicador: cfg.indicador,\n  total_api: esperados,\n  coletado_em: new Date().toISOString(),\n  alunos_json: JSON.stringify(alunos)\n} }];"
+      }
+    },
+    {
+      "id": "save-2",
+      "name": "Salvar sem avaliacao Itaituba",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        560
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH recebidos AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer, unidade_nome text, codigo_cliente bigint,\n        matricula text, nome_aluno text, nome_avaliador text,\n        nome_professor text, observacao text, modalidade text,\n        indicador text, pagina_origem integer, coletado_em timestamptz\n    )\n), gravados AS (\n    INSERT INTO public.alunos_sem_avaliacao AS destino (\n        unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, atualizado_em\n    )\n    SELECT unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, now()\n    FROM recebidos\n    ON CONFLICT (unidade_codigo, codigo_cliente) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, matricula=EXCLUDED.matricula,\n        nome_aluno=EXCLUDED.nome_aluno, nome_avaliador=EXCLUDED.nome_avaliador,\n        nome_professor=EXCLUDED.nome_professor, observacao=EXCLUDED.observacao,\n        modalidade=EXCLUDED.modalidade, indicador=EXCLUDED.indicador,\n        pagina_origem=EXCLUDED.pagina_origem, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n), removidos AS (\n    DELETE FROM public.alunos_sem_avaliacao a\n    WHERE a.unidade_codigo=$2::integer\n      AND NOT EXISTS (SELECT 1 FROM recebidos r\n        WHERE r.unidade_codigo=a.unidade_codigo AND r.codigo_cliente=a.codigo_cliente)\n    RETURNING 1\n), controle AS (\n    INSERT INTO public.coletas_alunos_sem_avaliacao\n        (unidade_codigo, unidade_nome, indicador, total_api, coletado_em, atualizado_em)\n    VALUES ($2::integer, $3::text, $4::text, $5::integer, $6::timestamptz, now())\n    ON CONFLICT (unidade_codigo) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, indicador=EXCLUDED.indicador,\n        total_api=EXCLUDED.total_api, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n)\nSELECT $2::integer AS unidade_codigo, $3::text AS unidade_nome,\n  (SELECT count(*)::integer FROM gravados) AS registros_gravados,\n  (SELECT count(*)::integer FROM removidos) AS registros_removidos,\n  $5::integer AS total_atual, $6::timestamptz AS coletado_em\nWHERE EXISTS (SELECT 1 FROM controle);",
+        "options": {
+          "queryReplacement": "={{ [$json.alunos_json, $json.unidade_codigo, $json.unidade_nome, $json.indicador, $json.total_api, $json.coletado_em] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "id": "schedule-1",
+      "name": "Agendar Medicilandia",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        960
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6,
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config-1",
+      "name": "Configurar Medicilandia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        960
+      ],
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nconst inicio = agora.set({ day: 1 });\nconst filtros = { dataInicio: inicio.toMillis(), dataFim: agora.toMillis(), professorId: -1, avaliadorId: -1, indicador: 'IND_AF_ATIVOS_SEM', tipoAvaliacao: 'TODOS_PROFESSORES' };\nreturn [{ json: { unidade_codigo: 1, unidade_nome: 'medicilandia', tamanho_pagina: 50, indicador: filtros.indicador, filters_json: JSON.stringify(filtros), iniciado_em: agora.toUTC().toISO() } }];"
+      }
+    },
+    {
+      "id": "first-1",
+      "name": "Consultar total Medicilandia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -280,
+        960
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Medicilandia').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "0"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho_pagina }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "pages-1",
+      "name": "Criar paginas Medicilandia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        960
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst total = Number(resposta.totalElements ?? resposta.data?.totalElements ?? 0);\nconst cfg = $('Configurar Medicilandia').first().json;\nconst tamanho = Number(cfg.tamanho_pagina || 50);\nif (!Number.isInteger(total) || total < 0) throw new Error('totalElements invalido: ' + total);\nconst paginas = Math.max(1, Math.ceil(total / tamanho));\nreturn Array.from({ length: paginas }, (_, pagina) => ({ json: {\n  pagina, tamanho, total_esperado: total, sem_dados: total === 0\n} }));"
+      }
+    },
+    {
+      "id": "loop-1",
+      "name": "Paginar Medicilandia",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        960
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-1",
+      "name": "Buscar pagina Medicilandia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        1040
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Medicilandia').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.pagina }}"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "normalize-1",
+      "name": "Normalizar Medicilandia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst controle = $('Paginar Medicilandia').item.json;\nconst cfg = $('Configurar Medicilandia').first().json;\nconst alunos = Array.isArray(resposta.content) ? resposta.content\n  : Array.isArray(resposta.data?.content) ? resposta.data.content : null;\nif (!alunos) throw new Error('Resposta sem content: ' + JSON.stringify(resposta).slice(0, 800));\nif (controle.sem_dados) return [{ json: { controle_sem_dados: true, total_esperado: 0 } }];\nif (!alunos.length) throw new Error('Pagina ' + controle.pagina + ' vazia com total esperado ' + controle.total_esperado);\nconst coletadoEm = new Date().toISOString();\nconst texto = v => v == null || String(v).trim() === '' || String(v).trim() === '-' ? null : String(v).trim();\nconst numero = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);\nreturn alunos.map((a, indice) => {\n  const codigo = numero(a.codCliente ?? a.codigoCliente ?? a.codigo_cliente);\n  const matricula = texto(a.matricula);\n  const nome = texto(a.nome ?? a.nomeAluno ?? a.nome_aluno);\n  if (codigo == null || !matricula || !nome) throw new Error('Aluno invalido na pagina ' + controle.pagina + ', item ' + indice);\n  return { json: {\n    unidade_codigo: cfg.unidade_codigo,\n    unidade_nome: cfg.unidade_nome,\n    codigo_cliente: codigo,\n    matricula,\n    nome_aluno: nome,\n    nome_avaliador: texto(a.avaliador ?? a.nomeAvaliador),\n    nome_professor: texto(a.professor ?? a.nomeProfessor),\n    observacao: texto(a.obs ?? a.observacao),\n    modalidade: texto(a.modalidade),\n    indicador: cfg.indicador,\n    pagina_origem: Number(controle.pagina),\n    coletado_em: coletadoEm,\n    total_esperado: Number(controle.total_esperado)\n  } };\n});"
+      }
+    },
+    {
+      "id": "wait-1",
+      "name": "Aguardar Medicilandia",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        1040
+      ],
+      "parameters": {
+        "amount": 1
+      }
+    },
+    {
+      "id": "prepare-1",
+      "name": "Conferir coleta Medicilandia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        880
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Configurar Medicilandia').first().json;\nconst itens = $input.all().map(i => i.json);\nconst semDados = itens.some(i => i.controle_sem_dados === true);\nconst registros = semDados ? [] : itens.filter(i => i.codigo_cliente != null);\nconst esperados = semDados ? 0 : Number(registros[0]?.total_esperado ?? -1);\nconst unicos = new Map();\nfor (const r of registros) unicos.set(String(r.codigo_cliente), r);\nif (esperados < 0 || registros.length !== esperados || unicos.size !== esperados) {\n  throw new Error('Coleta incompleta: esperados=' + esperados + ', recebidos=' + registros.length + ', unicos=' + unicos.size);\n}\nconst alunos = [...unicos.values()].map(({ total_esperado, ...r }) => r);\nreturn [{ json: {\n  unidade_codigo: cfg.unidade_codigo,\n  unidade_nome: cfg.unidade_nome,\n  indicador: cfg.indicador,\n  total_api: esperados,\n  coletado_em: new Date().toISOString(),\n  alunos_json: JSON.stringify(alunos)\n} }];"
+      }
+    },
+    {
+      "id": "save-1",
+      "name": "Salvar sem avaliacao Medicilandia",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        880
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH recebidos AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer, unidade_nome text, codigo_cliente bigint,\n        matricula text, nome_aluno text, nome_avaliador text,\n        nome_professor text, observacao text, modalidade text,\n        indicador text, pagina_origem integer, coletado_em timestamptz\n    )\n), gravados AS (\n    INSERT INTO public.alunos_sem_avaliacao AS destino (\n        unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, atualizado_em\n    )\n    SELECT unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, now()\n    FROM recebidos\n    ON CONFLICT (unidade_codigo, codigo_cliente) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, matricula=EXCLUDED.matricula,\n        nome_aluno=EXCLUDED.nome_aluno, nome_avaliador=EXCLUDED.nome_avaliador,\n        nome_professor=EXCLUDED.nome_professor, observacao=EXCLUDED.observacao,\n        modalidade=EXCLUDED.modalidade, indicador=EXCLUDED.indicador,\n        pagina_origem=EXCLUDED.pagina_origem, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n), removidos AS (\n    DELETE FROM public.alunos_sem_avaliacao a\n    WHERE a.unidade_codigo=$2::integer\n      AND NOT EXISTS (SELECT 1 FROM recebidos r\n        WHERE r.unidade_codigo=a.unidade_codigo AND r.codigo_cliente=a.codigo_cliente)\n    RETURNING 1\n), controle AS (\n    INSERT INTO public.coletas_alunos_sem_avaliacao\n        (unidade_codigo, unidade_nome, indicador, total_api, coletado_em, atualizado_em)\n    VALUES ($2::integer, $3::text, $4::text, $5::integer, $6::timestamptz, now())\n    ON CONFLICT (unidade_codigo) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, indicador=EXCLUDED.indicador,\n        total_api=EXCLUDED.total_api, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n)\nSELECT $2::integer AS unidade_codigo, $3::text AS unidade_nome,\n  (SELECT count(*)::integer FROM gravados) AS registros_gravados,\n  (SELECT count(*)::integer FROM removidos) AS registros_removidos,\n  $5::integer AS total_atual, $6::timestamptz AS coletado_em\nWHERE EXISTS (SELECT 1 FROM controle);",
+        "options": {
+          "queryReplacement": "={{ [$json.alunos_json, $json.unidade_codigo, $json.unidade_nome, $json.indicador, $json.total_api, $json.coletado_em] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "id": "schedule-6",
+      "name": "Agendar Novo Progresso",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        1280
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6,
+              "triggerAtMinute": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config-6",
+      "name": "Configurar Novo Progresso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        1280
+      ],
+      "parameters": {
+        "jsCode": "const agora = $now.setZone('America/Sao_Paulo');\nconst inicio = agora.set({ day: 1 });\nconst filtros = { dataInicio: inicio.toMillis(), dataFim: agora.toMillis(), professorId: -1, avaliadorId: -1, indicador: 'IND_AF_ATIVOS_SEM', tipoAvaliacao: 'TODOS_PROFESSORES' };\nreturn [{ json: { unidade_codigo: 6, unidade_nome: 'novo_progresso', tamanho_pagina: 50, indicador: filtros.indicador, filters_json: JSON.stringify(filtros), iniciado_em: agora.toUTC().toISO() } }];"
+      }
+    },
+    {
+      "id": "first-6",
+      "name": "Consultar total Novo Progresso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -280,
+        1280
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Novo Progresso').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "0"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho_pagina }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "pages-6",
+      "name": "Criar paginas Novo Progresso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        1280
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst total = Number(resposta.totalElements ?? resposta.data?.totalElements ?? 0);\nconst cfg = $('Configurar Novo Progresso').first().json;\nconst tamanho = Number(cfg.tamanho_pagina || 50);\nif (!Number.isInteger(total) || total < 0) throw new Error('totalElements invalido: ' + total);\nconst paginas = Math.max(1, Math.ceil(total / tamanho));\nreturn Array.from({ length: paginas }, (_, pagina) => ({ json: {\n  pagina, tamanho, total_esperado: total, sem_dados: total === 0\n} }));"
+      }
+    },
+    {
+      "id": "loop-6",
+      "name": "Paginar Novo Progresso",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        160,
+        1280
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-6",
+      "name": "Buscar pagina Novo Progresso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        1360
+      ],
+      "retryOnFail": true,
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters",
+              "value": "={{ $('Configurar Novo Progresso').first().json.filters_json }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.pagina }}"
+            },
+            {
+              "name": "size",
+              "value": "={{ $json.tamanho }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API"
+        }
+      }
+    },
+    {
+      "id": "normalize-6",
+      "name": "Normalizar Novo Progresso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        1360
+      ],
+      "parameters": {
+        "jsCode": "const resposta = $input.first().json;\nconst controle = $('Paginar Novo Progresso').item.json;\nconst cfg = $('Configurar Novo Progresso').first().json;\nconst alunos = Array.isArray(resposta.content) ? resposta.content\n  : Array.isArray(resposta.data?.content) ? resposta.data.content : null;\nif (!alunos) throw new Error('Resposta sem content: ' + JSON.stringify(resposta).slice(0, 800));\nif (controle.sem_dados) return [{ json: { controle_sem_dados: true, total_esperado: 0 } }];\nif (!alunos.length) throw new Error('Pagina ' + controle.pagina + ' vazia com total esperado ' + controle.total_esperado);\nconst coletadoEm = new Date().toISOString();\nconst texto = v => v == null || String(v).trim() === '' || String(v).trim() === '-' ? null : String(v).trim();\nconst numero = v => v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);\nreturn alunos.map((a, indice) => {\n  const codigo = numero(a.codCliente ?? a.codigoCliente ?? a.codigo_cliente);\n  const matricula = texto(a.matricula);\n  const nome = texto(a.nome ?? a.nomeAluno ?? a.nome_aluno);\n  if (codigo == null || !matricula || !nome) throw new Error('Aluno invalido na pagina ' + controle.pagina + ', item ' + indice);\n  return { json: {\n    unidade_codigo: cfg.unidade_codigo,\n    unidade_nome: cfg.unidade_nome,\n    codigo_cliente: codigo,\n    matricula,\n    nome_aluno: nome,\n    nome_avaliador: texto(a.avaliador ?? a.nomeAvaliador),\n    nome_professor: texto(a.professor ?? a.nomeProfessor),\n    observacao: texto(a.obs ?? a.observacao),\n    modalidade: texto(a.modalidade),\n    indicador: cfg.indicador,\n    pagina_origem: Number(controle.pagina),\n    coletado_em: coletadoEm,\n    total_esperado: Number(controle.total_esperado)\n  } };\n});"
+      }
+    },
+    {
+      "id": "wait-6",
+      "name": "Aguardar Novo Progresso",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        1360
+      ],
+      "parameters": {
+        "amount": 1
+      }
+    },
+    {
+      "id": "prepare-6",
+      "name": "Conferir coleta Novo Progresso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        1200
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Configurar Novo Progresso').first().json;\nconst itens = $input.all().map(i => i.json);\nconst semDados = itens.some(i => i.controle_sem_dados === true);\nconst registros = semDados ? [] : itens.filter(i => i.codigo_cliente != null);\nconst esperados = semDados ? 0 : Number(registros[0]?.total_esperado ?? -1);\nconst unicos = new Map();\nfor (const r of registros) unicos.set(String(r.codigo_cliente), r);\nif (esperados < 0 || registros.length !== esperados || unicos.size !== esperados) {\n  throw new Error('Coleta incompleta: esperados=' + esperados + ', recebidos=' + registros.length + ', unicos=' + unicos.size);\n}\nconst alunos = [...unicos.values()].map(({ total_esperado, ...r }) => r);\nreturn [{ json: {\n  unidade_codigo: cfg.unidade_codigo,\n  unidade_nome: cfg.unidade_nome,\n  indicador: cfg.indicador,\n  total_api: esperados,\n  coletado_em: new Date().toISOString(),\n  alunos_json: JSON.stringify(alunos)\n} }];"
+      }
+    },
+    {
+      "id": "save-6",
+      "name": "Salvar sem avaliacao Novo Progresso",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        1200
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH recebidos AS (\n    SELECT * FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer, unidade_nome text, codigo_cliente bigint,\n        matricula text, nome_aluno text, nome_avaliador text,\n        nome_professor text, observacao text, modalidade text,\n        indicador text, pagina_origem integer, coletado_em timestamptz\n    )\n), gravados AS (\n    INSERT INTO public.alunos_sem_avaliacao AS destino (\n        unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, atualizado_em\n    )\n    SELECT unidade_codigo, unidade_nome, codigo_cliente, matricula, nome_aluno,\n        nome_avaliador, nome_professor, observacao, modalidade, indicador,\n        pagina_origem, coletado_em, now()\n    FROM recebidos\n    ON CONFLICT (unidade_codigo, codigo_cliente) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, matricula=EXCLUDED.matricula,\n        nome_aluno=EXCLUDED.nome_aluno, nome_avaliador=EXCLUDED.nome_avaliador,\n        nome_professor=EXCLUDED.nome_professor, observacao=EXCLUDED.observacao,\n        modalidade=EXCLUDED.modalidade, indicador=EXCLUDED.indicador,\n        pagina_origem=EXCLUDED.pagina_origem, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n), removidos AS (\n    DELETE FROM public.alunos_sem_avaliacao a\n    WHERE a.unidade_codigo=$2::integer\n      AND NOT EXISTS (SELECT 1 FROM recebidos r\n        WHERE r.unidade_codigo=a.unidade_codigo AND r.codigo_cliente=a.codigo_cliente)\n    RETURNING 1\n), controle AS (\n    INSERT INTO public.coletas_alunos_sem_avaliacao\n        (unidade_codigo, unidade_nome, indicador, total_api, coletado_em, atualizado_em)\n    VALUES ($2::integer, $3::text, $4::text, $5::integer, $6::timestamptz, now())\n    ON CONFLICT (unidade_codigo) DO UPDATE SET\n        unidade_nome=EXCLUDED.unidade_nome, indicador=EXCLUDED.indicador,\n        total_api=EXCLUDED.total_api, coletado_em=EXCLUDED.coletado_em,\n        atualizado_em=now()\n    RETURNING 1\n)\nSELECT $2::integer AS unidade_codigo, $3::text AS unidade_nome,\n  (SELECT count(*)::integer FROM gravados) AS registros_gravados,\n  (SELECT count(*)::integer FROM removidos) AS registros_removidos,\n  $5::integer AS total_atual, $6::timestamptz AS coletado_em\nWHERE EXISTS (SELECT 1 FROM controle);",
+        "options": {
+          "queryReplacement": "={{ [$json.alunos_json, $json.unidade_codigo, $json.unidade_nome, $json.indicador, $json.total_api, $json.coletado_em] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Agendar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Configurar Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Consultar total Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar total Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Criar paginas Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar paginas Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Paginar Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Conferir coleta Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar pagina Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pagina Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Paginar Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir coleta Nova Republica": {
+      "main": [
+        [
+          {
+            "node": "Salvar sem avaliacao Nova Republica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Configurar Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Consultar total Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar total Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Criar paginas Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar paginas Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Paginar Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Conferir coleta Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar pagina Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pagina Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Paginar Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir coleta Santarem 24h": {
+      "main": [
+        [
+          {
+            "node": "Salvar sem avaliacao Santarem 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Configurar Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Consultar total Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar total Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Criar paginas Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar paginas Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Paginar Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Conferir coleta Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar pagina Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pagina Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Paginar Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir coleta Itaituba": {
+      "main": [
+        [
+          {
+            "node": "Salvar sem avaliacao Itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Configurar Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Consultar total Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar total Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Criar paginas Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar paginas Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Paginar Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Conferir coleta Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar pagina Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pagina Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Paginar Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir coleta Medicilandia": {
+      "main": [
+        [
+          {
+            "node": "Salvar sem avaliacao Medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Configurar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Consultar total Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar total Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Criar paginas Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar paginas Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Paginar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Conferir coleta Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar pagina Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pagina Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Paginar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir coleta Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Salvar sem avaliacao Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

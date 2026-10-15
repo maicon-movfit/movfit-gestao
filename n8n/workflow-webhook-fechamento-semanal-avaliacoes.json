@@ -1,0 +1,142 @@
+{
+    "nodes":  [
+                  {
+                      "position":  [
+                                       -480,
+                                       0
+                                   ],
+                      "name":  "Webhook fechamento semanal avaliacoes",
+                      "id":  "5cf5bcf4-b0dc-45c9-959b-bd647966a547",
+                      "webhookId":  "84eb4458-e709-490f-a51e-5fd3f2c75ed2",
+                      "type":  "n8n-nodes-base.webhook",
+                      "parameters":  {
+                                         "path":  "fechamento_semanal_avaliacoes",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     },
+                                         "httpMethod":  "POST"
+                                     },
+                      "typeVersion":  2.1
+                  },
+                  {
+                      "position":  [
+                                       -240,
+                                       0
+                                   ],
+                      "name":  "Preparar consulta",
+                      "id":  "2f3cd742-d42e-45c2-b06a-63b095de9581",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const entrada = $input.first().json;\nconst body = entrada.body || entrada;\nconst query = entrada.query || {};\n\nconst unidadeInformada = String(\n  body.unidade || query.unidade || body.unidade_codigo || query.unidade_codigo || \u0027\u0027\n).trim().toLowerCase();\n\nconst unidades = {\n  \u00271\u0027: { codigo: 1, slug: \u0027medicilandia\u0027 },\n  medicilandia: { codigo: 1, slug: \u0027medicilandia\u0027 },\n  \u00272\u0027: { codigo: 2, slug: \u0027itaituba\u0027 },\n  itaituba: { codigo: 2, slug: \u0027itaituba\u0027 },\n  \u00273\u0027: { codigo: 3, slug: \u0027santarem_24h\u0027 },\n  stm_24h: { codigo: 3, slug: \u0027santarem_24h\u0027 },\n  santarem_24h: { codigo: 3, slug: \u0027santarem_24h\u0027 },\n  \u00275\u0027: { codigo: 5, slug: \u0027santarem_nova_republica\u0027 },\n  stm_nova_republica: { codigo: 5, slug: \u0027santarem_nova_republica\u0027 },\n  santarem_nova_republica: { codigo: 5, slug: \u0027santarem_nova_republica\u0027 },\n  \u00276\u0027: { codigo: 6, slug: \u0027novo_progresso\u0027 },\n  novo_progresso: { codigo: 6, slug: \u0027novo_progresso\u0027 },\n};\n\nconst unidade = unidades[unidadeInformada];\nif (!unidade) {\n  throw new Error(\u0027Unidade invalida. Use medicilandia, itaituba, stm_24h, stm_nova_republica ou novo_progresso.\u0027);\n}\n\nconst inicio = String(body.data_inicio || query.data_inicio || \u0027\u0027).trim();\nconst fim = String(body.data_fim || query.data_fim || \u0027\u0027).trim();\nconst formato = /^\\d{4}-\\d{2}-\\d{2}$/;\n\nif (!formato.test(inicio) || !formato.test(fim)) {\n  throw new Error(\u0027data_inicio e data_fim sao obrigatorias no formato AAAA-MM-DD.\u0027);\n}\n\nconst inicioData = new Date(inicio + \u0027T12:00:00.000Z\u0027);\nconst fimData = new Date(fim + \u0027T12:00:00.000Z\u0027);\nif (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime()) || inicioData \u003e fimData) {\n  throw new Error(\u0027Periodo invalido.\u0027);\n}\n\nconst dias = Math.floor((fimData - inicioData) / 86400000) + 1;\nif (dias \u003e 31) {\n  throw new Error(\u0027O periodo maximo permitido e de 31 dias.\u0027);\n}\n\nreturn [{ json: {\n  unidade_codigo: unidade.codigo,\n  unidade: unidade.slug,\n  data_inicio: inicio,\n  data_fim: fim,\n} }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "name":  "Consultar fechamento no Postgres",
+                      "id":  "bafc4901-d871-4f3b-994f-16ca4e43034c",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH parametros AS (\n    SELECT\n        $1::integer AS unidade_codigo,\n        $2::date AS data_inicio,\n        $3::date AS data_fim\n),\ndias AS (\n    SELECT generate_series(p.data_inicio, p.data_fim, interval \u00271 day\u0027)::date AS data\n    FROM parametros p\n),\ncontagens AS (\n    SELECT\n        a.data_referencia AS data,\n        SUM(a.quantidade) FILTER (WHERE a.tipo_avaliacao = \u0027bio_nova\u0027)::integer AS bio_novas,\n        SUM(a.quantidade) FILTER (WHERE a.tipo_avaliacao = \u0027reavaliacao\u0027)::integer AS reavaliacoes,\n        COUNT(*) FILTER (WHERE a.tipo_avaliacao IN (\u0027bio_nova\u0027, \u0027reavaliacao\u0027))::integer AS linhas_dia\n    FROM public.avaliacoes_fisicas_diarias a\n    CROSS JOIN parametros p\n    WHERE a.unidade_codigo = p.unidade_codigo\n      AND a.data_referencia BETWEEN p.data_inicio AND p.data_fim\n    GROUP BY a.data_referencia\n),\nmetadata AS (\n    SELECT MAX(a.coletado_em) AS atualizado_em\n    FROM public.avaliacoes_fisicas_diarias a\n    CROSS JOIN parametros p\n    WHERE a.unidade_codigo = p.unidade_codigo\n      AND a.data_referencia BETWEEN p.data_inicio AND p.data_fim\n),\natrasadas AS (\n    SELECT COUNT(DISTINCT COALESCE(NULLIF(a.matricula, \u0027\u0027), a.codigo_cliente::text))::integer AS quantidade\n    FROM public.alunos_avaliacao_atrasada a\n    CROSS JOIN parametros p\n    WHERE a.unidade_codigo = p.unidade_codigo\n),\nsem_avaliacao AS (\n    SELECT\n        c.total_api::integer AS quantidade,\n        c.coletado_em\n    FROM public.coletas_alunos_sem_avaliacao c\n    CROSS JOIN parametros p\n    WHERE c.unidade_codigo = p.unidade_codigo\n)\nSELECT\n    d.data,\n    COALESCE(c.bio_novas, 0)::integer AS bio_novas,\n    COALESCE(c.reavaliacoes, 0)::integer AS reavaliacoes,\n    COALESCE(c.linhas_dia, 0)::integer AS linhas_dia,\n    (SELECT quantidade FROM atrasadas) AS avaliacoes_atrasadas,\n    (SELECT quantidade FROM sem_avaliacao) AS alunos_sem_avaliacao,\n    (SELECT coletado_em FROM sem_avaliacao) AS sem_avaliacao_coletado_em,\n    m.atualizado_em\nFROM dias d\nLEFT JOIN contagens c ON c.data = d.data\nCROSS JOIN metadata m\nORDER BY d.data;",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [$json.unidade_codigo, $json.data_inicio, $json.data_fim] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  },
+                  {
+                      "position":  [
+                                       240,
+                                       0
+                                   ],
+                      "name":  "Montar fechamento semanal",
+                      "id":  "b47bf612-168b-44cb-9179-3f663351f914",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const entrada = $(\u0027Preparar consulta\u0027).first().json;\nconst linhas = $input.all().map(i =\u003e i.json);\n\nif (!linhas.length) {\n  throw new Error(\u0027A consulta nao retornou os dias do periodo.\u0027);\n}\n\nconst dias = linhas.map(linha =\u003e ({\n  data: String(linha.data).slice(0, 10),\n  disponivel: Number(linha.linhas_dia || 0) === 2,\n  bio_novas: Number(linha.bio_novas || 0),\n  reavaliacoes: Number(linha.reavaliacoes || 0),\n  total_avaliacoes: Number(linha.bio_novas || 0) + Number(linha.reavaliacoes || 0),\n}));\n\nconst coletaDisponivel = dias.some(d =\u003e d.disponivel);\nconst periodoCompleto = dias.every(d =\u003e d.disponivel);\nconst semAvaliacaoColetadoEm = linhas[0].sem_avaliacao_coletado_em || null;\nconst semAvaliacaoTimestamp = semAvaliacaoColetadoEm\n  ? new Date(semAvaliacaoColetadoEm).getTime()\n  : NaN;\nconst semAvaliacaoIdadeMs = Date.now() - semAvaliacaoTimestamp;\nconst semAvaliacaoDisponivel = Number.isFinite(semAvaliacaoTimestamp)\n  \u0026\u0026 semAvaliacaoIdadeMs \u003e= -(5 * 60 * 1000)\n  \u0026\u0026 semAvaliacaoIdadeMs \u003c= (24 * 60 * 60 * 1000);\n\nreturn [{ json: {\n  sucesso: true,\n  unidade: entrada.unidade,\n  unidade_codigo: entrada.unidade_codigo,\n  periodo_inicio: entrada.data_inicio,\n  periodo_fim: entrada.data_fim,\n  fonte: \u0027pacto_avaliacoes_fisicas_diarias\u0027,\n  coleta_disponivel: coletaDisponivel,\n  periodo_completo: periodoCompleto,\n  dias,\n  totais: {\n    bio_novas: dias.reduce((s, d) =\u003e s + d.bio_novas, 0),\n    reavaliacoes: dias.reduce((s, d) =\u003e s + d.reavaliacoes, 0),\n    total_avaliacoes: dias.reduce((s, d) =\u003e s + d.total_avaliacoes, 0),\n  },\n  indicadores_semana: {\n    alunos_sem_avaliacao: !semAvaliacaoDisponivel || linhas[0].alunos_sem_avaliacao == null\n      ? null\n      : Number(linhas[0].alunos_sem_avaliacao),\n    avaliacoes_atrasadas: Number(linhas[0].avaliacoes_atrasadas || 0),\n  },\n  avisos: [\n    ...(!periodoCompleto\n      ? [\u0027Alguns dias ainda nao possuem coleta; o dashboard deve aplicar somente dias com disponivel=true.\u0027]\n      : []),\n    ...(!semAvaliacaoDisponivel\n      ? [\u0027A coleta de alunos sem avaliacao esta ausente ou desatualizada; o campo permanece manual.\u0027]\n      : []),\n  ],\n  sem_avaliacao_disponivel: semAvaliacaoDisponivel,\n  sem_avaliacao_coletado_em: semAvaliacaoColetadoEm,\n  atualizado_em: linhas[0].atualizado_em || null,\n  gerado_em: $now.toUTC().toISO(),\n} }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       480,
+                                       0
+                                   ],
+                      "name":  "Responder fechamento semanal",
+                      "id":  "784615f8-c196-4bff-94a0-405169fc45ef",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "parameters":  {
+                                         "responseBody":  "={{ $json }}",
+                                         "respondWith":  "json",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "typeVersion":  1.5
+                  }
+              ],
+    "connections":  {
+                        "Webhook fechamento semanal avaliacoes":  {
+                                                                      "main":  [
+                                                                                   [
+                                                                                       {
+                                                                                           "node":  "Preparar consulta",
+                                                                                           "type":  "main",
+                                                                                           "index":  0
+                                                                                       }
+                                                                                   ]
+                                                                               ]
+                                                                  },
+                        "Preparar consulta":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Consultar fechamento no Postgres",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Consultar fechamento no Postgres":  {
+                                                                 "main":  [
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Montar fechamento semanal",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ]
+                                                                          ]
+                                                             },
+                        "Montar fechamento semanal":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Responder fechamento semanal",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      }
+                    },
+    "pinData":  {
+
+                },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true,
+                 "instanceId":  "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+             }
+}

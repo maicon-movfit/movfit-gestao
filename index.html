@@ -30767,6 +30767,26 @@ async function _pulsoSincronizarAvaliacoesPacto(unidId,pulso){
       alterou=true;
     }
   }
+  const indicadoresOrigem=dados.indicadores_semana||{};
+  const indicadoresAtuais=pulso.indicadoresSemana||{};
+  const indicadoresNovos={...indicadoresAtuais};
+  let alterouIndicadores=false;
+  const semAvaliacao=indicadoresOrigem.alunos_sem_avaliacao;
+  const avaliacoesAtrasadas=indicadoresOrigem.avaliacoes_atrasadas;
+  if(semAvaliacao!==null&&semAvaliacao!==undefined&&Number.isInteger(Number(semAvaliacao))&&Number(semAvaliacao)>=0){
+    if(indicadoresAtuais.semSavaliacao===null||indicadoresAtuais.semSavaliacao===undefined||Number(indicadoresAtuais.semSavaliacao)!==Number(semAvaliacao))alterouIndicadores=true;
+    indicadoresNovos.semSavaliacao=Number(semAvaliacao);
+  }
+  if(avaliacoesAtrasadas!==null&&avaliacoesAtrasadas!==undefined&&Number.isInteger(Number(avaliacoesAtrasadas))&&Number(avaliacoesAtrasadas)>=0){
+    if(indicadoresAtuais.avaliacoesAtrasadas===null||indicadoresAtuais.avaliacoesAtrasadas===undefined||Number(indicadoresAtuais.avaliacoesAtrasadas)!==Number(avaliacoesAtrasadas))alterouIndicadores=true;
+    indicadoresNovos.avaliacoesAtrasadas=Number(avaliacoesAtrasadas);
+  }
+  if(alterouIndicadores){
+    pulso.indicadoresSemana=indicadoresNovos;
+    atualizacoes.indicadoresSemana=indicadoresNovos;
+    atualizacoes.indicadoresPactoAtualizadoEm=dados.sem_avaliacao_coletado_em||dados.gerado_em||new Date().toISOString();
+    alterou=true;
+  }
   if(!alterou)return pulso;
   pulso.totais=pulsoCalcTotais(pulso);
   atualizacoes.totais=pulso.totais;
