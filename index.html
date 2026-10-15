@@ -9552,7 +9552,7 @@ async function renderDash(mesNome){atualizarCtxBar(mesNome);
 // ======================== RANKING ========================
 
 // ── Ranking: modos e filtros ──────────────────────────────────────────────────
-let _rankModo='treino', _rankFiltro='todos';
+let _rankModo='treino', _rankFiltro='todos', _rankMesVisual=null;
 function setRankModo(modo, btn){
   _rankModo=modo;
   document.querySelectorAll('.rank-modo-btn').forEach(b=>{b.classList.remove('rank-modo-on');b.style.background='';b.style.color='';b.style.borderColor='';});
@@ -9560,7 +9560,7 @@ function setRankModo(modo, btn){
   if(modo==='bio'){btn.style.background='#7c3aed';btn.style.borderColor='#7c3aed';}
   const mes=document.getElementById('rankTitle').textContent.replace('Ranking — ','');
   const hist=getHistorico();
-  const m=hist.find(x=>x.nome===mes);
+  const m=_rankMesVisual&&_rankMesVisual.nome===mes?_rankMesVisual:hist.find(x=>x.nome===mes);
   if(m) _aplicarRankModo(m);
 }
 function setRankFiltro(filtro, btn){
@@ -9570,7 +9570,7 @@ function setRankFiltro(filtro, btn){
   if(filtro==='biocrit'){btn.style.background='#7c3aed';btn.style.color='#fff';}
   const mes=document.getElementById('rankTitle').textContent.replace('Ranking — ','');
   const hist=getHistorico();
-  const m=hist.find(x=>x.nome===mes);
+  const m=_rankMesVisual&&_rankMesVisual.nome===mes?_rankMesVisual:hist.find(x=>x.nome===mes);
   if(m) _aplicarRankModo(m);
 }
 function _aplicarRankModo(mes){
@@ -9616,7 +9616,7 @@ function _aplicarRankModo(mes){
   }).join('');
 }
 
-function renderRanking(mesNome){const mes=getHistorico().find(m=>m.nome===mesNome);if(!mes){document.getElementById('rank-empty').style.display='block';document.getElementById('rank-content').style.display='none';return;}document.getElementById('rank-empty').style.display='none';document.getElementById('rank-content').style.display='block';document.getElementById('rankTitle').textContent='Ranking — '+mes.nome;const srt=[...mes.professores].sort((a,b)=>pct(b.emDia,b.comTreino)-pct(a.emDia,a.comTreino));
+async function renderRanking(mesNome){let mes=getHistorico().find(m=>m.nome===mesNome);if(!mes){document.getElementById('rank-empty').style.display='block';document.getElementById('rank-content').style.display='none';return;}if(dashboardMesEhCompetenciaAtual(mesNome)){const vivos=await dashboardProfessoresAoVivo(unidadeAtual?unidadeAtual.id:null,mes.professores);if(vivos)mes={...mes,professores:vivos};}_rankMesVisual=mes;document.getElementById('rank-empty').style.display='none';document.getElementById('rank-content').style.display='block';document.getElementById('rankTitle').textContent='Ranking — '+mes.nome;const srt=[...mes.professores].sort((a,b)=>pct(b.emDia,b.comTreino)-pct(a.emDia,a.comTreino));
   // Pódio visual (top 3)
   const podioEl=document.getElementById('rankPodio');
   if(podioEl&&srt.length>=3){
@@ -10004,13 +10004,17 @@ function calcMotorScore(p, prev2){
   return{score,acoes:acoes.sort((a,b)=>b.sc-a.sc).slice(0,3),padrao};
 }
 
-function renderInsights(mesNome){
+async function renderInsights(mesNome){
   const hist=getHistorico();
-  const mes=hist.find(m=>m.nome===mesNome);
+  let mes=hist.find(m=>m.nome===mesNome);
   if(!mes){
     document.getElementById('ins-empty').style.display='block';
     document.getElementById('ins-content').style.display='none';
     return;
+  }
+  if(dashboardMesEhCompetenciaAtual(mesNome)){
+    const vivos=await dashboardProfessoresAoVivo(unidadeAtual?unidadeAtual.id:null,mes.professores);
+    if(vivos)mes={...mes,professores:vivos};
   }
   document.getElementById('ins-empty').style.display='none';
   document.getElementById('ins-content').style.display='block';
@@ -10806,13 +10810,30 @@ async function renderHomeCockpit() {
   const pactoIndicadores = typeof totalAtivosBuscarDados === 'function'
     ? await totalAtivosBuscarDados().catch(() => null)
     : null;
+  const professoresAtuais = new Map();
+  await Promise.all(UNIDADES.map(async u => {
+    const hist = getHistorico(u.id);
+    const ultimo = hist[hist.length-1];
+    if(!ultimo) return;
+    const vivos = await dashboardProfessoresAoVivo(u.id, ultimo.professores);
+    if(vivos) professoresAtuais.set(u.id, vivos);
+  }));
 
   // ── Coletar dados base de todas as unidades ───────────────────────────────
   const dadosUnidades = UNIDADES.map(u => {
     const hist = getHistorico(u.id);
     if(!hist.length) return { u, hasData: false };
-    const ultimo = hist[hist.length-1];
-    const prev   = hist.length > 1 ? hist[hist.length-2] : null;
+    const ultimoSalvo = hist[hist.length-1];
+    const professoresVivos = professoresAtuais.get(u.id);
+    const ultimo = professoresVivos ? {...ultimoSalvo, professores: professoresVivos} : ultimoSalvo;
+    // Com BI ao vivo, compara ao fechamento anterior. Se o mês atual já foi
+    // registrado, pula essa cópia para não comparar outubro com outubro.
+    // Sem BI, mantém exatamente a comparação histórica anterior.
+    const prev = professoresVivos
+      ? (dashboardMesEhCompetenciaAtual(ultimoSalvo.nome)
+          ? (hist.length > 1 ? hist[hist.length-2] : null)
+          : ultimoSalvo)
+      : (hist.length > 1 ? hist[hist.length-2] : null);
     const totalHistorico = ultimo.professores.reduce((s,p)=>s+p.total,0);
     const totalOficial = typeof totalAtivosGetUnidade === 'function'
       ? totalAtivosGetUnidade(u.id, pactoIndicadores)
@@ -10826,7 +10847,7 @@ async function renderHomeCockpit() {
     const meta   = getMeta(u.id);
     const score  = calcScoreRT(u.id);
     if(score) persistirScoreRT(u.id, score, ultimo.nome);
-    return { u, hasData:true, hist, ultimo, prev, tot, emDia, venc, com, pe, pePrev, meta, score, mesNome: ultimo.nome };
+    return { u, hasData:true, hist, ultimo, prev, tot, emDia, venc, com, pe, pePrev, meta, score, mesNome: ultimo.nome, aoVivo:!!professoresVivos };
   });
   const comDados = dadosUnidades.filter(d=>d.hasData);
 
@@ -10879,10 +10900,11 @@ async function renderHomeCockpit() {
   const heroPior    = document.getElementById('heroPior');
   const heroTrend   = document.getElementById('heroTrend');
   const subEl = document.getElementById('cockpitSubtitle');
+  const unidadesAoVivo = comDados.filter(d=>d.aoVivo).length;
 
   if(heroNum) heroNum.textContent = comDados.length ? peMedio : '—';
   if(subEl) subEl.textContent = comDados.length
-    ? `${comDados.length} de ${UNIDADES.length} unidades com dados · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}`
+    ? `${comDados.length} de ${UNIDADES.length} unidades com dados · ${unidadesAoVivo} Pacto ao vivo · ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}`
     : 'Salve dados em ao menos uma unidade para começar.';
   if(heroDelta && deltaPe !== null) {
     const cls = deltaPe >= 0 ? 'up' : 'dn';
