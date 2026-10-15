@@ -9146,7 +9146,59 @@ function verPainelSelecionado(){const sel=[...selecaoHistorico];if(!sel.length){
 function compararSelecionados(){const sel=[...selecaoHistorico];if(sel.length<2){alert('Selecione ao menos 2 meses para comparar.');return;}document.getElementById('compSelA').value=sel[sel.length-2];document.getElementById('compSelB').value=sel[sel.length-1];renderComparativo();goTab('comparativo');}
 
 // ======================== PAINEL ========================
-function renderDash(mesNome){atualizarCtxBar(mesNome);
+function dashboardMesEhCompetenciaAtual(mesNome){
+  const meses={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+  const txt=String(mesNome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const mesKey=Object.keys(meses).find(m=>txt.includes(m));
+  const anos=txt.match(/(?:19|20)?\d{2}/g)||[];
+  if(!mesKey||!anos.length)return false;
+  let ano=Number(anos[anos.length-1]);
+  if(ano<100)ano+=2000;
+  const partes=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).formatToParts(new Date());
+  const anoAtual=Number(partes.find(p=>p.type==='year')?.value);
+  const mesAtual=Number(partes.find(p=>p.type==='month')?.value);
+  return ano===anoAtual&&meses[mesKey]===mesAtual;
+}
+
+async function dashboardProfessoresAoVivo(unidId,professoresHistoricos){
+  if(!unidId||typeof pactoEmpresaId!=='function'||typeof pactoBuscarProfessoresBI!=='function')return null;
+  const empresaId=pactoEmpresaId(unidId);
+  if(!empresaId)return null;
+  try{
+    const raw=await pactoBuscarProfessoresBI(empresaId,unidId);
+    const vivos=(raw||[]).map(p=>typeof pactoNormalizarProfessor==='function'?pactoNormalizarProfessor(p):p).filter(Boolean);
+    // Uma resposta parcial nunca pode substituir a carteira inteira na tela.
+    const minimo=(professoresHistoricos||[]).length>=3?Math.max(2,Math.ceil(professoresHistoricos.length*.5)):1;
+    if(vivos.length<minimo)return null;
+    return vivos.map(v=>{
+      const antigo=(professoresHistoricos||[]).find(p=>
+        (p.codigoPacto!=null&&v.codigo!=null&&String(p.codigoPacto)===String(v.codigo))||
+        (typeof nomesProvavelmenteMesmoProfessor==='function'&&nomesProvavelmenteMesmoProfessor(p.nome,v.nome))
+      )||{};
+      const com=Number(v.comTreino||0),sem=Number(v.semTreino||0);
+      const ativos=v.ativos!=null?Number(v.ativos):com+sem;
+      const nome=v.nome||antigo.nome||'Professor';
+      return {...antigo,
+        nome,
+        shortName:nome.split(' ').slice(0,2).join(' '),
+        codigoPacto:v.codigo??antigo.codigoPacto??null,
+        total:v.total!=null?Number(v.total):ativos,
+        ativo:ativos,
+        comTreino:com,
+        semTreino:sem,
+        emDia:Number(v.emDia||0),
+        vencido:Number(v.vencidos||0),
+        duracao:v.duracao??antigo.duracao??null,
+        _fonte:'pacto_ao_vivo'
+      };
+    });
+  }catch(e){
+    console.warn('[DASH] BI Pacto indisponível; mantendo fechamento salvo:',e);
+    return null;
+  }
+}
+
+async function renderDash(mesNome){atualizarCtxBar(mesNome);
   const hist=getHistorico();
   const mes=hist.find(m=>m.nome===mesNome);
   if(!mes){
@@ -9156,9 +9208,14 @@ function renderDash(mesNome){atualizarCtxBar(mesNome);
   }
   document.getElementById('dash-empty').style.display='none';
   document.getElementById('dash-content').style.display='block';
-  document.getElementById('dashTitle').textContent='Painel — '+mes.nome;
-
-  const d=mes.professores;
+  const unidRender=unidadeAtual?unidadeAtual.id:null;
+  let d=mes.professores;
+  let painelAoVivo=false;
+  if(dashboardMesEhCompetenciaAtual(mesNome)){
+    const vivos=await dashboardProfessoresAoVivo(unidRender,mes.professores);
+    if(vivos&&unidadeAtual&&unidadeAtual.id===unidRender){d=vivos;painelAoVivo=true;}
+  }
+  document.getElementById('dashTitle').textContent='Painel — '+mes.nome+(painelAoVivo?' · Pacto ao vivo':' · histórico salvo');
   const tot=d.reduce((s,p)=>s+p.total,0);
   const emD=d.reduce((s,p)=>s+p.emDia,0);
   const vec=d.reduce((s,p)=>s+p.vencido,0);
