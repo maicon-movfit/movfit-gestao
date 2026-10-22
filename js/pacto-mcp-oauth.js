@@ -299,7 +299,7 @@ async function pactoMcpOAuthTrocarViaServidor(payload) {
     const det = String(e?.message || '');
     throw new Error(
       det.includes('Failed to fetch') || det.includes('NetworkError')
-        ? 'Não foi possível concluir o login na Pacto (rede). Tente de novo em alguns minutos.'
+        ? 'Nao foi possivel concluir o login: atualize o workflow MOVFIT Pacto Proxy no n8n e tente Conectar de novo.'
         : 'Não foi possível concluir o login na Pacto depois de autorizar. Tente conectar de novo.'
     );
   }

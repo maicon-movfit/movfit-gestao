@@ -50,8 +50,8 @@ const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/f
  */
 const N8N_PACTO_MCP_PROXY_URL = '';
 
-/** Retorno OAuth MCP (troca código PKCE — não expõe segredo no navegador). */
-const N8N_PACTO_MCP_OAUTH_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-mcp-oauth';
+/** Retorno OAuth MCP via webhook movfit/pacto (acao=token|refresh + X-Movfit-Proxy). */
+const N8N_PACTO_MCP_OAUTH_URL = N8N_PACTO_BASE;
 
 /**
  * Cabeçalhos usados nas chamadas ao n8n.
