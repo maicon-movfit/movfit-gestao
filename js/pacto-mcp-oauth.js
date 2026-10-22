@@ -236,44 +236,59 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   window.location.assign(`${descoberta.autorizacao}?${params.toString()}`);
 }
 
-async function pactoMcpOAuthTrocarCodigo(pending, codigo) {
-  const form = new URLSearchParams();
-  form.set('grant_type', 'authorization_code');
-  form.set('code', codigo);
-  form.set('redirect_uri', pending.redirectUri);
-  form.set('client_id', pending.clientId);
-  form.set('code_verifier', pending.verificador);
-  form.set('resource', pending.recurso);
-
-  const resp = await fetch(pending.tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: form.toString(),
-  });
-  if (!resp.ok) {
-    const t = await resp.text().catch(() => '');
-    throw new Error(`Troca do código falhou (${resp.status}).${t ? ` ${t.slice(0, 100)}` : ''}`);
+async function pactoMcpOAuthHeadersAuth() {
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (typeof auth !== 'undefined' && auth.currentUser) {
+    headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
   }
-  return resp.json();
+  return headers;
+}
+
+async function pactoMcpOAuthTrocarViaServidor(payload) {
+  const url = typeof PACTO_MCP_OAUTH_TOKEN_URL !== 'undefined' && PACTO_MCP_OAUTH_TOKEN_URL;
+  if (!url) {
+    throw new Error('URL da Cloud Function OAuth não configurada.');
+  }
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: await pactoMcpOAuthHeadersAuth(),
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    throw new Error('Não foi possível concluir o login na Pacto (rede ou função ainda não publicada no Firebase).');
+  }
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const msg = data.error_description || data.error || data.erro || `HTTP ${resp.status}`;
+    throw new Error(typeof msg === 'string' ? msg : 'Troca do código falhou.');
+  }
+  return data;
+}
+
+async function pactoMcpOAuthTrocarCodigo(pending, codigo) {
+  return pactoMcpOAuthTrocarViaServidor({
+    token_endpoint: pending.tokenEndpoint,
+    code: codigo,
+    redirect_uri: pending.redirectUri,
+    client_id: pending.clientId,
+    code_verifier: pending.verificador,
+    resource: pending.recurso,
+  });
 }
 
 async function pactoMcpOAuthRenovar(cfg) {
   if (!cfg.refresh_token || !cfg.oauth_token_endpoint) {
     throw new Error('Refresh token ausente — conecte de novo.');
   }
-  const form = new URLSearchParams();
-  form.set('grant_type', 'refresh_token');
-  form.set('refresh_token', cfg.refresh_token);
-  form.set('client_id', cfg.oauth_client_id);
-  form.set('resource', cfg.oauth_recurso || cfg.url);
-
-  const resp = await fetch(cfg.oauth_token_endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: form.toString(),
+  return pactoMcpOAuthTrocarViaServidor({
+    grant_type: 'refresh_token',
+    token_endpoint: cfg.oauth_token_endpoint,
+    refresh_token: cfg.refresh_token,
+    client_id: cfg.oauth_client_id,
+    resource: cfg.oauth_recurso || cfg.url,
   });
-  if (!resp.ok) throw new Error('Renovação OAuth falhou — conecte de novo.');
-  return resp.json();
 }
 
 async function pactoMcpOAuthQuemEntrou(userinfoEndpoint, accessToken) {
@@ -370,6 +385,7 @@ async function pactoMcpOAuthFinalizarRetorno() {
     falha('Login demorou demais. Tente de novo.');
     return;
   }
+  await pactoMcpOAuthAguardarAuth();
   const tokens = await pactoMcpOAuthTrocarCodigo(pending, codigo);
   const quem = await pactoMcpOAuthQuemEntrou(pending.userinfoEndpoint, tokens.access_token);
   await pactoMcpOAuthPersistirTokens(pending.urlMcp, pending, tokens, quem);
