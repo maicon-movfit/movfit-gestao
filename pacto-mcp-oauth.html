@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conectando Pacto — MovFit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e8eaef; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .box { text-align: center; max-width: 420px; padding: 24px; }
+    .spin { width: 32px; height: 32px; border: 3px solid #333; border-top-color: #34c47c; border-radius: 50%; animation: r 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes r { to { transform: rotate(360deg); } }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+  <div class="box">
+    <div class="spin" aria-hidden="true"></div>
+    <p id="msg">Concluindo login na Pacto…</p>
+  </div>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/n8n-config.js"></script>
+  <script src="js/pacto-mcp.js"></script>
+  <script src="js/pacto-mcp-oauth.js"></script>
+  <script>
+    pactoMcpOAuthFinalizarRetorno().catch(function (e) {
+      document.getElementById('msg').textContent = e.message || 'Erro ao conectar.';
+    });
+  </script>
+</body>
+</html>

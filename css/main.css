@@ -1674,6 +1674,8 @@ tbody tr:last-child td{border-bottom:none;}
 .pacto-mcp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .pacto-mcp-status-meta{margin-left:auto;font-size:10px;font-weight:500;color:var(--muted);}
 .pacto-mcp-form{display:flex;flex-direction:column;gap:8px;}
+.pacto-mcp-avancado{margin-top:12px;padding:10px 12px;border:1px solid var(--border,#2a2e38);border-radius:8px;font-size:13px;}
+.pacto-mcp-avancado summary{cursor:pointer;color:var(--muted,#9aa3b2);margin-bottom:8px;}
 .pacto-mcp-lbl{font-size:11px;font-weight:600;color:var(--muted);}
 .pacto-mcp-input{
   width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;

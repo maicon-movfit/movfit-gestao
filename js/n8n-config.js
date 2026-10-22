@@ -51,6 +51,12 @@ const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/f
 const N8N_PACTO_MCP_PROXY_URL = '';
 
 /**
+ * Proxy opcional para trocar código OAuth por token (se o browser bloquear CORS no token_endpoint).
+ * Body: { token_endpoint, client_id, code, redirect_uri, code_verifier, resource }
+ */
+const N8N_PACTO_MCP_OAUTH_TOKEN_URL = '';
+
+/**
  * Cabeçalhos usados nas chamadas ao n8n.
  * Durante a migração, envia a sessão Firebase e mantém o token legado para que
  * os webhooks ainda não migrados continuem funcionando sem interrupção.
