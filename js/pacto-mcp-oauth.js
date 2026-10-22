@@ -15,11 +15,27 @@ const PACTO_MCP_OAUTH_CONVERSAS = {
 };
 
 /** DCR feito uma vez no servidor — o navegador não consegue POST em /register (CORS). */
+const PACTO_MCP_OAUTH_GITHUB_CLIENT = 'dcr-VNNiD7rLIuzkQOnspFSLh9TtjnXD2vo6';
+
 const PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT = {
-  'https://maicon-movfit.github.io/movfit-gestao/pacto-mcp-oauth.html': 'dcr-VNNiD7rLIuzkQOnspFSLh9TtjnXD2vo6',
+  'https://maicon-movfit.github.io/movfit-gestao/pacto-mcp-oauth.html': PACTO_MCP_OAUTH_GITHUB_CLIENT,
   'https://mov-fit---gestao-de-carteira.web.app/pacto-mcp-oauth.html': 'dcr-vOg9ihP1Z_OaLEEYvKtLIr5GEVJ5hvM1',
   'https://mov-fit---gestao-de-carteira.firebaseapp.com/pacto-mcp-oauth.html': 'dcr-cCEMVCzEqVdwIMrYNfQiis7u52KG6L7P',
 };
+
+function pactoMcpOAuthClientIdPreRegistrado(redirectUri) {
+  const direto = PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT[redirectUri];
+  if (direto) return direto;
+  try {
+    const u = new URL(redirectUri);
+    const canonKey = `${u.origin}${u.pathname.replace(/\/+$/, '')}/pacto-mcp-oauth.html`;
+    if (PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT[canonKey]) return PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT[canonKey];
+    if (u.hostname === 'maicon-movfit.github.io' && u.pathname.includes('/movfit-gestao')) {
+      return PACTO_MCP_OAUTH_GITHUB_CLIENT;
+    }
+  } catch (_) { /* ignore */ }
+  return null;
+}
 
 function pactoMcpOAuthAvisoAmbiente() {
   const { protocol, hostname } = window.location;
@@ -141,7 +157,7 @@ async function pactoMcpOAuthRegistrar(endpointRegistro, redirectUri) {
     });
   } catch (e) {
     const amb = pactoMcpOAuthAvisoAmbiente();
-    throw new Error(amb || 'Registro na Pacto só funciona no site publicado (HTTPS). Abra pelo Firebase ou use token manual.');
+    throw new Error(amb || 'Atualize a página (Ctrl+Shift+R) no GitHub Pages ou use token manual em Avançado.');
   }
   if (!resp.ok) {
     const t = await resp.text().catch(() => '');
@@ -167,7 +183,7 @@ function pactoMcpOAuthGravarClientCache(redirectUri, urlMcp, clientId) {
 }
 
 async function pactoMcpOAuthObterClientId(descoberta, redirectUri, urlMcp) {
-  const pre = PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT[redirectUri];
+  const pre = pactoMcpOAuthClientIdPreRegistrado(redirectUri);
   if (pre) return pre;
   const cfg = typeof _pactoMcpState !== 'undefined' ? _pactoMcpState.config : null;
   if (cfg?.oauth_client_id && cfg.oauth_redirect_uri === redirectUri) {
