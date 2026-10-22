@@ -1,4 +1,12 @@
 functions/node_modules/
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+dist/
 .firebase/
 *.local
 _matriculados_out.json

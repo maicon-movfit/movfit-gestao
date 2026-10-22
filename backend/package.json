@@ -1,0 +1,27 @@
+{
+  "name": "@movfit/backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "import:firestore": "node scripts/import-firestore.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check scripts/migrate.js && node --check scripts/import-firestore.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "firebase-admin": "^14.5.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.16.3",
+    "pino-http": "^10.5.0",
+    "zod": "^3.25.76"
+  }
+}
