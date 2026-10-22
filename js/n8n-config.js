@@ -32,7 +32,7 @@ const N8N_TOTAL_ATIVOS_URL = '';
 /** Webhook de matriculados no mês por unidade (POST). */
 const N8N_MATRICULADOS_URL = 'https://n8n2.mov.pro.br/webhook/matriculados_mes';
 
-/** Indicadores gerenciais oficiais consultados pelo MCP da Pacto. */
+/** Indicadores gerenciais oficiais coletados no n8n e servidos pelo webhook. */
 const N8N_PACTO_INDICADORES_URL = 'https://n8n2.mov.pro.br/webhook/pacto_indicadores';
 
 /** Webhook de avaliações físicas atrasadas por unidade (POST). */
@@ -43,12 +43,6 @@ const N8N_AVALIACOES_REALIZADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoe
 
 /** Avaliações diárias oficiais para preenchimento do Fechamento Semanal. */
 const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/fechamento_semanal_avaliacoes';
-
-/**
- * Proxy opcional para MCP Pacto Reports (evita CORS no navegador).
- * Body: { url, token, method, params, sessionId } → { result, sessionId }
- */
-const N8N_PACTO_MCP_PROXY_URL = '';
 
 /**
  * Cabeçalhos usados nas chamadas ao n8n.

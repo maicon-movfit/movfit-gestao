@@ -1665,37 +1665,7 @@ tbody tr:last-child td{border-bottom:none;}
 /* ══════════════════════════════════════════════
    JANELA DE TREINO
 ══════════════════════════════════════════════ */
-#dashJanelaTreino,#dashMatriculadosMes,#dashPactoMcp{margin-top:14px;}
-.pacto-mcp-status{
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  padding:10px 12px;margin-bottom:14px;border-radius:8px;
-  border:1px solid var(--border);background:var(--surface2);font-size:12px;font-weight:600;
-}
-.pacto-mcp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.pacto-mcp-status-meta{margin-left:auto;font-size:10px;font-weight:500;color:var(--muted);}
-.pacto-mcp-form{display:flex;flex-direction:column;gap:8px;}
-.pacto-mcp-avancado{margin-top:12px;padding:10px 12px;border:1px solid var(--border,#2a2e38);border-radius:8px;font-size:13px;}
-.pacto-mcp-avancado summary{cursor:pointer;color:var(--muted,#9aa3b2);margin-bottom:8px;}
-.pacto-mcp-lbl{font-size:11px;font-weight:600;color:var(--muted);}
-.pacto-mcp-input{
-  width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;
-  padding:8px 12px;font-size:12px;color:var(--text);font-family:Inter,sans-serif;outline:none;
-}
-.pacto-mcp-hint{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 0 0;}
-.pacto-mcp-hint code{font-size:10px;background:var(--surface2);padding:1px 4px;border-radius:4px;}
-.pacto-mcp-acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
-.pacto-mcp-btn{font-size:11px;padding:8px 12px;}
-.pacto-mcp-tools{
-  list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;
-  max-height:220px;overflow:auto;
-}
-.pacto-mcp-tools li{
-  font-size:11px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);
-}
-.pacto-mcp-tools li strong{display:block;color:var(--text);margin-bottom:2px;}
-.pacto-mcp-tools li span{color:var(--muted);line-height:1.4;}
-.pacto-mcp-tools-more{color:var(--muted);font-style:italic;}
-.pacto-mcp-tools-empty{font-size:11px;color:var(--muted);padding:8px 0;}
+#dashJanelaTreino,#dashMatriculadosMes{margin-top:14px;}
 .matric-toolbar-comp{margin-bottom:6px;}
 .matric-toolbar-comp .matric-comp-select{min-width:220px;}
 .matric-funil{
