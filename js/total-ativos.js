@@ -154,18 +154,18 @@ function totalAtivosSubtitulo(unidId, data) {
   const unidade = totalAtivosEncontrarUnidade(data || _totalAtivosCache.data, unidId);
   const status = pactoIndicadoresStatus(unidade);
   const dataStatus = status.data ? totalAtivosFmtData(status.data) : null;
-  if (status.nivel === 'ausente') return 'Pacto MCP - unidade sem dados';
-  if (status.nivel === 'competencia') return 'Pacto MCP - competencia divergente';
-  if (status.nivel === 'sem_data') return 'Pacto MCP - horario da coleta ausente';
-  if (status.nivel === 'futuro') return 'Pacto MCP - horario da coleta invalido';
+  if (status.nivel === 'ausente') return 'Pacto via webhook - unidade sem dados';
+  if (status.nivel === 'competencia') return 'Pacto via webhook - competencia divergente';
+  if (status.nivel === 'sem_data') return 'Pacto via webhook - horario da coleta ausente';
+  if (status.nivel === 'futuro') return 'Pacto via webhook - horario da coleta invalido';
   if (status.nivel === 'expirado') {
-    return `Pacto MCP - desatualizado${dataStatus ? ` desde ${dataStatus}` : ''}`;
+    return `Pacto via webhook - desatualizado${dataStatus ? ` desde ${dataStatus}` : ''}`;
   }
-  if (status.nivel === 'atencao') return `Pacto MCP - atencao - ${dataStatus}`;
+  if (status.nivel === 'atencao') return `Pacto via webhook - atencao - ${dataStatus}`;
   const when = totalAtivosFmtData(
     unidade?.coletado_em || unidade?.sincronizacao?.ultima_atualizacao
   );
-  return when ? `Pacto MCP · ${when}` : 'Pacto MCP';
+  return when ? `Pacto via webhook · ${when}` : 'Pacto via webhook';
 }
 
 async function atualizarMetricaTotalAtivos(unidId) {
