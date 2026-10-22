@@ -51,9 +51,11 @@ const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/f
 const N8N_PACTO_MCP_PROXY_URL = '';
 
 /**
- * Proxy opcional para trocar código OAuth por token (se o browser bloquear CORS no token_endpoint).
- * Body: { token_endpoint, client_id, code, redirect_uri, code_verifier, resource }
+ * Proxy n8n para OAuth MCP (registrar app, trocar código, refresh) — necessário por CORS na Pacto.
+ * Body: { acao: 'registrar'|'token'|'refresh', ... }
+ * Legado: N8N_PACTO_MCP_OAUTH_TOKEN_URL aceita só troca de código (sem acao).
  */
+const N8N_PACTO_MCP_OAUTH_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-mcp-oauth';
 const N8N_PACTO_MCP_OAUTH_TOKEN_URL = '';
 
 /**

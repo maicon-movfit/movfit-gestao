@@ -4,6 +4,56 @@
 const PACTO_MCP_OAUTH_SESS = 'movfit_pacto_mcp_oauth_pending';
 const PACTO_MCP_OAUTH_CLIENT = 'movfit_pacto_mcp_oauth_client';
 
+/** Metadados oficiais — o browser não consegue ler mcp-auth.conversas.ai (CORS). */
+const PACTO_MCP_OAUTH_CONVERSAS = {
+  recurso: 'https://mcp-reports.conversas.ai/mcp',
+  autorizacao: 'https://mcp-auth.conversas.ai/oauth/authorize',
+  token: 'https://mcp-auth.conversas.ai/oauth/token',
+  registro: 'https://mcp-auth.conversas.ai/register',
+  userinfo: 'https://mcp-auth.conversas.ai/userinfo',
+  escopos: 'openid email mcp:relatorios',
+};
+
+function pactoMcpOAuthEhConversas(urlMcp) {
+  try {
+    return new URL(urlMcp).hostname === 'mcp-reports.conversas.ai';
+  } catch (_) {
+    return false;
+  }
+}
+
+function pactoMcpOAuthUrlProxy() {
+  if (typeof N8N_PACTO_MCP_OAUTH_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_URL) {
+    return N8N_PACTO_MCP_OAUTH_URL;
+  }
+  if (typeof N8N_PACTO_MCP_OAUTH_TOKEN_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_TOKEN_URL) {
+    return N8N_PACTO_MCP_OAUTH_TOKEN_URL;
+  }
+  return '';
+}
+
+async function pactoMcpOAuthChamadaProxy(acao, payload) {
+  const url = pactoMcpOAuthUrlProxy();
+  if (!url) return null;
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
+    headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
+  }
+  const legadoToken = acao === 'token'
+    && typeof N8N_PACTO_MCP_OAUTH_TOKEN_URL !== 'undefined'
+    && N8N_PACTO_MCP_OAUTH_TOKEN_URL
+    && !(typeof N8N_PACTO_MCP_OAUTH_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_URL);
+  const body = legadoToken ? { ...payload } : { acao, ...payload };
+  const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => '');
+    throw new Error(`Proxy OAuth (${acao}) HTTP ${resp.status}${t ? `: ${t.slice(0, 120)}` : ''}`);
+  }
+  const data = await resp.json();
+  if (data.erro || data.error) throw new Error(data.erro || data.error);
+  return data;
+}
+
 function pactoMcpOAuthRedirectUri() {
   const path = window.location.pathname.replace(/[^/]+$/, '');
   const base = `${window.location.origin}${path}`;
@@ -33,6 +83,9 @@ async function pactoMcpOAuthFetchJson(url) {
 }
 
 async function pactoMcpOAuthDescobrir(urlMcp) {
+  if (pactoMcpOAuthEhConversas(urlMcp)) {
+    return { ...PACTO_MCP_OAUTH_CONVERSAS, recurso: urlMcp };
+  }
   const mcp = new URL(urlMcp);
   const origem = `${mcp.protocol}//${mcp.host}`;
   const caminho = mcp.pathname === '/' ? '' : mcp.pathname;
@@ -41,6 +94,9 @@ async function pactoMcpOAuthDescobrir(urlMcp) {
     recurso = await pactoMcpOAuthFetchJson(`${origem}/.well-known/oauth-protected-resource`).catch(() => null);
   }
   if (!recurso?.authorization_servers?.length) {
+    if (pactoMcpOAuthEhConversas(urlMcp)) {
+      return { ...PACTO_MCP_OAUTH_CONVERSAS, recurso: urlMcp };
+    }
     throw new Error('Este MCP não oferece login OAuth. Use token manual.');
   }
   const emissor = String(recurso.authorization_servers[0]).replace(/\/+$/, '');
@@ -52,6 +108,12 @@ async function pactoMcpOAuthDescobrir(urlMcp) {
     servidor = await pactoMcpOAuthFetchJson(`${raiz}/.well-known/openid-configuration${caminhoEmissor}`).catch(() => null);
   }
   if (!servidor?.authorization_endpoint || !servidor?.token_endpoint) {
+    if (/mcp-auth\.conversas\.ai/i.test(emissor) || pactoMcpOAuthEhConversas(urlMcp)) {
+      return {
+        ...PACTO_MCP_OAUTH_CONVERSAS,
+        recurso: recurso.resource || urlMcp,
+      };
+    }
     throw new Error('Servidor de login da Pacto indisponível.');
   }
   const metodos = servidor.code_challenge_methods_supported || [];
@@ -82,16 +144,26 @@ async function pactoMcpOAuthRegistrar(endpointRegistro, redirectUri) {
     response_types: ['code'],
     token_endpoint_auth_method: 'none',
   };
-  const resp = await fetch(endpointRegistro, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(corpo),
-  });
-  if (!resp.ok) {
-    const t = await resp.text().catch(() => '');
-    throw new Error(`Registro OAuth falhou (${resp.status})${t ? `: ${t.slice(0, 80)}` : ''}`);
+  let data = null;
+  try {
+    const resp = await fetch(endpointRegistro, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    if (resp.ok) data = await resp.json();
+  } catch (_) { /* CORS — tenta proxy n8n */ }
+  if (!data?.client_id) {
+    const via = await pactoMcpOAuthChamadaProxy('registrar', {
+      registration_endpoint: endpointRegistro,
+      redirect_uri: redirectUri,
+    }).catch(() => null);
+    if (via?.client_id) return via.client_id;
+    if (!pactoMcpOAuthUrlProxy()) {
+      throw new Error('Registro OAuth bloqueado no navegador. Ative o webhook n8n (N8N_PACTO_MCP_OAUTH_URL).');
+    }
+    throw new Error('Registro OAuth falhou no proxy n8n.');
   }
-  const data = await resp.json();
   if (!data.client_id) throw new Error('Pacto não devolveu client_id.');
   return data.client_id;
 }
@@ -164,27 +236,15 @@ async function pactoMcpOAuthTrocarCodigo(pending, codigo) {
   form.set('code_verifier', pending.verificador);
   form.set('resource', pending.recurso);
 
-  if (typeof N8N_PACTO_MCP_OAUTH_TOKEN_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_TOKEN_URL) {
-    const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
-      headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-    }
-    const resp = await fetch(N8N_PACTO_MCP_OAUTH_TOKEN_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        token_endpoint: pending.tokenEndpoint,
-        client_id: pending.clientId,
-        code: codigo,
-        redirect_uri: pending.redirectUri,
-        code_verifier: pending.verificador,
-        resource: pending.recurso,
-      }),
+  if (pactoMcpOAuthUrlProxy()) {
+    return pactoMcpOAuthChamadaProxy('token', {
+      token_endpoint: pending.tokenEndpoint,
+      client_id: pending.clientId,
+      code: codigo,
+      redirect_uri: pending.redirectUri,
+      code_verifier: pending.verificador,
+      resource: pending.recurso,
     });
-    if (!resp.ok) throw new Error(`Proxy OAuth HTTP ${resp.status}`);
-    const data = await resp.json();
-    if (data.erro || data.error) throw new Error(data.erro || data.error);
-    return data;
   }
 
   const resp = await fetch(pending.tokenEndpoint, {
@@ -194,7 +254,7 @@ async function pactoMcpOAuthTrocarCodigo(pending, codigo) {
   });
   if (!resp.ok) {
     const t = await resp.text().catch(() => '');
-    throw new Error(`Troca do código falhou (${resp.status}).${/cors|failed/i.test(t) ? ' Configure N8N_PACTO_MCP_OAUTH_TOKEN_URL no n8n.' : ''}`);
+    throw new Error(`Troca do código falhou (${resp.status}).${/cors|failed/i.test(t) ? ' Configure N8N_PACTO_MCP_OAUTH_URL no n8n.' : ''}`);
   }
   return resp.json();
 }
@@ -209,6 +269,14 @@ async function pactoMcpOAuthRenovar(cfg) {
   form.set('client_id', cfg.oauth_client_id);
   form.set('resource', cfg.oauth_recurso || cfg.url);
 
+  if (pactoMcpOAuthUrlProxy()) {
+    return pactoMcpOAuthChamadaProxy('refresh', {
+      token_endpoint: cfg.oauth_token_endpoint,
+      client_id: cfg.oauth_client_id,
+      refresh_token: cfg.refresh_token,
+      resource: cfg.oauth_recurso || cfg.url,
+    });
+  }
   const resp = await fetch(cfg.oauth_token_endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
