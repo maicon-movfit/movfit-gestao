@@ -290,7 +290,7 @@ function pactoMcpRenderPainel(cfg, unidId) {
     <div class="pacto-mcp-form">
       <label class="pacto-mcp-lbl">URL do servidor MCP</label>
       <input type="url" class="pacto-mcp-input" id="pactoMcpUrl" value="${pactoMcpEsc(url)}" ${admin ? '' : 'readonly'} />
-      <p class="pacto-mcp-hint">Use <strong>Conectar com a Pacto</strong> para login com e-mail e senha (OAuth). URL padrão: <code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>.</p>
+      <p class="pacto-mcp-hint"><strong>Conectar com a Pacto</strong> abre o login oficial (OAuth) do MCP — igual ao Movchat/Claude. Os indicadores do dashboard já vêm do n8n; isto é opcional (teste de ferramentas / Cursor). URL: <code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>.</p>
       <div class="pacto-mcp-acoes">${btnConectar}<button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiCopiarCursor()">Copiar config Cursor</button></div>
       ${avancado}
     </div>
