@@ -280,9 +280,6 @@ async function pactoMcpOAuthHeadersN8n() {
   if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
     headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
   }
-  if (typeof n8nAuthHeaders === 'function') {
-    return { ...headers, ...(await n8nAuthHeaders()) };
-  }
   return headers;
 }
 
@@ -299,7 +296,12 @@ async function pactoMcpOAuthTrocarViaServidor(payload) {
       body: JSON.stringify({ acao: payload.grant_type === 'refresh_token' ? 'refresh' : 'token', ...payload }),
     });
   } catch (e) {
-    throw new Error('Não foi possível concluir a conexão MCP depois de autorizar na Pacto. Tente de novo ou use token manual (Avançado).');
+    const det = String(e?.message || '');
+    throw new Error(
+      det.includes('Failed to fetch') || det.includes('NetworkError')
+        ? 'Retorno MCP inacessível (rede/CORS). Confirme o workflow pacto-mcp-oauth no servidor ou use token manual.'
+        : 'Não foi possível concluir a conexão MCP depois de autorizar na Pacto. Tente de novo ou use token manual (Avançado).'
+    );
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
