@@ -16,6 +16,7 @@ const PACTO_MCP_OAUTH_CONVERSAS = {
 
 /** DCR feito uma vez no servidor — o navegador não consegue POST em /register (CORS). */
 const PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT = {
+  'https://maicon-movfit.github.io/movfit-gestao/pacto-mcp-oauth.html': 'dcr-VNNiD7rLIuzkQOnspFSLh9TtjnXD2vo6',
   'https://mov-fit---gestao-de-carteira.web.app/pacto-mcp-oauth.html': 'dcr-vOg9ihP1Z_OaLEEYvKtLIr5GEVJ5hvM1',
   'https://mov-fit---gestao-de-carteira.firebaseapp.com/pacto-mcp-oauth.html': 'dcr-cCEMVCzEqVdwIMrYNfQiis7u52KG6L7P',
 };
@@ -23,7 +24,7 @@ const PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT = {
 function pactoMcpOAuthAvisoAmbiente() {
   const { protocol, hostname } = window.location;
   if (protocol === 'file:') {
-    return 'Abra o gestão publicado em HTTPS (Firebase), não o arquivo HTML local.';
+    return 'Abra o gestão publicado (GitHub Pages / HTTPS), não o arquivo HTML local.';
   }
   if (protocol !== 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1') {
     return 'Login Pacto exige o site em HTTPS (domínio publicado).';
@@ -40,9 +41,11 @@ function pactoMcpOAuthEhConversas(urlMcp) {
 }
 
 function pactoMcpOAuthRedirectUri() {
-  const path = window.location.pathname.replace(/[^/]+$/, '');
-  const base = `${window.location.origin}${path}`;
-  return `${base}pacto-mcp-oauth.html`;
+  const path = window.location.pathname;
+  const basePath = /\.html$/i.test(path)
+    ? path.replace(/[^/]+$/, '')
+    : (path.endsWith('/') ? path : `${path}/`);
+  return `${window.location.origin}${basePath}pacto-mcp-oauth.html`;
 }
 
 function pactoMcpOAuthAleatorio() {
