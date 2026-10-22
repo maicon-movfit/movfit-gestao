@@ -756,7 +756,6 @@
     <div id="dashMatriculadosMes"></div>
 
     <!-- Pacto Reports MCP (Conversa Labs) -->
-    <div id="dashPactoMcp"></div>
 
     <!-- Gráfico barras + Distribuição lista -->
     <div class="two-cols" style="margin-top:14px;">
@@ -1631,14 +1630,10 @@ async function salvarMetasFirestore() {
 </script>
 <script src="js/auth-config.js"></script>
 <script src="js/n8n-config.js?v=20260325"></script>
-<script src="js/pacto-mcp-api-config.js?v=20260325"></script>
 <script src="js/pacto.js"></script>
 <script src="js/total-ativos.js?v=20261009-3"></script>
 <script src="js/janela-treino.js?v=20261009-1"></script>
 <script src="js/matriculados-mes.js?v=20261009-4"></script>
-<script src="js/pacto-mcp.js?v=20260325"></script>
-<script src="js/pacto-mcp-oauth.js?v=20260325"></script>
-<script src="js/pacto-mcp-indicadores.js?v=20260325"></script>
 <script>
 
 // ════════════════════════════════════════════════════════════════════════
@@ -9552,9 +9547,6 @@ async function renderDash(mesNome){atualizarCtxBar(mesNome);
   }
   if (typeof renderMatriculadosMes === 'function') {
     renderMatriculadosMes(unidadeAtual ? unidadeAtual.id : null);
-  }
-  if (typeof renderPactoMcp === 'function') {
-    renderPactoMcp(unidadeAtual ? unidadeAtual.id : null);
   }
 }
 
