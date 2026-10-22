@@ -328,6 +328,7 @@ function pactoMcpUiQueryRetorno() {
 }
 
 async function renderPactoMcp(unidId) {
+  if (typeof pactoMcpOAuthEscutarRetorno === 'function') pactoMcpOAuthEscutarRetorno();
   const el = document.getElementById('dashPactoMcp');
   if (!el) return;
   if (!unidId) {

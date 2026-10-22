@@ -3,6 +3,36 @@
 
 const PACTO_MCP_OAUTH_SESS = 'movfit_pacto_mcp_oauth_pending';
 const PACTO_MCP_OAUTH_CLIENT = 'movfit_pacto_mcp_oauth_client';
+const PACTO_MCP_OAUTH_JANELA = 'movfit_pacto_mcp_login';
+
+function pactoMcpOAuthGravarSessao(dados) {
+  const raw = JSON.stringify(dados);
+  try { localStorage.setItem(PACTO_MCP_OAUTH_SESS, raw); } catch (_) { /* ignore */ }
+  try { sessionStorage.setItem(PACTO_MCP_OAUTH_SESS, raw); } catch (_) { /* ignore */ }
+}
+
+function pactoMcpOAuthLerSessao() {
+  try {
+    return localStorage.getItem(PACTO_MCP_OAUTH_SESS) || sessionStorage.getItem(PACTO_MCP_OAUTH_SESS);
+  } catch (_) {
+    return sessionStorage.getItem(PACTO_MCP_OAUTH_SESS);
+  }
+}
+
+function pactoMcpOAuthLimparSessao() {
+  try { localStorage.removeItem(PACTO_MCP_OAUTH_SESS); } catch (_) { /* ignore */ }
+  try { sessionStorage.removeItem(PACTO_MCP_OAUTH_SESS); } catch (_) { /* ignore */ }
+}
+
+function pactoMcpOAuthNotificarOpener(payload) {
+  if (!window.opener || window.opener.closed) return false;
+  try {
+    window.opener.postMessage({ type: 'pactoMcpOAuth', ...payload }, window.location.origin);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 /** Endpoints oficiais do MCP Pacto Reports (Conversa Labs). */
 const PACTO_MCP_OAUTH_CONVERSAS = {
@@ -212,7 +242,7 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   const estado = pactoMcpOAuthAleatorio();
   const verificador = pactoMcpOAuthAleatorio();
   const desafio = await pactoMcpOAuthDesafio(verificador);
-  sessionStorage.setItem(PACTO_MCP_OAUTH_SESS, JSON.stringify({
+  pactoMcpOAuthGravarSessao({
     estado,
     verificador,
     urlMcp,
@@ -222,7 +252,7 @@ async function pactoMcpOAuthIniciar(urlInformada) {
     userinfoEndpoint: descoberta.userinfo,
     recurso: descoberta.recurso,
     expira: Date.now() + 10 * 60 * 1000,
-  }));
+  });
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -233,7 +263,16 @@ async function pactoMcpOAuthIniciar(urlInformada) {
     resource: descoberta.recurso,
   });
   if (descoberta.escopos) params.set('scope', descoberta.escopos);
-  window.location.assign(`${descoberta.autorizacao}?${params.toString()}`);
+  const loginUrl = `${descoberta.autorizacao}?${params.toString()}`;
+  const pop = window.open(loginUrl, PACTO_MCP_OAUTH_JANELA, 'width=540,height=780,scrollbars=yes,resizable=yes');
+  if (!pop) {
+    window.location.assign(loginUrl);
+    return;
+  }
+  pop.focus();
+  if (typeof mostrarToast === 'function') {
+    mostrarToast('Login da Pacto aberto em outra aba — o gestão continua aqui.');
+  }
 }
 
 async function pactoMcpOAuthHeadersN8n() {
@@ -369,7 +408,12 @@ async function pactoMcpOAuthFinalizarRetorno() {
     window.location.assign(`${window.location.origin}${path}index.html?pactoMcp=conectado`);
   };
   const falha = (msg) => {
-    sessionStorage.removeItem(PACTO_MCP_OAUTH_SESS);
+    pactoMcpOAuthLimparSessao();
+    const el = document.getElementById('msg');
+    if (pactoMcpOAuthNotificarOpener({ status: 'erro', motivo: msg })) {
+      if (el) el.textContent = msg;
+      return;
+    }
     window.location.assign(`${window.location.origin}${window.location.pathname.replace(/[^/]+$/, '')}index.html?pactoMcp=erro&motivo=${encodeURIComponent(msg)}`);
   };
 
@@ -377,7 +421,7 @@ async function pactoMcpOAuthFinalizarRetorno() {
     falha('Login cancelado ou recusado na Pacto.');
     return;
   }
-  const raw = sessionStorage.getItem(PACTO_MCP_OAUTH_SESS);
+  const raw = pactoMcpOAuthLerSessao();
   if (!raw) {
     falha('Sessão OAuth expirada. Tente conectar de novo.');
     return;
@@ -395,8 +439,31 @@ async function pactoMcpOAuthFinalizarRetorno() {
   const tokens = await pactoMcpOAuthTrocarCodigo(pending, codigo);
   const quem = await pactoMcpOAuthQuemEntrou(pending.userinfoEndpoint, tokens.access_token);
   await pactoMcpOAuthPersistirTokens(pending.urlMcp, pending, tokens, quem);
-  sessionStorage.removeItem(PACTO_MCP_OAUTH_SESS);
+  pactoMcpOAuthLimparSessao();
+  const el = document.getElementById('msg');
+  if (pactoMcpOAuthNotificarOpener({ status: 'conectado' })) {
+    if (el) el.textContent = 'Pacto conectada. Pode fechar esta aba.';
+    setTimeout(() => { try { window.close(); } catch (_) { /* ignore */ } }, 1200);
+    return;
+  }
   destino();
+}
+
+function pactoMcpOAuthEscutarRetorno() {
+  if (window.__pactoMcpOAuthListen) return;
+  window.__pactoMcpOAuthListen = true;
+  window.addEventListener('message', (e) => {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || e.data.type !== 'pactoMcpOAuth') return;
+    if (e.data.status === 'conectado' && typeof mostrarToast === 'function') {
+      mostrarToast('Pacto conectada — teste a conexão.');
+    }
+    if (e.data.status === 'erro' && typeof mostrarToast === 'function') {
+      mostrarToast(`Pacto: ${e.data.motivo || 'falha no login'}`);
+    }
+    const unid = typeof unidadeAtual !== 'undefined' ? unidadeAtual?.id : null;
+    if (unid && typeof renderPactoMcp === 'function') renderPactoMcp(unid);
+  });
 }
 
 async function pactoMcpResolverToken(cfg) {
