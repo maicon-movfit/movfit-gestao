@@ -140,21 +140,23 @@ async function pactoMcpRpcDirect(url, token, method, params, sessionId) {
 }
 
 async function pactoMcpRpcProxy(url, token, method, params, sessionId) {
-  if (typeof N8N_PACTO_MCP_PROXY_URL === 'undefined' || !N8N_PACTO_MCP_PROXY_URL) {
-    throw new Error('Proxy n8n não configurado (N8N_PACTO_MCP_PROXY_URL).');
+  const apiUrl = typeof PACTO_MCP_RPC_API_URL !== 'undefined' && PACTO_MCP_RPC_API_URL;
+  if (!apiUrl) {
+    throw new Error('Proxy MCP nao configurado (pacto-mcp-api-config.js).');
   }
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
-    headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-  }
-  const resp = await fetch(N8N_PACTO_MCP_PROXY_URL, {
+  const headers = typeof pactoMcpApiAuthHeaders === 'function'
+    ? await pactoMcpApiAuthHeaders()
+    : { 'Content-Type': 'application/json', Accept: 'application/json' };
+  const resp = await fetch(apiUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify({ url, token, method, params: params || {}, sessionId }),
   });
-  if (!resp.ok) throw new Error(`Proxy n8n HTTP ${resp.status}`);
-  const data = await resp.json();
-  if (data.erro || data.error) throw new Error(data.erro || data.error);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data.error_description || data.error || `Proxy MCP HTTP ${resp.status}`);
+  }
+  if (data.erro || data.error) throw new Error(data.erro || data.error_description || data.error);
   return {
     result: data.result,
     sessionId: data.sessionId || sessionId || null,
@@ -162,18 +164,49 @@ async function pactoMcpRpcProxy(url, token, method, params, sessionId) {
 }
 
 async function pactoMcpRpc(url, token, method, params, sessionId) {
-  const useProxy = typeof N8N_PACTO_MCP_PROXY_URL !== 'undefined' && N8N_PACTO_MCP_PROXY_URL;
+  const useProxy = typeof PACTO_MCP_RPC_API_URL !== 'undefined' && PACTO_MCP_RPC_API_URL;
   try {
     if (useProxy) return await pactoMcpRpcProxy(url, token, method, params, sessionId);
     return await pactoMcpRpcDirect(url, token, method, params, sessionId);
   } catch (e) {
     if (!useProxy && /failed to fetch|network|cors/i.test(String(e.message))) {
-      throw new Error(
-        'Navegador bloqueou a conexão com o MCP da Pacto. Peça ao suporte MovFit para ativar o proxy de relatórios.'
-      );
+      throw new Error('Navegador bloqueou o MCP da Pacto. Publique as Cloud Functions (pactoMcpRpc).');
     }
     throw e;
   }
+}
+
+function pactoMcpExtrairJsonTool(result) {
+  let valor = result?.structuredContent ?? result?.content ?? result;
+  if (Array.isArray(valor)) {
+    const bloco = valor.find(b => b?.type === 'text');
+    valor = bloco?.text ?? valor;
+  }
+  if (valor && typeof valor === 'object' && Array.isArray(valor.content)) {
+    const bloco = valor.content.find(b => b?.type === 'text');
+    valor = bloco?.text ?? valor;
+  }
+  if (typeof valor === 'string') {
+    try { return JSON.parse(valor); } catch { return null; }
+  }
+  return valor && typeof valor === 'object' ? valor : null;
+}
+
+async function pactoMcpChamarFerramenta(nome, args) {
+  const cfg = _pactoMcpState.config || await pactoMcpCarregarConfig();
+  const token = typeof pactoMcpResolverToken === 'function'
+    ? await pactoMcpResolverToken(cfg)
+    : cfg?.token;
+  if (!token) throw new Error('Conecte com a Pacto primeiro.');
+  const url = cfg?.url || PACTO_MCP_DEFAULT_URL;
+  if (!_pactoMcpState.sessionId) {
+    await pactoMcpSessaoCompleta(url, token);
+  }
+  const pack = await pactoMcpRpc(url, token, 'tools/call', {
+    name: nome,
+    arguments: args || {},
+  }, _pactoMcpState.sessionId);
+  return pactoMcpExtrairJsonTool(pack.result);
 }
 
 async function pactoMcpSessaoCompleta(url, token) {
@@ -270,8 +303,8 @@ function pactoMcpRenderPainel(cfg, unidId) {
   return `<div class="janela-card pacto-mcp-card" data-unid-id="${unidId || ''}">
     <div class="janela-card-head">
       <div>
-        <div class="janela-title">Pacto Reports — MCP</div>
-        <div class="janela-sub">${pactoMcpEsc(nomeUnidade)} · Relatórios Conversa Labs · Streamable HTTP</div>
+        <div class="janela-title">Pacto — dados oficiais</div>
+        <div class="janela-sub">${pactoMcpEsc(nomeUnidade)} · MCP Reports (login com sua conta)</div>
       </div>
       <div class="matric-head-actions">
         <button type="button" class="janela-refresh" onclick="pactoMcpUiTestar()" title="Initialize + tools/list">↻ Testar conexão</button>
@@ -285,7 +318,7 @@ function pactoMcpRenderPainel(cfg, unidId) {
     <div class="pacto-mcp-form">
       <label class="pacto-mcp-lbl">URL do servidor MCP</label>
       <input type="url" class="pacto-mcp-input" id="pactoMcpUrl" value="${pactoMcpEsc(url)}" ${admin ? '' : 'readonly'} />
-      <p class="pacto-mcp-hint">Use <strong>Conectar com a Pacto</strong> (e-mail e senha). Depois disso o gestão usa os relatórios oficiais (<code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>) — os indicadores do painel já vêm da Pacto automaticamente.</p>
+      <p class="pacto-mcp-hint">Só <strong>Conectar com a Pacto</strong> (e-mail e senha da sua conta). O dashboard puxa alunos ativos e indicadores direto do MCP — sem token manual.</p>
       <div class="pacto-mcp-acoes">${btnConectar}</div>
       ${credencialLeitura}
     </div>

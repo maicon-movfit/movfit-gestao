@@ -95,6 +95,18 @@ function pactoIndicadoresGetNumero(unidId, campo, data) {
 }
 
 async function totalAtivosBuscarDados(forceRefresh) {
+  if (typeof pactoMcpIndicadoresBuscarTodos === 'function') {
+    try {
+      const mcpDireto = await pactoMcpIndicadoresBuscarTodos(forceRefresh);
+      if (mcpDireto?.sucesso && mcpDireto.unidades?.length) {
+        _totalAtivosCache.data = mcpDireto;
+        _totalAtivosCache.at = Date.now();
+        return mcpDireto;
+      }
+    } catch (e) {
+      console.warn('[ATIVOS] MCP Pacto direto:', e.message);
+    }
+  }
   if (typeof N8N_PACTO_INDICADORES_URL === 'undefined' || !N8N_PACTO_INDICADORES_URL) {
     console.warn('[ATIVOS] Configure N8N_PACTO_INDICADORES_URL em js/n8n-config.js');
     return null;

@@ -44,7 +44,7 @@ const PACTO_MCP_OAUTH_CONVERSAS = {
   escopos: 'openid email mcp:relatorios',
 };
 
-/** DCR feito uma vez no servidor ? o navegador não consegue POST em /register (CORS). */
+/** DCR feito uma vez no servidor ? o navegador n?o consegue POST em /register (CORS). */
 const PACTO_MCP_OAUTH_GITHUB_CLIENT = 'dcr-VNNiD7rLIuzkQOnspFSLh9TtjnXD2vo6';
 
 const PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT = {
@@ -70,10 +70,10 @@ function pactoMcpOAuthClientIdPreRegistrado(redirectUri) {
 function pactoMcpOAuthAvisoAmbiente() {
   const { protocol, hostname } = window.location;
   if (protocol === 'file:') {
-    return 'Abra o gestão publicado (GitHub Pages / HTTPS), não o arquivo HTML local.';
+    return 'Abra o gest?o publicado (GitHub Pages / HTTPS), n?o o arquivo HTML local.';
   }
   if (protocol !== 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return 'Login Pacto exige o site em HTTPS (domínio publicado).';
+    return 'Login Pacto exige o site em HTTPS (dom?nio publicado).';
   }
   return null;
 }
@@ -131,7 +131,7 @@ async function pactoMcpOAuthDescobrir(urlMcp) {
     if (pactoMcpOAuthEhConversas(urlMcp)) {
       return { ...PACTO_MCP_OAUTH_CONVERSAS, recurso: urlMcp };
     }
-    throw new Error('Este servidor não oferece login OAuth da Pacto.');
+    throw new Error('Este servidor n?o oferece login OAuth da Pacto.');
   }
   const emissor = String(recurso.authorization_servers[0]).replace(/\/+$/, '');
   const uriEmissor = new URL(emissor);
@@ -148,11 +148,11 @@ async function pactoMcpOAuthDescobrir(urlMcp) {
         recurso: recurso.resource || urlMcp,
       };
     }
-    throw new Error('Servidor de login da Pacto indisponível.');
+    throw new Error('Servidor de login da Pacto indispon?vel.');
   }
   const metodos = servidor.code_challenge_methods_supported || [];
   if (metodos.length && !metodos.includes('S256')) {
-    throw new Error('Login da Pacto não aceita PKCE S256.');
+    throw new Error('Login da Pacto n?o aceita PKCE S256.');
   }
   const escopos = (servidor.scopes_supported || [])
     .filter(s => String(s).startsWith('mcp') || s === 'openid' || s === 'email')
@@ -169,10 +169,10 @@ async function pactoMcpOAuthDescobrir(urlMcp) {
 
 async function pactoMcpOAuthRegistrar(endpointRegistro, redirectUri) {
   if (!endpointRegistro) {
-    throw new Error('Login da Pacto não permite registrar aplicativo (DCR).');
+    throw new Error('Login da Pacto n?o permite registrar aplicativo (DCR).');
   }
   const corpo = {
-    client_name: 'MovFit Gestão',
+    client_name: 'MovFit Gest?o',
     redirect_uris: [redirectUri],
     grant_types: ['authorization_code', 'refresh_token'],
     response_types: ['code'],
@@ -187,14 +187,14 @@ async function pactoMcpOAuthRegistrar(endpointRegistro, redirectUri) {
     });
   } catch (e) {
     const amb = pactoMcpOAuthAvisoAmbiente();
-    throw new Error(amb || 'Atualize a página (Ctrl+Shift+R) e tente Conectar com a Pacto de novo.');
+    throw new Error(amb || 'Atualize a p?gina (Ctrl+Shift+R) e tente Conectar com a Pacto de novo.');
   }
   if (!resp.ok) {
     const t = await resp.text().catch(() => '');
     throw new Error(`Registro na Pacto falhou (${resp.status})${t ? `: ${t.slice(0, 100)}` : ''}`);
   }
   const data = await resp.json();
-  if (!data.client_id) throw new Error('Pacto não devolveu client_id.');
+  if (!data.client_id) throw new Error('Pacto n?o devolveu client_id.');
   return data.client_id;
 }
 
@@ -226,7 +226,7 @@ async function pactoMcpOAuthObterClientId(descoberta, redirectUri, urlMcp) {
   return clientId;
 }
 
-/** Abre a página de login da Pacto (e-mail/senha). */
+/** Abre a p?gina de login da Pacto (e-mail/senha). */
 async function pactoMcpOAuthIniciar(urlInformada) {
   if (typeof pactoMcpIsAdmin === 'function' && !pactoMcpIsAdmin()) {
     throw new Error('Somente administradores conectam a Pacto.');
@@ -235,7 +235,7 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   if (aviso) throw new Error(aviso);
   if (typeof pactoMcpCarregarConfig === 'function') await pactoMcpCarregarConfig();
   const urlMcp = String(urlInformada || PACTO_MCP_DEFAULT_URL).trim();
-  if (!urlMcp.startsWith('https://')) throw new Error('URL do MCP inválida.');
+  if (!urlMcp.startsWith('https://')) throw new Error('URL do MCP inv?lida.');
   const redirectUri = pactoMcpOAuthRedirectUri();
   const descoberta = await pactoMcpOAuthDescobrir(urlMcp);
   const clientId = await pactoMcpOAuthObterClientId(descoberta, redirectUri, urlMcp);
@@ -271,16 +271,8 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   }
   pop.focus();
   if (typeof mostrarToast === 'function') {
-    mostrarToast('Login da Pacto aberto em outra aba ? o gestão continua aqui.');
+    mostrarToast('Login da Pacto aberto em outra aba ? o gest?o continua aqui.');
   }
-}
-
-async function pactoMcpOAuthHeadersN8n() {
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
-    headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
-  }
-  return headers;
 }
 
 function pactoMcpOAuthFlatResposta(data) {
@@ -294,72 +286,49 @@ function pactoMcpOAuthFlatResposta(data) {
   return data;
 }
 
-function pactoMcpOAuthUrlsRetorno() {
-  const urls = [];
-  if (typeof N8N_PACTO_MCP_OAUTH_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_URL) {
-    urls.push(N8N_PACTO_MCP_OAUTH_URL);
-  }
-  if (typeof N8N_PACTO_MCP_OAUTH_FALLBACK_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_FALLBACK_URL
-    && !urls.includes(N8N_PACTO_MCP_OAUTH_FALLBACK_URL)) {
-    urls.push(N8N_PACTO_MCP_OAUTH_FALLBACK_URL);
-  }
-  return urls;
-}
-
 function pactoMcpOAuthMsgErroToken(data) {
   const flat = pactoMcpOAuthFlatResposta(data) || {};
   return flat.error_description || flat.error || flat.erro || null;
 }
 
 async function pactoMcpOAuthTrocarViaServidor(payload) {
-  const urls = pactoMcpOAuthUrlsRetorno();
-  if (!urls.length) {
-    throw new Error('Login da Pacto nao esta configurado neste ambiente. Avise o suporte MovFit.');
+  const url = typeof PACTO_MCP_OAUTH_API_URL !== 'undefined' && PACTO_MCP_OAUTH_API_URL;
+  if (!url) {
+    throw new Error('API MCP Pacto nao configurada (pacto-mcp-api-config.js).');
   }
   const body = JSON.stringify({
     acao: payload.grant_type === 'refresh_token' ? 'refresh' : 'token',
     ...payload,
   });
-  const headers = await pactoMcpOAuthHeadersN8n();
-  let ultimoVazio = false;
-  let ultimaRede = false;
-  for (let i = 0; i < urls.length; i += 1) {
-    const url = urls[i];
-    let resp;
-    try {
-      resp = await fetch(url, { method: 'POST', headers, body });
-    } catch (e) {
-      ultimaRede = String(e?.message || '').includes('Failed to fetch')
-        || String(e?.message || '').includes('NetworkError');
-      continue;
-    }
-    const texto = await resp.text().catch(() => '');
-    const data = pactoMcpOAuthFlatResposta(texto.trim() ? texto : null);
-    if (!data || (!data.access_token && !data.error && !data.error_description)) {
-      ultimoVazio = !texto.trim();
-      if (resp.status === 404) continue;
-    }
-    if (!resp.ok) {
-      const msg = pactoMcpOAuthMsgErroToken(data) || `HTTP ${resp.status}`;
-      if (resp.status === 404 && i < urls.length - 1) continue;
-      throw new Error(typeof msg === 'string' ? msg : 'Troca do codigo falhou.');
-    }
-    if (data.error || data.error_description) {
-      throw new Error(pactoMcpOAuthMsgErroToken(data) || 'Pacto recusou o login.');
-    }
-    if (data.access_token) return data;
-    ultimoVazio = true;
-  }
-  if (ultimaRede) {
-    throw new Error('Nao foi possivel falar com o servidor MovFit (rede/CORS).');
-  }
-  if (ultimoVazio) {
+  const headers = typeof pactoMcpApiAuthHeaders === 'function'
+    ? await pactoMcpApiAuthHeaders()
+    : { 'Content-Type': 'application/json', Accept: 'application/json' };
+  let resp;
+  try {
+    resp = await fetch(url, { method: 'POST', headers, body });
+  } catch (e) {
+    const det = String(e?.message || '');
     throw new Error(
-      'Servidor MovFit respondeu vazio. No n8n, importe e ative o workflow '
-      + 'n8n/workflow-webhook-pacto-mcp-oauth.json (webhook pacto_mcp_oauth), depois Conectar de novo.'
+      det.includes('Failed to fetch') || det.includes('NetworkError')
+        ? 'Nao foi possivel concluir o login (rede). Publique as Cloud Functions: firebase deploy --only functions'
+        : 'Nao foi possivel concluir o login na Pacto. Tente Conectar de novo.'
     );
   }
-  throw new Error('Nao foi possivel concluir o login na Pacto. Tente Conectar de novo.');
+  const texto = await resp.text().catch(() => '');
+  const data = pactoMcpOAuthFlatResposta(texto.trim() ? texto : null) || {};
+  if (!resp.ok) {
+    throw new Error(pactoMcpOAuthMsgErroToken(data) || `HTTP ${resp.status}`);
+  }
+  if (data.error || data.error_description) {
+    throw new Error(pactoMcpOAuthMsgErroToken(data) || 'Pacto recusou o login.');
+  }
+  if (!data.access_token) {
+    throw new Error(
+      pactoMcpOAuthMsgErroToken(data)
+      || 'Pacto nao devolveu access_token. Publique as functions e faca login de novo na Pacto.'
+    );
+  }
+  return data;
 }
 
 async function pactoMcpOAuthTrocarCodigo(pending, codigo) {
@@ -404,7 +373,7 @@ async function pactoMcpOAuthAguardarAuth() {
   if (typeof auth === 'undefined') return;
   if (auth.currentUser) return;
   await new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('Abra o MovFit, faça login e conecte de novo.')), 20000);
+    const t = setTimeout(() => reject(new Error('Abra o MovFit, fa?a login e conecte de novo.')), 20000);
     const unsub = auth.onAuthStateChanged(u => {
       if (u) {
         clearTimeout(t);
@@ -418,7 +387,7 @@ async function pactoMcpOAuthAguardarAuth() {
 async function pactoMcpOAuthPersistirTokens(urlMcp, pending, tokens, quem) {
   await pactoMcpOAuthAguardarAuth();
   const col = typeof pactoMcpColConfig === 'function' ? pactoMcpColConfig() : null;
-  if (!col) throw new Error('Firestore indisponível.');
+  if (!col) throw new Error('Firestore indispon?vel.');
   const flat = pactoMcpOAuthFlatResposta(tokens) || tokens;
   const access = flat.access_token;
   if (!access) {
@@ -452,7 +421,7 @@ async function pactoMcpOAuthPersistirTokens(urlMcp, pending, tokens, quem) {
   }, { merge: true });
 }
 
-/** Chamado em pacto-mcp-oauth.html após redirect da Pacto. */
+/** Chamado em pacto-mcp-oauth.html ap?s redirect da Pacto. */
 async function pactoMcpOAuthFinalizarRetorno() {
   const params = new URLSearchParams(window.location.search);
   const estado = params.get('state');
@@ -478,12 +447,12 @@ async function pactoMcpOAuthFinalizarRetorno() {
   }
   const raw = pactoMcpOAuthLerSessao();
   if (!raw) {
-    falha('Sessão OAuth expirada. Tente conectar de novo.');
+    falha('Sess?o OAuth expirada. Tente conectar de novo.');
     return;
   }
   const pending = JSON.parse(raw);
   if (pending.estado !== estado) {
-    falha('Estado OAuth inválido.');
+    falha('Estado OAuth inv?lido.');
     return;
   }
   if (pending.expira && Date.now() > pending.expira) {
@@ -511,8 +480,14 @@ function pactoMcpOAuthEscutarRetorno() {
     if (e.origin !== window.location.origin) return;
     if (!e.data || e.data.type !== 'pactoMcpOAuth') return;
     if (e.data.status === 'conectado' && typeof mostrarToast === 'function') {
-      mostrarToast('Pacto conectada ? validando relatórios?');
+      mostrarToast('Pacto conectada ? validando relat?rios?');
       if (typeof pactoMcpUiTestar === 'function') pactoMcpUiTestar().catch(() => {});
+      if (typeof totalAtivosBuscarDados === 'function') {
+        totalAtivosBuscarDados(true).then(() => {
+          const id = typeof unidadeAtual !== 'undefined' ? unidadeAtual?.id : null;
+          if (id && typeof atualizarMetricaTotalAtivos === 'function') atualizarMetricaTotalAtivos(id);
+        }).catch(() => {});
+      }
     }
     if (e.data.status === 'erro' && typeof mostrarToast === 'function') {
       mostrarToast(`Pacto: ${e.data.motivo || 'falha no login'}`);

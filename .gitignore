@@ -1,4 +1,4 @@
-functions/
+functions/node_modules/
 .firebase/
 *.local
 _matriculados_out.json
