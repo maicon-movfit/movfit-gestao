@@ -1,3 +1,7 @@
-functions/node_modules/
+functions/
 .firebase/
 *.local
+_matriculados_out.json
+carteira_sample.json
+resp2.json
+webhook_out.txt
