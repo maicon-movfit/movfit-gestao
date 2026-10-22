@@ -51,12 +51,6 @@ const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/f
 const N8N_PACTO_MCP_PROXY_URL = '';
 
 /**
- * Retorno OAuth MCP (troca código → token). Site estático não consegue chamar mcp-auth (CORS).
- * Workflow: n8n/movfit-pacto-mcp-oauth.json — ativar no servidor MovFit.
- */
-const N8N_PACTO_MCP_OAUTH_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-mcp-oauth';
-
-/**
  * Cabeçalhos usados nas chamadas ao n8n.
  * Durante a migração, envia a sessão Firebase e mantém o token legado para que
  * os webhooks ainda não migrados continuem funcionando sem interrupção.

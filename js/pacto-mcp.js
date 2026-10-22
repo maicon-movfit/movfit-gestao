@@ -64,7 +64,7 @@ async function pactoMcpSalvarConfig(url, token) {
   const prev = _pactoMcpState.config || {};
   const tokenFinal = t || prev.token || '';
   if (!tokenFinal) {
-    alert('Informe o token Bearer do perfil MCP (formato mcp_...) ou use Conectar com a Pacto.');
+    alert('Informe o token Bearer do perfil MCP (formato mcp_…).');
     return false;
   }
   const hint = tokenFinal.length >= 4 ? `••••${tokenFinal.slice(-4)}` : '••••';
@@ -199,11 +199,9 @@ async function pactoMcpSessaoCompleta(url, token) {
 
 async function pactoMcpTestarConexao() {
   const cfg = _pactoMcpState.config || await pactoMcpCarregarConfig();
-  const token = typeof pactoMcpResolverToken === 'function'
-    ? await pactoMcpResolverToken(cfg)
-    : cfg?.token;
+  const token = cfg?.token;
   if (!token) {
-    throw new Error('Conecte com a Pacto antes de testar.');
+    throw new Error('Salve o token MCP (mcp_…) antes de testar.');
   }
   const url = cfg.url || PACTO_MCP_DEFAULT_URL;
   const pack = await pactoMcpSessaoCompleta(url, token);
@@ -260,17 +258,14 @@ function pactoMcpRenderPainel(cfg, unidId) {
     ? UNIDADES.find(u => u.id === unidId)?.nome
     : null) || unidId || '—';
 
-  const btnConectar = admin
-    ? `<button type="button" class="btn primary pacto-mcp-btn" onclick="pactoMcpUiConectar()">Conectar com a Pacto</button>`
-    : '';
-  const avancado = admin
-    ? `<details class="pacto-mcp-avancado">
-      <summary>Token manual (mcp_…)</summary>
-      <label class="pacto-mcp-lbl">Token Bearer</label>
-      <input type="password" class="pacto-mcp-input" id="pactoMcpToken" placeholder="Opcional — perfil MCP Conversa Labs" autocomplete="off" />
-      <button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiSalvar()">Salvar token manual</button>
-    </details>`
-    : `<input type="text" class="pacto-mcp-input" disabled placeholder="${c.tokenHint ? `Credencial ${pactoMcpEsc(c.tokenHint)}` : 'Somente admin conecta'}" />`;
+  const tokenField = admin
+    ? `<label class="pacto-mcp-lbl">Token Bearer (mcp_…)</label>
+      <input type="password" class="pacto-mcp-input" id="pactoMcpToken" placeholder="Perfil MCP — Conversa Labs / Pacto" autocomplete="off" />
+      <div class="pacto-mcp-acoes">
+        <button type="button" class="btn primary pacto-mcp-btn" onclick="pactoMcpUiSalvar()">Salvar conexão MCP</button>
+        <button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiAjudaToken()">Como obter o token</button>
+      </div>`
+    : `<input type="text" class="pacto-mcp-input" disabled placeholder="${c.tokenHint ? `Token ${pactoMcpEsc(c.tokenHint)}` : 'Somente admin configura'}" />`;
 
   return `<div class="janela-card pacto-mcp-card" data-unid-id="${unidId || ''}">
     <div class="janela-card-head">
@@ -290,9 +285,9 @@ function pactoMcpRenderPainel(cfg, unidId) {
     <div class="pacto-mcp-form">
       <label class="pacto-mcp-lbl">URL do servidor MCP</label>
       <input type="url" class="pacto-mcp-input" id="pactoMcpUrl" value="${pactoMcpEsc(url)}" ${admin ? '' : 'readonly'} />
-      <p class="pacto-mcp-hint"><strong>Conectar com a Pacto</strong> — login OAuth do MCP (<code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>). Indicadores do dashboard vêm da Pacto por outro caminho; isto é só a conexão MCP deste painel.</p>
-      <div class="pacto-mcp-acoes">${btnConectar}<button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiCopiarCursor()">Copiar config Cursor</button></div>
-      ${avancado}
+      <p class="pacto-mcp-hint">Servidor MCP: <code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>. Faça login na Pacto/Conversa Labs, gere o token <code>mcp_…</code> em Configurações → MCP e cole acima (igual ao Cursor).</p>
+      ${tokenField}
+      <div class="pacto-mcp-acoes"><button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiCopiarCursor()">Copiar config Cursor</button></div>
     </div>
     <div class="sec" style="margin:14px 0 8px;">Ferramentas disponíveis</div>
     <div id="pactoMcpToolsWrap">${pactoMcpRenderToolsList(_pactoMcpState.tools)}</div>
@@ -318,17 +313,19 @@ function pactoMcpUiQueryRetorno() {
     url.searchParams.delete('pactoMcp');
     url.searchParams.delete('motivo');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    if (st === 'info' && typeof mostrarToast === 'function') {
+      mostrarToast('Cole o token mcp_… no card Pacto Reports — MCP.');
+    }
     if (st === 'conectado' && typeof mostrarToast === 'function') {
-      mostrarToast('Pacto conectada — teste a conexão.');
+      mostrarToast('MCP salvo — teste a conexão.');
     }
     if (st === 'erro' && typeof mostrarToast === 'function') {
-      mostrarToast(`Pacto: ${q.get('motivo') || 'falha no login'}`);
+      mostrarToast(`MCP: ${q.get('motivo') || 'falha'}`);
     }
   } catch (_) { /* ignore */ }
 }
 
 async function renderPactoMcp(unidId) {
-  if (typeof pactoMcpOAuthEscutarRetorno === 'function') pactoMcpOAuthEscutarRetorno();
   const el = document.getElementById('dashPactoMcp');
   if (!el) return;
   if (!unidId) {
@@ -341,18 +338,13 @@ async function renderPactoMcp(unidId) {
   el.innerHTML = pactoMcpRenderPainel(cfg, unidId);
 }
 
-async function pactoMcpUiConectar() {
-  const url = document.getElementById('pactoMcpUrl')?.value;
-  try {
-    if (typeof pactoMcpOAuthIniciar !== 'function') {
-      throw new Error('Módulo OAuth não carregado.');
-    }
-    await pactoMcpOAuthIniciar(url);
-  } catch (e) {
-    console.warn('[PACTO MCP] OAuth', e.message);
-    if (typeof mostrarToast === 'function') mostrarToast(e.message);
-    else alert(e.message);
-  }
+function pactoMcpUiAjudaToken() {
+  const msg = '1) Entre na Conversa Labs / Pacto com seu e-mail.\n'
+    + '2) Abra Configurações → MCP (perfil de relatórios).\n'
+    + '3) Copie o token mcp_… e cole aqui em Salvar conexão MCP.\n'
+    + '4) Use ↻ Testar conexão.\n\n'
+    + `URL MCP: ${PACTO_MCP_DEFAULT_URL}`;
+  alert(msg);
 }
 
 async function pactoMcpUiSalvar() {
