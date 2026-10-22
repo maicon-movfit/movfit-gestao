@@ -290,7 +290,7 @@ function pactoMcpRenderPainel(cfg, unidId) {
     <div class="pacto-mcp-form">
       <label class="pacto-mcp-lbl">URL do servidor MCP</label>
       <input type="url" class="pacto-mcp-input" id="pactoMcpUrl" value="${pactoMcpEsc(url)}" ${admin ? '' : 'readonly'} />
-      <p class="pacto-mcp-hint"><strong>Conectar com a Pacto</strong> — login OAuth do MCP (<code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>). Depois de autorizar, o n8n só troca o código por token (CORS). Indicadores do painel são outro fluxo.</p>
+      <p class="pacto-mcp-hint"><strong>Conectar com a Pacto</strong> — login OAuth do MCP (<code>${pactoMcpEsc(PACTO_MCP_DEFAULT_URL)}</code>). Indicadores do dashboard vêm da Pacto por outro caminho; isto é só a conexão MCP deste painel.</p>
       <div class="pacto-mcp-acoes">${btnConectar}<button type="button" class="btn pacto-mcp-btn" onclick="pactoMcpUiCopiarCursor()">Copiar config Cursor</button></div>
       ${avancado}
     </div>

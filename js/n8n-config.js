@@ -51,8 +51,8 @@ const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/f
 const N8N_PACTO_MCP_PROXY_URL = '';
 
 /**
- * Finaliza login MCP Pacto (troca código → token). O browser não pode falar com mcp-auth (CORS).
- * Importe n8n/movfit-pacto-mcp-oauth.json e ative. Body: { acao: 'token'|'refresh', ... }
+ * Retorno OAuth MCP (troca código → token). Site estático não consegue chamar mcp-auth (CORS).
+ * Workflow: n8n/movfit-pacto-mcp-oauth.json — ativar no servidor MovFit.
  */
 const N8N_PACTO_MCP_OAUTH_URL = 'https://n8n2.mov.pro.br/webhook/movfit/pacto-mcp-oauth';
 

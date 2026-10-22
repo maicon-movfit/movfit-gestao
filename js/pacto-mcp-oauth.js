@@ -250,7 +250,7 @@ async function pactoMcpOAuthHeadersN8n() {
 async function pactoMcpOAuthTrocarViaServidor(payload) {
   const url = typeof N8N_PACTO_MCP_OAUTH_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_URL;
   if (!url) {
-    throw new Error('Webhook n8n do MCP OAuth não configurado (N8N_PACTO_MCP_OAUTH_URL).');
+    throw new Error('Retorno OAuth do MCP não configurado no servidor MovFit.');
   }
   let resp;
   try {
@@ -260,10 +260,13 @@ async function pactoMcpOAuthTrocarViaServidor(payload) {
       body: JSON.stringify({ acao: payload.grant_type === 'refresh_token' ? 'refresh' : 'token', ...payload }),
     });
   } catch (e) {
-    throw new Error('Não foi possível concluir o login na Pacto. Verifique rede ou ative o webhook movfit/pacto-mcp-oauth no n8n.');
+    throw new Error('Não foi possível concluir a conexão MCP depois de autorizar na Pacto. Tente de novo ou use token manual (Avançado).');
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
+    if (resp.status === 404) {
+      throw new Error('Retorno OAuth do MCP ainda não está ativo no servidor. Avise o admin ou use token manual (Avançado).');
+    }
     const msg = data.error_description || data.error || data.erro || `HTTP ${resp.status}`;
     throw new Error(typeof msg === 'string' ? msg : 'Troca do código falhou.');
   }
