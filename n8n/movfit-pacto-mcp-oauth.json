@@ -1,0 +1,88 @@
+{
+  "name": "MOVFIT Pacto MCP OAuth (troca código)",
+  "meta": {
+    "description": "Só finaliza login MCP: POST acao=token|refresh + X-Movfit-Proxy. Não é login do painel — é CORS do mcp-auth."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "movfit/pacto-mcp-oauth",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "id": "wh-oauth",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "movfit-pacto-mcp-oauth"
+    },
+    {
+      "parameters": {
+        "jsCode": "const headers = $input.first().json.headers || {};\nconst h = Object.fromEntries(Object.entries(headers).map(([k, v]) => [String(k).toLowerCase(), v]));\nconst expected = $env.N8N_MOVFIT_PROXY_TOKEN || 'movfit_proxy_k7x9m2pQ4wR9';\nif ((h['x-movfit-proxy'] || '') !== expected) {\n  return [{ json: { ok: false, status: 401, error: 'Unauthorized' } }];\n}\nconst body = $input.first().json.body || $input.first().json;\nconst acao = String(body.acao || 'token').toLowerCase();\nreturn [{ json: { ok: true, acao, body } }];"
+      },
+      "id": "check",
+      "name": "Check proxy token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [{ "value1": "={{ $json.ok }}", "value2": true }] }
+      },
+      "id": "if-ok",
+      "name": "Auth OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { acao, body } = $input.first().json;\nconst http = this.helpers.httpRequest.bind(this.helpers);\nconst endpoint = body.token_endpoint || 'https://mcp-auth.conversas.ai/oauth/token';\ntry {\n  const form = new URLSearchParams();\n  if (acao === 'refresh') {\n    form.set('grant_type', 'refresh_token');\n    form.set('refresh_token', body.refresh_token);\n    form.set('client_id', body.client_id);\n    if (body.resource) form.set('resource', body.resource);\n  } else {\n    form.set('grant_type', 'authorization_code');\n    form.set('code', body.code);\n    form.set('redirect_uri', body.redirect_uri);\n    form.set('client_id', body.client_id);\n    form.set('code_verifier', body.code_verifier);\n    if (body.resource) form.set('resource', body.resource);\n  }\n  const data = await http({\n    method: 'POST',\n    url: endpoint,\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },\n    body: form.toString(),\n    json: true,\n  });\n  return [{ json: data }];\n} catch (e) {\n  return [{ json: { error: e.message || String(e) } }];\n}"
+      },
+      "id": "run-oauth",
+      "name": "Pacto token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "resp-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: $json.error || 'Unauthorized' } }}",
+        "options": { "responseCode": "={{ $json.status || 401 }}" }
+      },
+      "id": "resp-err",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Check proxy token", "type": "main", "index": 0 }]] },
+    "Check proxy token": { "main": [[{ "node": "Auth OK?", "type": "main", "index": 0 }]] },
+    "Auth OK?": {
+      "main": [
+        [{ "node": "Pacto token", "type": "main", "index": 0 }],
+        [{ "node": "Respond Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Pacto token": { "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

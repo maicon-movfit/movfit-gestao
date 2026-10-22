@@ -236,28 +236,31 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   window.location.assign(`${descoberta.autorizacao}?${params.toString()}`);
 }
 
-async function pactoMcpOAuthHeadersAuth() {
+async function pactoMcpOAuthHeadersN8n() {
   const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (typeof auth !== 'undefined' && auth.currentUser) {
-    headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+  if (typeof N8N_PROXY_TOKEN !== 'undefined' && N8N_PROXY_TOKEN) {
+    headers['X-Movfit-Proxy'] = N8N_PROXY_TOKEN;
+  }
+  if (typeof n8nAuthHeaders === 'function') {
+    return { ...headers, ...(await n8nAuthHeaders()) };
   }
   return headers;
 }
 
 async function pactoMcpOAuthTrocarViaServidor(payload) {
-  const url = typeof PACTO_MCP_OAUTH_TOKEN_URL !== 'undefined' && PACTO_MCP_OAUTH_TOKEN_URL;
+  const url = typeof N8N_PACTO_MCP_OAUTH_URL !== 'undefined' && N8N_PACTO_MCP_OAUTH_URL;
   if (!url) {
-    throw new Error('URL da Cloud Function OAuth não configurada.');
+    throw new Error('Webhook n8n do MCP OAuth não configurado (N8N_PACTO_MCP_OAUTH_URL).');
   }
   let resp;
   try {
     resp = await fetch(url, {
       method: 'POST',
-      headers: await pactoMcpOAuthHeadersAuth(),
-      body: JSON.stringify(payload),
+      headers: await pactoMcpOAuthHeadersN8n(),
+      body: JSON.stringify({ acao: payload.grant_type === 'refresh_token' ? 'refresh' : 'token', ...payload }),
     });
   } catch (e) {
-    throw new Error('Não foi possível concluir o login na Pacto (rede ou função ainda não publicada no Firebase).');
+    throw new Error('Não foi possível concluir o login na Pacto. Verifique rede ou ative o webhook movfit/pacto-mcp-oauth no n8n.');
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {

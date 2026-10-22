@@ -11,9 +11,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-/** Troca código OAuth Pacto (browser → Cloud Function → mcp-auth). */
-const PACTO_MCP_OAUTH_TOKEN_URL = 'https://us-central1-mov-fit---gestao-de-carteira.cloudfunctions.net/pactoMcpOAuthToken';
-
 // ── Offline persistence — Firebase SDK nativo ─────────────────────────────────
 // Estratégia: Firebase SDK gerencia o cache IndexedDB automaticamente.
 // "Server always wins" na resolução de conflitos — correto para o Pulso
