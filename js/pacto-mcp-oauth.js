@@ -14,6 +14,23 @@ const PACTO_MCP_OAUTH_CONVERSAS = {
   escopos: 'openid email mcp:relatorios',
 };
 
+/** DCR feito uma vez no servidor — o navegador não consegue POST em /register (CORS). */
+const PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT = {
+  'https://mov-fit---gestao-de-carteira.web.app/pacto-mcp-oauth.html': 'dcr-vOg9ihP1Z_OaLEEYvKtLIr5GEVJ5hvM1',
+  'https://mov-fit---gestao-de-carteira.firebaseapp.com/pacto-mcp-oauth.html': 'dcr-cCEMVCzEqVdwIMrYNfQiis7u52KG6L7P',
+};
+
+function pactoMcpOAuthAvisoAmbiente() {
+  const { protocol, hostname } = window.location;
+  if (protocol === 'file:') {
+    return 'Abra o gestão publicado em HTTPS (Firebase), não o arquivo HTML local.';
+  }
+  if (protocol !== 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return 'Login Pacto exige o site em HTTPS (domínio publicado).';
+  }
+  return null;
+}
+
 function pactoMcpOAuthEhConversas(urlMcp) {
   try {
     return new URL(urlMcp).hostname === 'mcp-reports.conversas.ai';
@@ -120,7 +137,8 @@ async function pactoMcpOAuthRegistrar(endpointRegistro, redirectUri) {
       body: JSON.stringify(corpo),
     });
   } catch (e) {
-    throw new Error('Não foi possível falar com a Pacto para registrar o app. Verifique rede e tente de novo.');
+    const amb = pactoMcpOAuthAvisoAmbiente();
+    throw new Error(amb || 'Registro na Pacto só funciona no site publicado (HTTPS). Abra pelo Firebase ou use token manual.');
   }
   if (!resp.ok) {
     const t = await resp.text().catch(() => '');
@@ -146,6 +164,12 @@ function pactoMcpOAuthGravarClientCache(redirectUri, urlMcp, clientId) {
 }
 
 async function pactoMcpOAuthObterClientId(descoberta, redirectUri, urlMcp) {
+  const pre = PACTO_MCP_OAUTH_CLIENTE_POR_REDIRECT[redirectUri];
+  if (pre) return pre;
+  const cfg = typeof _pactoMcpState !== 'undefined' ? _pactoMcpState.config : null;
+  if (cfg?.oauth_client_id && cfg.oauth_redirect_uri === redirectUri) {
+    return cfg.oauth_client_id;
+  }
   const cached = pactoMcpOAuthLerClientCache(redirectUri, urlMcp);
   if (cached) return cached;
   const clientId = await pactoMcpOAuthRegistrar(descoberta.registro, redirectUri);
@@ -158,6 +182,9 @@ async function pactoMcpOAuthIniciar(urlInformada) {
   if (typeof pactoMcpIsAdmin === 'function' && !pactoMcpIsAdmin()) {
     throw new Error('Somente administradores conectam a Pacto.');
   }
+  const aviso = pactoMcpOAuthAvisoAmbiente();
+  if (aviso) throw new Error(aviso);
+  if (typeof pactoMcpCarregarConfig === 'function') await pactoMcpCarregarConfig();
   const urlMcp = String(urlInformada || PACTO_MCP_DEFAULT_URL).trim();
   if (!urlMcp.startsWith('https://')) throw new Error('URL do MCP inválida.');
   const redirectUri = pactoMcpOAuthRedirectUri();
