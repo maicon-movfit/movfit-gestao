@@ -1,0 +1,159 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6222ba2d-c4de-4bc5-8e4f-2af97ff19f31",
+      "name": "Atualizar Novo Progresso a cada 4 horas"
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "6249b42d-f1cb-4868-bef8-ca42fea5c9a3",
+      "name": "Aguardar Novo Progresso",
+      "webhookId": "42ae444a-f84b-43d6-954d-29d6d7d82e21"
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        0
+      ],
+      "id": "ac4a3e6e-e4bb-44b9-8c64-93042c22fa7a",
+      "name": "BI Professores Novo Progresso",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API Treino - Novo Progresso"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first()?.json;\nconst unidade = 'novo_progresso';\nconst empresaId = 6;\n\nfunction extrairLista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (Array.isArray(valor?.professores)) return valor.professores;\n  if (Array.isArray(valor?.content)) return valor.content;\n  return [];\n}\n\nconst lista = extrairLista(raw);\nif (!lista.length) {\n  throw new Error(`[${unidade}] A Pacto retornou uma lista vazia; o cache anterior foi preservado.`);\n}\n\nconst registros = lista.map((p, indice) => {\n  if (p?.codigo != null && p?.comTreino != null) {\n    return {\n      empresa_id: empresaId,\n      unidade,\n      codigo: Number(p.codigo),\n      nome: String(p.nome || '').trim(),\n      com_treino: Number(p.comTreino ?? 0),\n      sem_treino: Number(p.semTreino ?? 0),\n      em_dia: Number(p.emDia ?? 0),\n      vencidos: Number(p.vencidos ?? 0),\n      a_renovar: Number(p.aRenovar ?? 0),\n      ativos: Number(p.ativos ?? 0),\n      total: Number(p.total ?? p.ativos ?? 0),\n      duracao: p.duracao == null ? null : Number(p.duracao),\n    };\n  }\n\n  const professor = p?.professor || {};\n  const bi = p?.biTreinoTreinamentoDTO || {};\n  const comTreino = Number(bi.alunosAtivosComTreino ?? 0);\n  const semTreino = Number(bi.alunosAtivosSemTreino ?? 0);\n  const medio = bi.tempoPermanenciaPrograma?.medio;\n\n  return {\n    empresa_id: empresaId,\n    unidade,\n    codigo: Number(professor.codigoPessoa ?? professor.id),\n    nome: String(professor.nome || '').trim(),\n    com_treino: comTreino,\n    sem_treino: semTreino,\n    em_dia: Number(bi.alunosAtivosProgramaEmDia ?? 0),\n    vencidos: Number(bi.alunosProgramaVencidos ?? 0),\n    a_renovar: Number(bi.alunosProgramaRenovar ?? 0),\n    ativos: comTreino + semTreino,\n    total: comTreino + semTreino,\n    duracao: medio == null || !Number.isFinite(Number(medio)) || Number(medio) <= 0\n      ? null\n      : Math.round(Number(medio)),\n  };\n});\n\nconst invalidos = registros.filter((r) =>\n  !Number.isFinite(r.codigo) || !r.nome ||\n  ['com_treino', 'sem_treino', 'em_dia', 'vencidos', 'a_renovar', 'ativos', 'total']\n    .some((campo) => !Number.isFinite(r[campo]) || r[campo] < 0)\n);\nif (invalidos.length) {\n  throw new Error(`[${unidade}] ${invalidos.length} registro(s) invÃ¡lido(s); nada foi gravado.`);\n}\n\nconst codigos = new Set(registros.map((r) => r.codigo));\nif (codigos.size !== registros.length) {\n  throw new Error(`[${unidade}] A resposta contÃ©m cÃ³digos de professor duplicados; nada foi gravado.`);\n}\n\nreturn [{\n  json: {\n    unidade,\n    empresa_id: empresaId,\n    quantidade: registros.length,\n    coletado_em: new Date().toISOString(),\n    registros,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "d462750d-df90-4a80-b303-9ed058a10a73",
+      "name": "Validar Novo Progresso"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        empresa_id integer,\n        unidade text,\n        codigo bigint,\n        nome text,\n        com_treino integer,\n        sem_treino integer,\n        em_dia integer,\n        vencidos integer,\n        a_renovar integer,\n        ativos integer,\n        total integer,\n        duracao integer\n    )\n),\nsalvos AS (\n    INSERT INTO public.cash_professores_bi_mfgestao (\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, atualizado_em\n    )\n    SELECT\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, $3::timestamptz\n    FROM dados\n    ON CONFLICT (unidade, codigo) DO UPDATE SET\n        empresa_id = EXCLUDED.empresa_id,\n        nome = EXCLUDED.nome,\n        com_treino = EXCLUDED.com_treino,\n        sem_treino = EXCLUDED.sem_treino,\n        em_dia = EXCLUDED.em_dia,\n        vencidos = EXCLUDED.vencidos,\n        a_renovar = EXCLUDED.a_renovar,\n        ativos = EXCLUDED.ativos,\n        total = EXCLUDED.total,\n        duracao = EXCLUDED.duracao,\n        atualizado_em = EXCLUDED.atualizado_em\n    RETURNING codigo\n),\nremovidos AS (\n    DELETE FROM public.cash_professores_bi_mfgestao antigo\n    WHERE antigo.unidade = $2::text\n      AND (\n          (SELECT COUNT(*) FROM dados) >= CEIL(\n              (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n               WHERE existente.unidade = $2::text) * 0.70\n          )\n          OR (\n              antigo.atualizado_em < $3::timestamptz - interval '7 days'\n              AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.50\n              )\n          )\n      )\n      AND NOT EXISTS (\n          SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo\n      )\n    RETURNING antigo.codigo\n)\nSELECT\n    $2::text AS unidade,\n    (SELECT COUNT(*) FROM salvos)::integer AS registros_salvos,\n    (SELECT COUNT(*) FROM removidos)::integer AS registros_removidos,\n    EXISTS (\n        SELECT 1\n        FROM public.cash_professores_bi_mfgestao antigo\n        WHERE antigo.unidade = $2::text\n          AND NOT EXISTS (SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo)\n          AND NOT (\n              (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.70\n              )\n              OR (\n                  antigo.atualizado_em < $3::timestamptz - interval '7 days'\n                  AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                      (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                       WHERE existente.unidade = $2::text) * 0.50\n                  )\n              )\n          )\n    ) AS limpeza_protegida,\n    $3::timestamptz AS atualizado_em;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.registros), $json.unidade, $json.coletado_em] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        960,
+        0
+      ],
+      "id": "a6cc435d-a46d-4c0e-8363-65822667c4ce",
+      "name": "Salvar cache Novo Progresso",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Atualizar Novo Progresso a cada 4 horas": {
+      "main": [
+        [
+          {
+            "node": "Aguardar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "BI Professores Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BI Professores Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Validar Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Novo Progresso": {
+      "main": [
+        [
+          {
+            "node": "Salvar cache Novo Progresso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+  }
+}

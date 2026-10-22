@@ -1,0 +1,849 @@
+{
+    "nodes":  [
+                  {
+                      "position":  [
+                                       -760,
+                                       480
+                                   ],
+                      "name":  "A cada 6 horas",
+                      "id":  "1b9fd3e0-9156-4e98-8454-efb490be37c2",
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "parameters":  {
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "hoursInterval":  6,
+                                                                           "field":  "hours"
+                                                                       }
+                                                                   ]
+                                                  }
+                                     },
+                      "typeVersion":  1.3
+                  },
+                  {
+                      "position":  [
+                                       -500,
+                                       0
+                                   ],
+                      "name":  "Configurar Santarem 24h",
+                      "id":  "a84a6876-3b40-4a77-92ae-870cadea8f4d",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const agora = $now.setZone(\u0027America/Sao_Paulo\u0027);\nconst inicio = agora.startOf(\u0027month\u0027);\nconst fim = agora.endOf(\u0027day\u0027);\nconst base = {\n  unidade_codigo: 3,\n  unidade_nome: \u0027santarem_24h\u0027,\n  empresa_api_id: 1,\n  periodo_inicio: inicio.toISODate(),\n  periodo_fim: fim.toISODate(),\n  coletado_em: agora.toUTC().toISO(),\n  tamanho_pagina: 2000,\n};\nconst indicadores = [\n  [\u0027todas\u0027, \u0027IND_AF_TODAS\u0027],\n  [\u0027bio_nova\u0027, \u0027IND_AF_NOVAS\u0027],\n  [\u0027reavaliacao\u0027, \u0027IND_AF_REAVALIACOES\u0027],\n];\nreturn indicadores.map(([tipo, indicador]) =\u003e ({ json: {\n  ...base,\n  tipo,\n  indicador,\n  filters: JSON.stringify({\n    dataInicio: inicio.toMillis(),\n    dataFim: fim.toMillis(),\n    professorId: -1,\n    avaliadorId: -1,\n    indicador,\n    tipoAvaliacao: \u0027TODOS_PROFESSORES\u0027,\n  }),\n}}));"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "parameters":  {
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "value":  "={{ $json.filters }}",
+                                                                                        "name":  "filters"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ JSON.stringify({}) }}",
+                                                                                        "name":  "configs"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "0",
+                                                                                        "name":  "page"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ $json.tamanho_pagina }}",
+                                                                                        "name":  "size"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "authentication":  "genericCredentialType",
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "accept"
+                                                                                     },
+                                                                                     {
+                                                                                         "value":  "={{ String($json.empresa_api_id) }}",
+                                                                                         "name":  "empresaId"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "url":  "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+                                         "sendHeaders":  true,
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json"
+                                                                                       }
+                                                                      }
+                                                     },
+                                         "sendQuery":  true,
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "position":  [
+                                       -260,
+                                       0
+                                   ],
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "id":  "a41f90f8-23aa-4605-81fc-2e25c858b69b",
+                      "retryOnFail":  true,
+                      "name":  "Pacto avaliacoes Santarem 24h",
+                      "waitBetweenTries":  2000,
+                      "maxTries":  3,
+                      "typeVersion":  4.4
+                  },
+                  {
+                      "position":  [
+                                       -20,
+                                       0
+                                   ],
+                      "name":  "Validar e agrupar Santarem 24h",
+                      "id":  "5271ab47-01ec-4f5b-9bcd-d36df7359a24",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const configs = $(\u0027Configurar Santarem 24h\u0027).all().map(i =\u003e i.json);\nconst responses = $input.all().map(i =\u003e i.json);\nif (configs.length !== 3 || responses.length !== 3) {\n  throw new Error(\u0027Esperadas tres respostas: todas, novas e reavaliacoes.\u0027);\n}\nconst porTipo = {};\nfor (let i = 0; i \u003c configs.length; i++) {\n  const cfg = configs[i];\n  const res = responses[i];\n  if (!Array.isArray(res.content) || !Number.isSafeInteger(Number(res.totalElements))) {\n    throw new Error(\u0027Resposta invalida para \u0027 + cfg.indicador + \u0027.\u0027);\n  }\n  const total = Number(res.totalElements);\n  if (total !== res.content.length || res.last !== true) {\n    throw new Error(\u0027Coleta incompleta em \u0027 + cfg.indicador + \u0027: \u0027 + res.content.length + \u0027/\u0027 + total + \u0027. Reduza o periodo ou implemente paginacao.\u0027);\n  }\n  porTipo[cfg.tipo] = { cfg, res, total };\n}\nif (porTipo.bio_nova.total + porTipo.reavaliacao.total !== porTipo.todas.total) {\n  throw new Error(\u0027Divergencia Pacto: novas (\u0027 + porTipo.bio_nova.total + \u0027) + reavaliacoes (\u0027 + porTipo.reavaliacao.total + \u0027) != todas (\u0027 + porTipo.todas.total + \u0027).\u0027);\n}\nconst base = configs[0];\nconst inicio = new Date(base.periodo_inicio + \u0027T12:00:00.000Z\u0027);\nconst fim = new Date(base.periodo_fim + \u0027T12:00:00.000Z\u0027);\nconst contagens = { bio_nova: new Map(), reavaliacao: new Map() };\nfor (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n  for (const item of porTipo[tipo].res.content) {\n    const data = String(item.dataAvaliacao || \u0027\u0027);\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data \u003c base.periodo_inicio || data \u003e base.periodo_fim) {\n      throw new Error(\u0027Data de avaliacao invalida em \u0027 + tipo + \u0027: \u0027 + data + \u0027.\u0027);\n    }\n    contagens[tipo].set(data, (contagens[tipo].get(data) || 0) + 1);\n  }\n}\nconst registros = [];\nfor (let dia = new Date(inicio); dia \u003c= fim; dia.setUTCDate(dia.getUTCDate() + 1)) {\n  const data = dia.toISOString().slice(0, 10);\n  for (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n    registros.push({\n      unidade_codigo: base.unidade_codigo,\n      unidade_nome: base.unidade_nome,\n      empresa_api_id: base.empresa_api_id,\n      data_referencia: data,\n      tipo_avaliacao: tipo,\n      quantidade: contagens[tipo].get(data) || 0,\n      coletado_em: base.coletado_em,\n    });\n  }\n}\nreturn [{ json: { unidade: base.unidade_nome, registros, coletado_em: base.coletado_em } }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       220,
+                                       0
+                                   ],
+                      "name":  "Salvar avaliacoes Santarem 24h",
+                      "id":  "0e916b87-6738-4a8c-9efb-e17f2656b6ec",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer,\n        unidade_nome text,\n        empresa_api_id integer,\n        data_referencia date,\n        tipo_avaliacao text,\n        quantidade integer,\n        coletado_em timestamptz\n    )\n),\nsalvos AS (\n    INSERT INTO public.avaliacoes_fisicas_diarias AS destino (\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, atualizado_em\n    )\n    SELECT\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, now()\n    FROM dados\n    ON CONFLICT (unidade_codigo, data_referencia, tipo_avaliacao)\n    DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_api_id = EXCLUDED.empresa_api_id,\n        quantidade = EXCLUDED.quantidade,\n        coletado_em = EXCLUDED.coletado_em,\n        atualizado_em = now()\n    RETURNING 1\n)\nSELECT\n    $2::text AS unidade,\n    COUNT(*)::integer AS registros_salvos,\n    MIN(data_referencia) AS periodo_inicio,\n    MAX(data_referencia) AS periodo_fim,\n    MAX(coletado_em) AS coletado_em\nFROM dados\nWHERE EXISTS (SELECT 1 FROM salvos);",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json.registros), $json.unidade] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  },
+                  {
+                      "position":  [
+                                       -610,
+                                       240
+                                   ],
+                      "name":  "Aguardar 20s - Nova Republica",
+                      "id":  "cc848fc9-fb17-4098-a55b-4b0b34a0d36f",
+                      "type":  "n8n-nodes-base.wait",
+                      "parameters":  {
+                                         "unit":  "seconds",
+                                         "amount":  20
+                                     },
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "position":  [
+                                       -380,
+                                       240
+                                   ],
+                      "name":  "Configurar Nova Republica",
+                      "id":  "9eb6372c-91c6-44b2-b2c1-69739b828493",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const agora = $now.setZone(\u0027America/Sao_Paulo\u0027);\nconst inicio = agora.startOf(\u0027month\u0027);\nconst fim = agora.endOf(\u0027day\u0027);\nconst base = {\n  unidade_codigo: 5,\n  unidade_nome: \u0027santarem_nova_republica\u0027,\n  empresa_api_id: 1,\n  periodo_inicio: inicio.toISODate(),\n  periodo_fim: fim.toISODate(),\n  coletado_em: agora.toUTC().toISO(),\n  tamanho_pagina: 2000,\n};\nconst indicadores = [\n  [\u0027todas\u0027, \u0027IND_AF_TODAS\u0027],\n  [\u0027bio_nova\u0027, \u0027IND_AF_NOVAS\u0027],\n  [\u0027reavaliacao\u0027, \u0027IND_AF_REAVALIACOES\u0027],\n];\nreturn indicadores.map(([tipo, indicador]) =\u003e ({ json: {\n  ...base,\n  tipo,\n  indicador,\n  filters: JSON.stringify({\n    dataInicio: inicio.toMillis(),\n    dataFim: fim.toMillis(),\n    professorId: -1,\n    avaliadorId: -1,\n    indicador,\n    tipoAvaliacao: \u0027TODOS_PROFESSORES\u0027,\n  }),\n}}));"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "parameters":  {
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "value":  "={{ $json.filters }}",
+                                                                                        "name":  "filters"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ JSON.stringify({}) }}",
+                                                                                        "name":  "configs"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "0",
+                                                                                        "name":  "page"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ $json.tamanho_pagina }}",
+                                                                                        "name":  "size"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "authentication":  "genericCredentialType",
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "accept"
+                                                                                     },
+                                                                                     {
+                                                                                         "value":  "={{ String($json.empresa_api_id) }}",
+                                                                                         "name":  "empresaId"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "url":  "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+                                         "sendHeaders":  true,
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json"
+                                                                                       }
+                                                                      }
+                                                     },
+                                         "sendQuery":  true,
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "position":  [
+                                       -140,
+                                       240
+                                   ],
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "id":  "b57f9e3f-a444-4447-a66a-fe6b3c284184",
+                      "retryOnFail":  true,
+                      "name":  "Pacto avaliacoes Nova Republica",
+                      "waitBetweenTries":  2000,
+                      "maxTries":  3,
+                      "typeVersion":  4.4
+                  },
+                  {
+                      "position":  [
+                                       100,
+                                       240
+                                   ],
+                      "name":  "Validar e agrupar Nova Republica",
+                      "id":  "e66600b4-dedd-4dd5-9006-88f177e20221",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const configs = $(\u0027Configurar Nova Republica\u0027).all().map(i =\u003e i.json);\nconst responses = $input.all().map(i =\u003e i.json);\nif (configs.length !== 3 || responses.length !== 3) {\n  throw new Error(\u0027Esperadas tres respostas: todas, novas e reavaliacoes.\u0027);\n}\nconst porTipo = {};\nfor (let i = 0; i \u003c configs.length; i++) {\n  const cfg = configs[i];\n  const res = responses[i];\n  if (!Array.isArray(res.content) || !Number.isSafeInteger(Number(res.totalElements))) {\n    throw new Error(\u0027Resposta invalida para \u0027 + cfg.indicador + \u0027.\u0027);\n  }\n  const total = Number(res.totalElements);\n  if (total !== res.content.length || res.last !== true) {\n    throw new Error(\u0027Coleta incompleta em \u0027 + cfg.indicador + \u0027: \u0027 + res.content.length + \u0027/\u0027 + total + \u0027. Reduza o periodo ou implemente paginacao.\u0027);\n  }\n  porTipo[cfg.tipo] = { cfg, res, total };\n}\nif (porTipo.bio_nova.total + porTipo.reavaliacao.total !== porTipo.todas.total) {\n  throw new Error(\u0027Divergencia Pacto: novas (\u0027 + porTipo.bio_nova.total + \u0027) + reavaliacoes (\u0027 + porTipo.reavaliacao.total + \u0027) != todas (\u0027 + porTipo.todas.total + \u0027).\u0027);\n}\nconst base = configs[0];\nconst inicio = new Date(base.periodo_inicio + \u0027T12:00:00.000Z\u0027);\nconst fim = new Date(base.periodo_fim + \u0027T12:00:00.000Z\u0027);\nconst contagens = { bio_nova: new Map(), reavaliacao: new Map() };\nfor (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n  for (const item of porTipo[tipo].res.content) {\n    const data = String(item.dataAvaliacao || \u0027\u0027);\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data \u003c base.periodo_inicio || data \u003e base.periodo_fim) {\n      throw new Error(\u0027Data de avaliacao invalida em \u0027 + tipo + \u0027: \u0027 + data + \u0027.\u0027);\n    }\n    contagens[tipo].set(data, (contagens[tipo].get(data) || 0) + 1);\n  }\n}\nconst registros = [];\nfor (let dia = new Date(inicio); dia \u003c= fim; dia.setUTCDate(dia.getUTCDate() + 1)) {\n  const data = dia.toISOString().slice(0, 10);\n  for (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n    registros.push({\n      unidade_codigo: base.unidade_codigo,\n      unidade_nome: base.unidade_nome,\n      empresa_api_id: base.empresa_api_id,\n      data_referencia: data,\n      tipo_avaliacao: tipo,\n      quantidade: contagens[tipo].get(data) || 0,\n      coletado_em: base.coletado_em,\n    });\n  }\n}\nreturn [{ json: { unidade: base.unidade_nome, registros, coletado_em: base.coletado_em } }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       340,
+                                       240
+                                   ],
+                      "name":  "Salvar avaliacoes Nova Republica",
+                      "id":  "89043e1f-9ac5-4f05-b8d0-32a1296d1b80",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer,\n        unidade_nome text,\n        empresa_api_id integer,\n        data_referencia date,\n        tipo_avaliacao text,\n        quantidade integer,\n        coletado_em timestamptz\n    )\n),\nsalvos AS (\n    INSERT INTO public.avaliacoes_fisicas_diarias AS destino (\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, atualizado_em\n    )\n    SELECT\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, now()\n    FROM dados\n    ON CONFLICT (unidade_codigo, data_referencia, tipo_avaliacao)\n    DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_api_id = EXCLUDED.empresa_api_id,\n        quantidade = EXCLUDED.quantidade,\n        coletado_em = EXCLUDED.coletado_em,\n        atualizado_em = now()\n    RETURNING 1\n)\nSELECT\n    $2::text AS unidade,\n    COUNT(*)::integer AS registros_salvos,\n    MIN(data_referencia) AS periodo_inicio,\n    MAX(data_referencia) AS periodo_fim,\n    MAX(coletado_em) AS coletado_em\nFROM dados\nWHERE EXISTS (SELECT 1 FROM salvos);",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json.registros), $json.unidade] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  },
+                  {
+                      "position":  [
+                                       -610,
+                                       480
+                                   ],
+                      "name":  "Aguardar 40s - Itaituba",
+                      "id":  "17f20469-357e-4782-9757-3bc2d6d15e25",
+                      "type":  "n8n-nodes-base.wait",
+                      "parameters":  {
+                                         "unit":  "seconds",
+                                         "amount":  40
+                                     },
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "position":  [
+                                       -380,
+                                       480
+                                   ],
+                      "name":  "Configurar Itaituba",
+                      "id":  "54de8e1b-3022-4794-9efc-f39814882e1c",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const agora = $now.setZone(\u0027America/Sao_Paulo\u0027);\nconst inicio = agora.startOf(\u0027month\u0027);\nconst fim = agora.endOf(\u0027day\u0027);\nconst base = {\n  unidade_codigo: 2,\n  unidade_nome: \u0027itaituba\u0027,\n  empresa_api_id: 1,\n  periodo_inicio: inicio.toISODate(),\n  periodo_fim: fim.toISODate(),\n  coletado_em: agora.toUTC().toISO(),\n  tamanho_pagina: 2000,\n};\nconst indicadores = [\n  [\u0027todas\u0027, \u0027IND_AF_TODAS\u0027],\n  [\u0027bio_nova\u0027, \u0027IND_AF_NOVAS\u0027],\n  [\u0027reavaliacao\u0027, \u0027IND_AF_REAVALIACOES\u0027],\n];\nreturn indicadores.map(([tipo, indicador]) =\u003e ({ json: {\n  ...base,\n  tipo,\n  indicador,\n  filters: JSON.stringify({\n    dataInicio: inicio.toMillis(),\n    dataFim: fim.toMillis(),\n    professorId: -1,\n    avaliadorId: -1,\n    indicador,\n    tipoAvaliacao: \u0027TODOS_PROFESSORES\u0027,\n  }),\n}}));"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "parameters":  {
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "value":  "={{ $json.filters }}",
+                                                                                        "name":  "filters"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ JSON.stringify({}) }}",
+                                                                                        "name":  "configs"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "0",
+                                                                                        "name":  "page"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ $json.tamanho_pagina }}",
+                                                                                        "name":  "size"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "authentication":  "genericCredentialType",
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "accept"
+                                                                                     },
+                                                                                     {
+                                                                                         "value":  "={{ String($json.empresa_api_id) }}",
+                                                                                         "name":  "empresaId"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "url":  "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+                                         "sendHeaders":  true,
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json"
+                                                                                       }
+                                                                      }
+                                                     },
+                                         "sendQuery":  true,
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "position":  [
+                                       -140,
+                                       480
+                                   ],
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "id":  "27a66959-09bb-46c4-a6ab-af229dcb37d7",
+                      "retryOnFail":  true,
+                      "name":  "Pacto avaliacoes Itaituba",
+                      "waitBetweenTries":  2000,
+                      "maxTries":  3,
+                      "typeVersion":  4.4
+                  },
+                  {
+                      "position":  [
+                                       100,
+                                       480
+                                   ],
+                      "name":  "Validar e agrupar Itaituba",
+                      "id":  "8eb209de-631f-41a4-af45-eb8721e14f4f",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const configs = $(\u0027Configurar Itaituba\u0027).all().map(i =\u003e i.json);\nconst responses = $input.all().map(i =\u003e i.json);\nif (configs.length !== 3 || responses.length !== 3) {\n  throw new Error(\u0027Esperadas tres respostas: todas, novas e reavaliacoes.\u0027);\n}\nconst porTipo = {};\nfor (let i = 0; i \u003c configs.length; i++) {\n  const cfg = configs[i];\n  const res = responses[i];\n  if (!Array.isArray(res.content) || !Number.isSafeInteger(Number(res.totalElements))) {\n    throw new Error(\u0027Resposta invalida para \u0027 + cfg.indicador + \u0027.\u0027);\n  }\n  const total = Number(res.totalElements);\n  if (total !== res.content.length || res.last !== true) {\n    throw new Error(\u0027Coleta incompleta em \u0027 + cfg.indicador + \u0027: \u0027 + res.content.length + \u0027/\u0027 + total + \u0027. Reduza o periodo ou implemente paginacao.\u0027);\n  }\n  porTipo[cfg.tipo] = { cfg, res, total };\n}\nif (porTipo.bio_nova.total + porTipo.reavaliacao.total !== porTipo.todas.total) {\n  throw new Error(\u0027Divergencia Pacto: novas (\u0027 + porTipo.bio_nova.total + \u0027) + reavaliacoes (\u0027 + porTipo.reavaliacao.total + \u0027) != todas (\u0027 + porTipo.todas.total + \u0027).\u0027);\n}\nconst base = configs[0];\nconst inicio = new Date(base.periodo_inicio + \u0027T12:00:00.000Z\u0027);\nconst fim = new Date(base.periodo_fim + \u0027T12:00:00.000Z\u0027);\nconst contagens = { bio_nova: new Map(), reavaliacao: new Map() };\nfor (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n  for (const item of porTipo[tipo].res.content) {\n    const data = String(item.dataAvaliacao || \u0027\u0027);\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data \u003c base.periodo_inicio || data \u003e base.periodo_fim) {\n      throw new Error(\u0027Data de avaliacao invalida em \u0027 + tipo + \u0027: \u0027 + data + \u0027.\u0027);\n    }\n    contagens[tipo].set(data, (contagens[tipo].get(data) || 0) + 1);\n  }\n}\nconst registros = [];\nfor (let dia = new Date(inicio); dia \u003c= fim; dia.setUTCDate(dia.getUTCDate() + 1)) {\n  const data = dia.toISOString().slice(0, 10);\n  for (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n    registros.push({\n      unidade_codigo: base.unidade_codigo,\n      unidade_nome: base.unidade_nome,\n      empresa_api_id: base.empresa_api_id,\n      data_referencia: data,\n      tipo_avaliacao: tipo,\n      quantidade: contagens[tipo].get(data) || 0,\n      coletado_em: base.coletado_em,\n    });\n  }\n}\nreturn [{ json: { unidade: base.unidade_nome, registros, coletado_em: base.coletado_em } }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       340,
+                                       480
+                                   ],
+                      "name":  "Salvar avaliacoes Itaituba",
+                      "id":  "71fefac4-502a-4dd0-b8e1-7bbebdacc2dd",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer,\n        unidade_nome text,\n        empresa_api_id integer,\n        data_referencia date,\n        tipo_avaliacao text,\n        quantidade integer,\n        coletado_em timestamptz\n    )\n),\nsalvos AS (\n    INSERT INTO public.avaliacoes_fisicas_diarias AS destino (\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, atualizado_em\n    )\n    SELECT\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, now()\n    FROM dados\n    ON CONFLICT (unidade_codigo, data_referencia, tipo_avaliacao)\n    DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_api_id = EXCLUDED.empresa_api_id,\n        quantidade = EXCLUDED.quantidade,\n        coletado_em = EXCLUDED.coletado_em,\n        atualizado_em = now()\n    RETURNING 1\n)\nSELECT\n    $2::text AS unidade,\n    COUNT(*)::integer AS registros_salvos,\n    MIN(data_referencia) AS periodo_inicio,\n    MAX(data_referencia) AS periodo_fim,\n    MAX(coletado_em) AS coletado_em\nFROM dados\nWHERE EXISTS (SELECT 1 FROM salvos);",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json.registros), $json.unidade] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  },
+                  {
+                      "position":  [
+                                       -610,
+                                       720
+                                   ],
+                      "name":  "Aguardar 60s - Medicilandia",
+                      "id":  "01249548-bb12-47ab-94fc-0dc752e8ef78",
+                      "type":  "n8n-nodes-base.wait",
+                      "parameters":  {
+                                         "unit":  "seconds",
+                                         "amount":  60
+                                     },
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "position":  [
+                                       -380,
+                                       720
+                                   ],
+                      "name":  "Configurar Medicilandia",
+                      "id":  "b79621a0-694a-48d1-9eb5-5a6c30c50d31",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const agora = $now.setZone(\u0027America/Sao_Paulo\u0027);\nconst inicio = agora.startOf(\u0027month\u0027);\nconst fim = agora.endOf(\u0027day\u0027);\nconst base = {\n  unidade_codigo: 1,\n  unidade_nome: \u0027medicilandia\u0027,\n  empresa_api_id: 1,\n  periodo_inicio: inicio.toISODate(),\n  periodo_fim: fim.toISODate(),\n  coletado_em: agora.toUTC().toISO(),\n  tamanho_pagina: 2000,\n};\nconst indicadores = [\n  [\u0027todas\u0027, \u0027IND_AF_TODAS\u0027],\n  [\u0027bio_nova\u0027, \u0027IND_AF_NOVAS\u0027],\n  [\u0027reavaliacao\u0027, \u0027IND_AF_REAVALIACOES\u0027],\n];\nreturn indicadores.map(([tipo, indicador]) =\u003e ({ json: {\n  ...base,\n  tipo,\n  indicador,\n  filters: JSON.stringify({\n    dataInicio: inicio.toMillis(),\n    dataFim: fim.toMillis(),\n    professorId: -1,\n    avaliadorId: -1,\n    indicador,\n    tipoAvaliacao: \u0027TODOS_PROFESSORES\u0027,\n  }),\n}}));"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "parameters":  {
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "value":  "={{ $json.filters }}",
+                                                                                        "name":  "filters"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ JSON.stringify({}) }}",
+                                                                                        "name":  "configs"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "0",
+                                                                                        "name":  "page"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ $json.tamanho_pagina }}",
+                                                                                        "name":  "size"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "authentication":  "genericCredentialType",
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "accept"
+                                                                                     },
+                                                                                     {
+                                                                                         "value":  "={{ String($json.empresa_api_id) }}",
+                                                                                         "name":  "empresaId"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "url":  "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+                                         "sendHeaders":  true,
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json"
+                                                                                       }
+                                                                      }
+                                                     },
+                                         "sendQuery":  true,
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "position":  [
+                                       -140,
+                                       720
+                                   ],
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "id":  "6e3214bf-ed80-4a15-8409-880c86666565",
+                      "retryOnFail":  true,
+                      "name":  "Pacto avaliacoes Medicilandia",
+                      "waitBetweenTries":  2000,
+                      "maxTries":  3,
+                      "typeVersion":  4.4
+                  },
+                  {
+                      "position":  [
+                                       100,
+                                       720
+                                   ],
+                      "name":  "Validar e agrupar Medicilandia",
+                      "id":  "2bb418c6-4065-462e-8e38-a5b4987bd4e3",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const configs = $(\u0027Configurar Medicilandia\u0027).all().map(i =\u003e i.json);\nconst responses = $input.all().map(i =\u003e i.json);\nif (configs.length !== 3 || responses.length !== 3) {\n  throw new Error(\u0027Esperadas tres respostas: todas, novas e reavaliacoes.\u0027);\n}\nconst porTipo = {};\nfor (let i = 0; i \u003c configs.length; i++) {\n  const cfg = configs[i];\n  const res = responses[i];\n  if (!Array.isArray(res.content) || !Number.isSafeInteger(Number(res.totalElements))) {\n    throw new Error(\u0027Resposta invalida para \u0027 + cfg.indicador + \u0027.\u0027);\n  }\n  const total = Number(res.totalElements);\n  if (total !== res.content.length || res.last !== true) {\n    throw new Error(\u0027Coleta incompleta em \u0027 + cfg.indicador + \u0027: \u0027 + res.content.length + \u0027/\u0027 + total + \u0027. Reduza o periodo ou implemente paginacao.\u0027);\n  }\n  porTipo[cfg.tipo] = { cfg, res, total };\n}\nif (porTipo.bio_nova.total + porTipo.reavaliacao.total !== porTipo.todas.total) {\n  throw new Error(\u0027Divergencia Pacto: novas (\u0027 + porTipo.bio_nova.total + \u0027) + reavaliacoes (\u0027 + porTipo.reavaliacao.total + \u0027) != todas (\u0027 + porTipo.todas.total + \u0027).\u0027);\n}\nconst base = configs[0];\nconst inicio = new Date(base.periodo_inicio + \u0027T12:00:00.000Z\u0027);\nconst fim = new Date(base.periodo_fim + \u0027T12:00:00.000Z\u0027);\nconst contagens = { bio_nova: new Map(), reavaliacao: new Map() };\nfor (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n  for (const item of porTipo[tipo].res.content) {\n    const data = String(item.dataAvaliacao || \u0027\u0027);\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data \u003c base.periodo_inicio || data \u003e base.periodo_fim) {\n      throw new Error(\u0027Data de avaliacao invalida em \u0027 + tipo + \u0027: \u0027 + data + \u0027.\u0027);\n    }\n    contagens[tipo].set(data, (contagens[tipo].get(data) || 0) + 1);\n  }\n}\nconst registros = [];\nfor (let dia = new Date(inicio); dia \u003c= fim; dia.setUTCDate(dia.getUTCDate() + 1)) {\n  const data = dia.toISOString().slice(0, 10);\n  for (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n    registros.push({\n      unidade_codigo: base.unidade_codigo,\n      unidade_nome: base.unidade_nome,\n      empresa_api_id: base.empresa_api_id,\n      data_referencia: data,\n      tipo_avaliacao: tipo,\n      quantidade: contagens[tipo].get(data) || 0,\n      coletado_em: base.coletado_em,\n    });\n  }\n}\nreturn [{ json: { unidade: base.unidade_nome, registros, coletado_em: base.coletado_em } }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       340,
+                                       720
+                                   ],
+                      "name":  "Salvar avaliacoes Medicilandia",
+                      "id":  "3e9e6e86-8faa-4079-b5d4-07727b9b836b",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer,\n        unidade_nome text,\n        empresa_api_id integer,\n        data_referencia date,\n        tipo_avaliacao text,\n        quantidade integer,\n        coletado_em timestamptz\n    )\n),\nsalvos AS (\n    INSERT INTO public.avaliacoes_fisicas_diarias AS destino (\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, atualizado_em\n    )\n    SELECT\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, now()\n    FROM dados\n    ON CONFLICT (unidade_codigo, data_referencia, tipo_avaliacao)\n    DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_api_id = EXCLUDED.empresa_api_id,\n        quantidade = EXCLUDED.quantidade,\n        coletado_em = EXCLUDED.coletado_em,\n        atualizado_em = now()\n    RETURNING 1\n)\nSELECT\n    $2::text AS unidade,\n    COUNT(*)::integer AS registros_salvos,\n    MIN(data_referencia) AS periodo_inicio,\n    MAX(data_referencia) AS periodo_fim,\n    MAX(coletado_em) AS coletado_em\nFROM dados\nWHERE EXISTS (SELECT 1 FROM salvos);",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json.registros), $json.unidade] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  },
+                  {
+                      "position":  [
+                                       -610,
+                                       960
+                                   ],
+                      "name":  "Aguardar 80s - Novo Progresso",
+                      "id":  "56fdc5c4-0f4a-49da-8772-552c84d3fc08",
+                      "type":  "n8n-nodes-base.wait",
+                      "parameters":  {
+                                         "unit":  "seconds",
+                                         "amount":  80
+                                     },
+                      "typeVersion":  1.1
+                  },
+                  {
+                      "position":  [
+                                       -380,
+                                       960
+                                   ],
+                      "name":  "Configurar Novo Progresso",
+                      "id":  "c9867205-85b8-4fe8-92e3-7363b3e03078",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const agora = $now.setZone(\u0027America/Sao_Paulo\u0027);\nconst inicio = agora.startOf(\u0027month\u0027);\nconst fim = agora.endOf(\u0027day\u0027);\nconst base = {\n  unidade_codigo: 6,\n  unidade_nome: \u0027novo_progresso\u0027,\n  empresa_api_id: 1,\n  periodo_inicio: inicio.toISODate(),\n  periodo_fim: fim.toISODate(),\n  coletado_em: agora.toUTC().toISO(),\n  tamanho_pagina: 2000,\n};\nconst indicadores = [\n  [\u0027todas\u0027, \u0027IND_AF_TODAS\u0027],\n  [\u0027bio_nova\u0027, \u0027IND_AF_NOVAS\u0027],\n  [\u0027reavaliacao\u0027, \u0027IND_AF_REAVALIACOES\u0027],\n];\nreturn indicadores.map(([tipo, indicador]) =\u003e ({ json: {\n  ...base,\n  tipo,\n  indicador,\n  filters: JSON.stringify({\n    dataInicio: inicio.toMillis(),\n    dataFim: fim.toMillis(),\n    professorId: -1,\n    avaliadorId: -1,\n    indicador,\n    tipoAvaliacao: \u0027TODOS_PROFESSORES\u0027,\n  }),\n}}));"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "parameters":  {
+                                         "queryParameters":  {
+                                                                 "parameters":  [
+                                                                                    {
+                                                                                        "value":  "={{ $json.filters }}",
+                                                                                        "name":  "filters"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ JSON.stringify({}) }}",
+                                                                                        "name":  "configs"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "0",
+                                                                                        "name":  "page"
+                                                                                    },
+                                                                                    {
+                                                                                        "value":  "={{ $json.tamanho_pagina }}",
+                                                                                        "name":  "size"
+                                                                                    }
+                                                                                ]
+                                                             },
+                                         "authentication":  "genericCredentialType",
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "value":  "application/json",
+                                                                                         "name":  "accept"
+                                                                                     },
+                                                                                     {
+                                                                                         "value":  "={{ String($json.empresa_api_id) }}",
+                                                                                         "name":  "empresaId"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "url":  "https://apigw.pactosolucoes.com.br/psec/avaliacao-fisica-bi/avaliacoes",
+                                         "sendHeaders":  true,
+                                         "options":  {
+                                                         "response":  {
+                                                                          "response":  {
+                                                                                           "responseFormat":  "json"
+                                                                                       }
+                                                                      }
+                                                     },
+                                         "sendQuery":  true,
+                                         "genericAuthType":  "httpHeaderAuth"
+                                     },
+                      "position":  [
+                                       -140,
+                                       960
+                                   ],
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "id":  "d0c9ac10-31aa-4aff-ab26-978b7498cf76",
+                      "retryOnFail":  true,
+                      "name":  "Pacto avaliacoes Novo Progresso",
+                      "waitBetweenTries":  2000,
+                      "maxTries":  3,
+                      "typeVersion":  4.4
+                  },
+                  {
+                      "position":  [
+                                       100,
+                                       960
+                                   ],
+                      "name":  "Validar e agrupar Novo Progresso",
+                      "id":  "33fa2504-6ef7-4cf2-9a28-7ab1ea68907a",
+                      "type":  "n8n-nodes-base.code",
+                      "parameters":  {
+                                         "jsCode":  "const configs = $(\u0027Configurar Novo Progresso\u0027).all().map(i =\u003e i.json);\nconst responses = $input.all().map(i =\u003e i.json);\nif (configs.length !== 3 || responses.length !== 3) {\n  throw new Error(\u0027Esperadas tres respostas: todas, novas e reavaliacoes.\u0027);\n}\nconst porTipo = {};\nfor (let i = 0; i \u003c configs.length; i++) {\n  const cfg = configs[i];\n  const res = responses[i];\n  if (!Array.isArray(res.content) || !Number.isSafeInteger(Number(res.totalElements))) {\n    throw new Error(\u0027Resposta invalida para \u0027 + cfg.indicador + \u0027.\u0027);\n  }\n  const total = Number(res.totalElements);\n  if (total !== res.content.length || res.last !== true) {\n    throw new Error(\u0027Coleta incompleta em \u0027 + cfg.indicador + \u0027: \u0027 + res.content.length + \u0027/\u0027 + total + \u0027. Reduza o periodo ou implemente paginacao.\u0027);\n  }\n  porTipo[cfg.tipo] = { cfg, res, total };\n}\nif (porTipo.bio_nova.total + porTipo.reavaliacao.total !== porTipo.todas.total) {\n  throw new Error(\u0027Divergencia Pacto: novas (\u0027 + porTipo.bio_nova.total + \u0027) + reavaliacoes (\u0027 + porTipo.reavaliacao.total + \u0027) != todas (\u0027 + porTipo.todas.total + \u0027).\u0027);\n}\nconst base = configs[0];\nconst inicio = new Date(base.periodo_inicio + \u0027T12:00:00.000Z\u0027);\nconst fim = new Date(base.periodo_fim + \u0027T12:00:00.000Z\u0027);\nconst contagens = { bio_nova: new Map(), reavaliacao: new Map() };\nfor (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n  for (const item of porTipo[tipo].res.content) {\n    const data = String(item.dataAvaliacao || \u0027\u0027);\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || data \u003c base.periodo_inicio || data \u003e base.periodo_fim) {\n      throw new Error(\u0027Data de avaliacao invalida em \u0027 + tipo + \u0027: \u0027 + data + \u0027.\u0027);\n    }\n    contagens[tipo].set(data, (contagens[tipo].get(data) || 0) + 1);\n  }\n}\nconst registros = [];\nfor (let dia = new Date(inicio); dia \u003c= fim; dia.setUTCDate(dia.getUTCDate() + 1)) {\n  const data = dia.toISOString().slice(0, 10);\n  for (const tipo of [\u0027bio_nova\u0027, \u0027reavaliacao\u0027]) {\n    registros.push({\n      unidade_codigo: base.unidade_codigo,\n      unidade_nome: base.unidade_nome,\n      empresa_api_id: base.empresa_api_id,\n      data_referencia: data,\n      tipo_avaliacao: tipo,\n      quantidade: contagens[tipo].get(data) || 0,\n      coletado_em: base.coletado_em,\n    });\n  }\n}\nreturn [{ json: { unidade: base.unidade_nome, registros, coletado_em: base.coletado_em } }];"
+                                     },
+                      "typeVersion":  2
+                  },
+                  {
+                      "position":  [
+                                       340,
+                                       960
+                                   ],
+                      "name":  "Salvar avaliacoes Novo Progresso",
+                      "id":  "180b98d1-f69b-4843-a2a5-a5710dfb94e1",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      },
+                      "type":  "n8n-nodes-base.postgres",
+                      "parameters":  {
+                                         "query":  "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        unidade_codigo integer,\n        unidade_nome text,\n        empresa_api_id integer,\n        data_referencia date,\n        tipo_avaliacao text,\n        quantidade integer,\n        coletado_em timestamptz\n    )\n),\nsalvos AS (\n    INSERT INTO public.avaliacoes_fisicas_diarias AS destino (\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, atualizado_em\n    )\n    SELECT\n        unidade_codigo, unidade_nome, empresa_api_id, data_referencia,\n        tipo_avaliacao, quantidade, coletado_em, now()\n    FROM dados\n    ON CONFLICT (unidade_codigo, data_referencia, tipo_avaliacao)\n    DO UPDATE SET\n        unidade_nome = EXCLUDED.unidade_nome,\n        empresa_api_id = EXCLUDED.empresa_api_id,\n        quantidade = EXCLUDED.quantidade,\n        coletado_em = EXCLUDED.coletado_em,\n        atualizado_em = now()\n    RETURNING 1\n)\nSELECT\n    $2::text AS unidade,\n    COUNT(*)::integer AS registros_salvos,\n    MIN(data_referencia) AS periodo_inicio,\n    MAX(data_referencia) AS periodo_fim,\n    MAX(coletado_em) AS coletado_em\nFROM dados\nWHERE EXISTS (SELECT 1 FROM salvos);",
+                                         "operation":  "executeQuery",
+                                         "options":  {
+                                                         "queryReplacement":  "={{ [JSON.stringify($json.registros), $json.unidade] }}"
+                                                     }
+                                     },
+                      "typeVersion":  2.6
+                  }
+              ],
+    "connections":  {
+                        "A cada 6 horas":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Aguardar 80s - Novo Progresso",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Configurar Santarem 24h":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Pacto avaliacoes Santarem 24h",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Pacto avaliacoes Santarem 24h":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Validar e agrupar Santarem 24h",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Validar e agrupar Santarem 24h":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Salvar avaliacoes Santarem 24h",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Aguardar 20s - Nova Republica":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Configurar Nova Republica",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Configurar Nova Republica":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Pacto avaliacoes Nova Republica",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Pacto avaliacoes Nova Republica":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Validar e agrupar Nova Republica",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Validar e agrupar Nova Republica":  {
+                                                                 "main":  [
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Salvar avaliacoes Nova Republica",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ]
+                                                                          ]
+                                                             },
+                        "Aguardar 40s - Itaituba":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Configurar Itaituba",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Configurar Itaituba":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Pacto avaliacoes Itaituba",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Pacto avaliacoes Itaituba":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Validar e agrupar Itaituba",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Validar e agrupar Itaituba":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Salvar avaliacoes Itaituba",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       },
+                        "Aguardar 60s - Medicilandia":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "Configurar Medicilandia",
+                                                                                 "type":  "main",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "Configurar Medicilandia":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Pacto avaliacoes Medicilandia",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Pacto avaliacoes Medicilandia":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Validar e agrupar Medicilandia",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Validar e agrupar Medicilandia":  {
+                                                               "main":  [
+                                                                            [
+                                                                                {
+                                                                                    "node":  "Salvar avaliacoes Medicilandia",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                                        ]
+                                                           },
+                        "Aguardar 80s - Novo Progresso":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Configurar Novo Progresso",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Configurar Novo Progresso":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Pacto avaliacoes Novo Progresso",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Pacto avaliacoes Novo Progresso":  {
+                                                                "main":  [
+                                                                             [
+                                                                                 {
+                                                                                     "node":  "Validar e agrupar Novo Progresso",
+                                                                                     "type":  "main",
+                                                                                     "index":  0
+                                                                                 }
+                                                                             ]
+                                                                         ]
+                                                            },
+                        "Validar e agrupar Novo Progresso":  {
+                                                                 "main":  [
+                                                                              [
+                                                                                  {
+                                                                                      "node":  "Salvar avaliacoes Novo Progresso",
+                                                                                      "type":  "main",
+                                                                                      "index":  0
+                                                                                  }
+                                                                              ]
+                                                                          ]
+                                                             }
+                    },
+    "pinData":  {
+
+                },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true,
+                 "instanceId":  "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+             }
+}

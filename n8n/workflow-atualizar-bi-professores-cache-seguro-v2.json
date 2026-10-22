@@ -1,0 +1,502 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -96,
+        432
+      ],
+      "id": "3266ce29-ceff-4321-a651-fb16110e3d88",
+      "name": "BI PROFESSORES2",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API Treino - Itaituba"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -96,
+        624
+      ],
+      "id": "03dd68a7-5109-43a3-9835-6447f901c75e",
+      "name": "BI PROFESSORES3",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API Treino - Medicilandia"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -272,
+        32
+      ],
+      "id": "bc20847d-ba5a-4d84-8cf4-d699997b6308",
+      "name": "BI PROFESSORES4",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API Treino - Santarem 24h"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first()?.json;\nconst unidade = 'stm_24h';\nconst empresaId = 1;\n\nfunction extrairLista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (Array.isArray(valor?.professores)) return valor.professores;\n  if (Array.isArray(valor?.content)) return valor.content;\n  return [];\n}\n\nconst lista = extrairLista(raw);\nif (!lista.length) {\n  throw new Error(`[${unidade}] A Pacto retornou uma lista vazia; o cache anterior foi preservado.`);\n}\n\nconst registros = lista.map((p, indice) => {\n  if (p?.codigo != null && p?.comTreino != null) {\n    return {\n      empresa_id: empresaId,\n      unidade,\n      codigo: Number(p.codigo),\n      nome: String(p.nome || '').trim(),\n      com_treino: Number(p.comTreino ?? 0),\n      sem_treino: Number(p.semTreino ?? 0),\n      em_dia: Number(p.emDia ?? 0),\n      vencidos: Number(p.vencidos ?? 0),\n      a_renovar: Number(p.aRenovar ?? 0),\n      ativos: Number(p.ativos ?? 0),\n      total: Number(p.total ?? p.ativos ?? 0),\n      duracao: p.duracao == null ? null : Number(p.duracao),\n    };\n  }\n\n  const professor = p?.professor || {};\n  const bi = p?.biTreinoTreinamentoDTO || {};\n  const comTreino = Number(bi.alunosAtivosComTreino ?? 0);\n  const semTreino = Number(bi.alunosAtivosSemTreino ?? 0);\n  const medio = bi.tempoPermanenciaPrograma?.medio;\n\n  return {\n    empresa_id: empresaId,\n    unidade,\n    codigo: Number(professor.codigoPessoa ?? professor.id),\n    nome: String(professor.nome || '').trim(),\n    com_treino: comTreino,\n    sem_treino: semTreino,\n    em_dia: Number(bi.alunosAtivosProgramaEmDia ?? 0),\n    vencidos: Number(bi.alunosProgramaVencidos ?? 0),\n    a_renovar: Number(bi.alunosProgramaRenovar ?? 0),\n    ativos: comTreino + semTreino,\n    total: comTreino + semTreino,\n    duracao: medio == null || !Number.isFinite(Number(medio)) || Number(medio) <= 0\n      ? null\n      : Math.round(Number(medio)),\n  };\n});\n\nconst invalidos = registros.filter((r) =>\n  !Number.isFinite(r.codigo) || !r.nome ||\n  ['com_treino', 'sem_treino', 'em_dia', 'vencidos', 'a_renovar', 'ativos', 'total']\n    .some((campo) => !Number.isFinite(r[campo]) || r[campo] < 0)\n);\nif (invalidos.length) {\n  throw new Error(`[${unidade}] ${invalidos.length} registro(s) invÃ¡lido(s); nada foi gravado.`);\n}\n\nconst codigos = new Set(registros.map((r) => r.codigo));\nif (codigos.size !== registros.length) {\n  throw new Error(`[${unidade}] A resposta contÃ©m cÃ³digos de professor duplicados; nada foi gravado.`);\n}\n\nreturn [{\n  json: {\n    unidade,\n    empresa_id: empresaId,\n    quantidade: registros.length,\n    coletado_em: new Date().toISOString(),\n    registros,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        32
+      ],
+      "id": "02dd9eb6-0e6d-4a35-a815-8922ff72dd77",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -656,
+        336
+      ],
+      "id": "ad07e9e3-2ea9-4ea6-acc7-a3b85ae17501",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        empresa_id integer,\n        unidade text,\n        codigo bigint,\n        nome text,\n        com_treino integer,\n        sem_treino integer,\n        em_dia integer,\n        vencidos integer,\n        a_renovar integer,\n        ativos integer,\n        total integer,\n        duracao integer\n    )\n),\nsalvos AS (\n    INSERT INTO public.cash_professores_bi_mfgestao (\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, atualizado_em\n    )\n    SELECT\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, $3::timestamptz\n    FROM dados\n    ON CONFLICT (unidade, codigo) DO UPDATE SET\n        empresa_id = EXCLUDED.empresa_id,\n        nome = EXCLUDED.nome,\n        com_treino = EXCLUDED.com_treino,\n        sem_treino = EXCLUDED.sem_treino,\n        em_dia = EXCLUDED.em_dia,\n        vencidos = EXCLUDED.vencidos,\n        a_renovar = EXCLUDED.a_renovar,\n        ativos = EXCLUDED.ativos,\n        total = EXCLUDED.total,\n        duracao = EXCLUDED.duracao,\n        atualizado_em = EXCLUDED.atualizado_em\n    RETURNING codigo\n),\nremovidos AS (\n    DELETE FROM public.cash_professores_bi_mfgestao antigo\n    WHERE antigo.unidade = $2::text\n      AND (\n          (SELECT COUNT(*) FROM dados) >= CEIL(\n              (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n               WHERE existente.unidade = $2::text) * 0.70\n          )\n          OR (\n              antigo.atualizado_em < $3::timestamptz - interval '7 days'\n              AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.50\n              )\n          )\n      )\n      AND NOT EXISTS (\n          SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo\n      )\n    RETURNING antigo.codigo\n)\nSELECT\n    $2::text AS unidade,\n    (SELECT COUNT(*) FROM salvos)::integer AS registros_salvos,\n    (SELECT COUNT(*) FROM removidos)::integer AS registros_removidos,\n    EXISTS (\n        SELECT 1\n        FROM public.cash_professores_bi_mfgestao antigo\n        WHERE antigo.unidade = $2::text\n          AND NOT EXISTS (SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo)\n          AND NOT (\n              (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.70\n              )\n              OR (\n                  antigo.atualizado_em < $3::timestamptz - interval '7 days'\n                  AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                      (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                       WHERE existente.unidade = $2::text) * 0.50\n                  )\n              )\n          )\n    ) AS limpeza_protegida,\n    $3::timestamptz AS atualizado_em;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.registros), $json.unidade, $json.coletado_em] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        160,
+        32
+      ],
+      "id": "ae488485-de19-4698-9cf8-4eb46ea4e3b1",
+      "name": "cash stm_24h",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first()?.json;\nconst unidade = 'stm_nova_republica';\nconst empresaId = 2;\n\nfunction extrairLista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (Array.isArray(valor?.professores)) return valor.professores;\n  if (Array.isArray(valor?.content)) return valor.content;\n  return [];\n}\n\nconst lista = extrairLista(raw);\nif (!lista.length) {\n  throw new Error(`[${unidade}] A Pacto retornou uma lista vazia; o cache anterior foi preservado.`);\n}\n\nconst registros = lista.map((p, indice) => {\n  if (p?.codigo != null && p?.comTreino != null) {\n    return {\n      empresa_id: empresaId,\n      unidade,\n      codigo: Number(p.codigo),\n      nome: String(p.nome || '').trim(),\n      com_treino: Number(p.comTreino ?? 0),\n      sem_treino: Number(p.semTreino ?? 0),\n      em_dia: Number(p.emDia ?? 0),\n      vencidos: Number(p.vencidos ?? 0),\n      a_renovar: Number(p.aRenovar ?? 0),\n      ativos: Number(p.ativos ?? 0),\n      total: Number(p.total ?? p.ativos ?? 0),\n      duracao: p.duracao == null ? null : Number(p.duracao),\n    };\n  }\n\n  const professor = p?.professor || {};\n  const bi = p?.biTreinoTreinamentoDTO || {};\n  const comTreino = Number(bi.alunosAtivosComTreino ?? 0);\n  const semTreino = Number(bi.alunosAtivosSemTreino ?? 0);\n  const medio = bi.tempoPermanenciaPrograma?.medio;\n\n  return {\n    empresa_id: empresaId,\n    unidade,\n    codigo: Number(professor.codigoPessoa ?? professor.id),\n    nome: String(professor.nome || '').trim(),\n    com_treino: comTreino,\n    sem_treino: semTreino,\n    em_dia: Number(bi.alunosAtivosProgramaEmDia ?? 0),\n    vencidos: Number(bi.alunosProgramaVencidos ?? 0),\n    a_renovar: Number(bi.alunosProgramaRenovar ?? 0),\n    ativos: comTreino + semTreino,\n    total: comTreino + semTreino,\n    duracao: medio == null || !Number.isFinite(Number(medio)) || Number(medio) <= 0\n      ? null\n      : Math.round(Number(medio)),\n  };\n});\n\nconst invalidos = registros.filter((r) =>\n  !Number.isFinite(r.codigo) || !r.nome ||\n  ['com_treino', 'sem_treino', 'em_dia', 'vencidos', 'a_renovar', 'ativos', 'total']\n    .some((campo) => !Number.isFinite(r[campo]) || r[campo] < 0)\n);\nif (invalidos.length) {\n  throw new Error(`[${unidade}] ${invalidos.length} registro(s) invÃ¡lido(s); nada foi gravado.`);\n}\n\nconst codigos = new Set(registros.map((r) => r.codigo));\nif (codigos.size !== registros.length) {\n  throw new Error(`[${unidade}] A resposta contÃ©m cÃ³digos de professor duplicados; nada foi gravado.`);\n}\n\nreturn [{\n  json: {\n    unidade,\n    empresa_id: empresaId,\n    quantidade: registros.length,\n    coletado_em: new Date().toISOString(),\n    registros,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        240
+      ],
+      "id": "41e7f8e8-0c6b-4467-8e62-800a9af19985",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "https://apigw.pactosolucoes.com.br/psec/colaboradores/bi-professores-vinculos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "empresaId",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -96,
+        240
+      ],
+      "id": "8002b8b1-58d6-4ca0-b303-b509d3e42069",
+      "name": "BI PROFESSORES",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Pacto API Treino - Nova Republica"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        empresa_id integer,\n        unidade text,\n        codigo bigint,\n        nome text,\n        com_treino integer,\n        sem_treino integer,\n        em_dia integer,\n        vencidos integer,\n        a_renovar integer,\n        ativos integer,\n        total integer,\n        duracao integer\n    )\n),\nsalvos AS (\n    INSERT INTO public.cash_professores_bi_mfgestao (\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, atualizado_em\n    )\n    SELECT\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, $3::timestamptz\n    FROM dados\n    ON CONFLICT (unidade, codigo) DO UPDATE SET\n        empresa_id = EXCLUDED.empresa_id,\n        nome = EXCLUDED.nome,\n        com_treino = EXCLUDED.com_treino,\n        sem_treino = EXCLUDED.sem_treino,\n        em_dia = EXCLUDED.em_dia,\n        vencidos = EXCLUDED.vencidos,\n        a_renovar = EXCLUDED.a_renovar,\n        ativos = EXCLUDED.ativos,\n        total = EXCLUDED.total,\n        duracao = EXCLUDED.duracao,\n        atualizado_em = EXCLUDED.atualizado_em\n    RETURNING codigo\n),\nremovidos AS (\n    DELETE FROM public.cash_professores_bi_mfgestao antigo\n    WHERE antigo.unidade = $2::text\n      AND (\n          (SELECT COUNT(*) FROM dados) >= CEIL(\n              (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n               WHERE existente.unidade = $2::text) * 0.70\n          )\n          OR (\n              antigo.atualizado_em < $3::timestamptz - interval '7 days'\n              AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.50\n              )\n          )\n      )\n      AND NOT EXISTS (\n          SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo\n      )\n    RETURNING antigo.codigo\n)\nSELECT\n    $2::text AS unidade,\n    (SELECT COUNT(*) FROM salvos)::integer AS registros_salvos,\n    (SELECT COUNT(*) FROM removidos)::integer AS registros_removidos,\n    EXISTS (\n        SELECT 1\n        FROM public.cash_professores_bi_mfgestao antigo\n        WHERE antigo.unidade = $2::text\n          AND NOT EXISTS (SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo)\n          AND NOT (\n              (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.70\n              )\n              OR (\n                  antigo.atualizado_em < $3::timestamptz - interval '7 days'\n                  AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                      (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                       WHERE existente.unidade = $2::text) * 0.50\n                  )\n              )\n          )\n    ) AS limpeza_protegida,\n    $3::timestamptz AS atualizado_em;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.registros), $json.unidade, $json.coletado_em] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        240
+      ],
+      "id": "c461fbaa-c84f-4f2e-ab9d-5e867a2a1c9d",
+      "name": "cash stm_nov_rep",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first()?.json;\nconst unidade = 'itaituba';\nconst empresaId = 4;\n\nfunction extrairLista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (Array.isArray(valor?.professores)) return valor.professores;\n  if (Array.isArray(valor?.content)) return valor.content;\n  return [];\n}\n\nconst lista = extrairLista(raw);\nif (!lista.length) {\n  throw new Error(`[${unidade}] A Pacto retornou uma lista vazia; o cache anterior foi preservado.`);\n}\n\nconst registros = lista.map((p, indice) => {\n  if (p?.codigo != null && p?.comTreino != null) {\n    return {\n      empresa_id: empresaId,\n      unidade,\n      codigo: Number(p.codigo),\n      nome: String(p.nome || '').trim(),\n      com_treino: Number(p.comTreino ?? 0),\n      sem_treino: Number(p.semTreino ?? 0),\n      em_dia: Number(p.emDia ?? 0),\n      vencidos: Number(p.vencidos ?? 0),\n      a_renovar: Number(p.aRenovar ?? 0),\n      ativos: Number(p.ativos ?? 0),\n      total: Number(p.total ?? p.ativos ?? 0),\n      duracao: p.duracao == null ? null : Number(p.duracao),\n    };\n  }\n\n  const professor = p?.professor || {};\n  const bi = p?.biTreinoTreinamentoDTO || {};\n  const comTreino = Number(bi.alunosAtivosComTreino ?? 0);\n  const semTreino = Number(bi.alunosAtivosSemTreino ?? 0);\n  const medio = bi.tempoPermanenciaPrograma?.medio;\n\n  return {\n    empresa_id: empresaId,\n    unidade,\n    codigo: Number(professor.codigoPessoa ?? professor.id),\n    nome: String(professor.nome || '').trim(),\n    com_treino: comTreino,\n    sem_treino: semTreino,\n    em_dia: Number(bi.alunosAtivosProgramaEmDia ?? 0),\n    vencidos: Number(bi.alunosProgramaVencidos ?? 0),\n    a_renovar: Number(bi.alunosProgramaRenovar ?? 0),\n    ativos: comTreino + semTreino,\n    total: comTreino + semTreino,\n    duracao: medio == null || !Number.isFinite(Number(medio)) || Number(medio) <= 0\n      ? null\n      : Math.round(Number(medio)),\n  };\n});\n\nconst invalidos = registros.filter((r) =>\n  !Number.isFinite(r.codigo) || !r.nome ||\n  ['com_treino', 'sem_treino', 'em_dia', 'vencidos', 'a_renovar', 'ativos', 'total']\n    .some((campo) => !Number.isFinite(r[campo]) || r[campo] < 0)\n);\nif (invalidos.length) {\n  throw new Error(`[${unidade}] ${invalidos.length} registro(s) invÃ¡lido(s); nada foi gravado.`);\n}\n\nconst codigos = new Set(registros.map((r) => r.codigo));\nif (codigos.size !== registros.length) {\n  throw new Error(`[${unidade}] A resposta contÃ©m cÃ³digos de professor duplicados; nada foi gravado.`);\n}\n\nreturn [{\n  json: {\n    unidade,\n    empresa_id: empresaId,\n    quantidade: registros.length,\n    coletado_em: new Date().toISOString(),\n    registros,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        432
+      ],
+      "id": "146758a7-73a1-42e2-9c46-4f4d73f36b79",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        240
+      ],
+      "id": "f13af135-c6ff-47f0-96fe-a9b7ec1e19c2",
+      "name": "Wait",
+      "webhookId": "7cef95d3-b9cc-4b3e-bd67-3edc00bd32c4"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        empresa_id integer,\n        unidade text,\n        codigo bigint,\n        nome text,\n        com_treino integer,\n        sem_treino integer,\n        em_dia integer,\n        vencidos integer,\n        a_renovar integer,\n        ativos integer,\n        total integer,\n        duracao integer\n    )\n),\nsalvos AS (\n    INSERT INTO public.cash_professores_bi_mfgestao (\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, atualizado_em\n    )\n    SELECT\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, $3::timestamptz\n    FROM dados\n    ON CONFLICT (unidade, codigo) DO UPDATE SET\n        empresa_id = EXCLUDED.empresa_id,\n        nome = EXCLUDED.nome,\n        com_treino = EXCLUDED.com_treino,\n        sem_treino = EXCLUDED.sem_treino,\n        em_dia = EXCLUDED.em_dia,\n        vencidos = EXCLUDED.vencidos,\n        a_renovar = EXCLUDED.a_renovar,\n        ativos = EXCLUDED.ativos,\n        total = EXCLUDED.total,\n        duracao = EXCLUDED.duracao,\n        atualizado_em = EXCLUDED.atualizado_em\n    RETURNING codigo\n),\nremovidos AS (\n    DELETE FROM public.cash_professores_bi_mfgestao antigo\n    WHERE antigo.unidade = $2::text\n      AND (\n          (SELECT COUNT(*) FROM dados) >= CEIL(\n              (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n               WHERE existente.unidade = $2::text) * 0.70\n          )\n          OR (\n              antigo.atualizado_em < $3::timestamptz - interval '7 days'\n              AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.50\n              )\n          )\n      )\n      AND NOT EXISTS (\n          SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo\n      )\n    RETURNING antigo.codigo\n)\nSELECT\n    $2::text AS unidade,\n    (SELECT COUNT(*) FROM salvos)::integer AS registros_salvos,\n    (SELECT COUNT(*) FROM removidos)::integer AS registros_removidos,\n    EXISTS (\n        SELECT 1\n        FROM public.cash_professores_bi_mfgestao antigo\n        WHERE antigo.unidade = $2::text\n          AND NOT EXISTS (SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo)\n          AND NOT (\n              (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.70\n              )\n              OR (\n                  antigo.atualizado_em < $3::timestamptz - interval '7 days'\n                  AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                      (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                       WHERE existente.unidade = $2::text) * 0.50\n                  )\n              )\n          )\n    ) AS limpeza_protegida,\n    $3::timestamptz AS atualizado_em;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.registros), $json.unidade, $json.coletado_em] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        432
+      ],
+      "id": "97bdde17-b3ea-4a27-80be-4ce6409c3e02",
+      "name": "cash itaituba",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        432
+      ],
+      "id": "4a6685b8-9260-4d60-8f98-ab4c075e681f",
+      "name": "Wait1",
+      "webhookId": "7cef95d3-b9cc-4b3e-bd67-3edc00bd32c4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first()?.json;\nconst unidade = 'medicilandia';\nconst empresaId = 5;\n\nfunction extrairLista(valor) {\n  if (Array.isArray(valor)) return valor;\n  if (Array.isArray(valor?.professores)) return valor.professores;\n  if (Array.isArray(valor?.content)) return valor.content;\n  return [];\n}\n\nconst lista = extrairLista(raw);\nif (!lista.length) {\n  throw new Error(`[${unidade}] A Pacto retornou uma lista vazia; o cache anterior foi preservado.`);\n}\n\nconst registros = lista.map((p, indice) => {\n  if (p?.codigo != null && p?.comTreino != null) {\n    return {\n      empresa_id: empresaId,\n      unidade,\n      codigo: Number(p.codigo),\n      nome: String(p.nome || '').trim(),\n      com_treino: Number(p.comTreino ?? 0),\n      sem_treino: Number(p.semTreino ?? 0),\n      em_dia: Number(p.emDia ?? 0),\n      vencidos: Number(p.vencidos ?? 0),\n      a_renovar: Number(p.aRenovar ?? 0),\n      ativos: Number(p.ativos ?? 0),\n      total: Number(p.total ?? p.ativos ?? 0),\n      duracao: p.duracao == null ? null : Number(p.duracao),\n    };\n  }\n\n  const professor = p?.professor || {};\n  const bi = p?.biTreinoTreinamentoDTO || {};\n  const comTreino = Number(bi.alunosAtivosComTreino ?? 0);\n  const semTreino = Number(bi.alunosAtivosSemTreino ?? 0);\n  const medio = bi.tempoPermanenciaPrograma?.medio;\n\n  return {\n    empresa_id: empresaId,\n    unidade,\n    codigo: Number(professor.codigoPessoa ?? professor.id),\n    nome: String(professor.nome || '').trim(),\n    com_treino: comTreino,\n    sem_treino: semTreino,\n    em_dia: Number(bi.alunosAtivosProgramaEmDia ?? 0),\n    vencidos: Number(bi.alunosProgramaVencidos ?? 0),\n    a_renovar: Number(bi.alunosProgramaRenovar ?? 0),\n    ativos: comTreino + semTreino,\n    total: comTreino + semTreino,\n    duracao: medio == null || !Number.isFinite(Number(medio)) || Number(medio) <= 0\n      ? null\n      : Math.round(Number(medio)),\n  };\n});\n\nconst invalidos = registros.filter((r) =>\n  !Number.isFinite(r.codigo) || !r.nome ||\n  ['com_treino', 'sem_treino', 'em_dia', 'vencidos', 'a_renovar', 'ativos', 'total']\n    .some((campo) => !Number.isFinite(r[campo]) || r[campo] < 0)\n);\nif (invalidos.length) {\n  throw new Error(`[${unidade}] ${invalidos.length} registro(s) invÃ¡lido(s); nada foi gravado.`);\n}\n\nconst codigos = new Set(registros.map((r) => r.codigo));\nif (codigos.size !== registros.length) {\n  throw new Error(`[${unidade}] A resposta contÃ©m cÃ³digos de professor duplicados; nada foi gravado.`);\n}\n\nreturn [{\n  json: {\n    unidade,\n    empresa_id: empresaId,\n    quantidade: registros.length,\n    coletado_em: new Date().toISOString(),\n    registros,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        624
+      ],
+      "id": "18050d73-50ad-479e-8c57-6b5af6b149ea",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        624
+      ],
+      "id": "503ee91b-30fe-4d96-b62b-872276d09522",
+      "name": "Wait2",
+      "webhookId": "7cef95d3-b9cc-4b3e-bd67-3edc00bd32c4"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH dados AS (\n    SELECT *\n    FROM jsonb_to_recordset($1::jsonb) AS d(\n        empresa_id integer,\n        unidade text,\n        codigo bigint,\n        nome text,\n        com_treino integer,\n        sem_treino integer,\n        em_dia integer,\n        vencidos integer,\n        a_renovar integer,\n        ativos integer,\n        total integer,\n        duracao integer\n    )\n),\nsalvos AS (\n    INSERT INTO public.cash_professores_bi_mfgestao (\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, atualizado_em\n    )\n    SELECT\n        empresa_id, unidade, codigo, nome, com_treino, sem_treino,\n        em_dia, vencidos, a_renovar, ativos, total, duracao, $3::timestamptz\n    FROM dados\n    ON CONFLICT (unidade, codigo) DO UPDATE SET\n        empresa_id = EXCLUDED.empresa_id,\n        nome = EXCLUDED.nome,\n        com_treino = EXCLUDED.com_treino,\n        sem_treino = EXCLUDED.sem_treino,\n        em_dia = EXCLUDED.em_dia,\n        vencidos = EXCLUDED.vencidos,\n        a_renovar = EXCLUDED.a_renovar,\n        ativos = EXCLUDED.ativos,\n        total = EXCLUDED.total,\n        duracao = EXCLUDED.duracao,\n        atualizado_em = EXCLUDED.atualizado_em\n    RETURNING codigo\n),\nremovidos AS (\n    DELETE FROM public.cash_professores_bi_mfgestao antigo\n    WHERE antigo.unidade = $2::text\n      AND (\n          (SELECT COUNT(*) FROM dados) >= CEIL(\n              (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n               WHERE existente.unidade = $2::text) * 0.70\n          )\n          OR (\n              antigo.atualizado_em < $3::timestamptz - interval '7 days'\n              AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.50\n              )\n          )\n      )\n      AND NOT EXISTS (\n          SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo\n      )\n    RETURNING antigo.codigo\n)\nSELECT\n    $2::text AS unidade,\n    (SELECT COUNT(*) FROM salvos)::integer AS registros_salvos,\n    (SELECT COUNT(*) FROM removidos)::integer AS registros_removidos,\n    EXISTS (\n        SELECT 1\n        FROM public.cash_professores_bi_mfgestao antigo\n        WHERE antigo.unidade = $2::text\n          AND NOT EXISTS (SELECT 1 FROM dados atual WHERE atual.codigo = antigo.codigo)\n          AND NOT (\n              (SELECT COUNT(*) FROM dados) >= CEIL(\n                  (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                   WHERE existente.unidade = $2::text) * 0.70\n              )\n              OR (\n                  antigo.atualizado_em < $3::timestamptz - interval '7 days'\n                  AND (SELECT COUNT(*) FROM dados) >= CEIL(\n                      (SELECT COUNT(*) FROM public.cash_professores_bi_mfgestao existente\n                       WHERE existente.unidade = $2::text) * 0.50\n                  )\n              )\n          )\n    ) AS limpeza_protegida,\n    $3::timestamptz AS atualizado_em;",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify($json.registros), $json.unidade, $json.coletado_em] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        624
+      ],
+      "id": "8317f7bd-2ab6-4bf5-a966-ae50832514f7",
+      "name": "cash medicilandia",
+      "credentials": {
+        "postgres": {
+          "id": "jnHp29TLth10XuTY",
+          "name": "Movfit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "BI PROFESSORES2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BI PROFESSORES3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BI PROFESSORES4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "cash stm_24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BI PROFESSORES4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "cash stm_nov_rep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BI PROFESSORES": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "cash itaituba",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "BI PROFESSORES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "BI PROFESSORES2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "cash medicilandia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "BI PROFESSORES3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+  },
+  "name": "Atualizar BI Professores - cache seguro v2"
+}

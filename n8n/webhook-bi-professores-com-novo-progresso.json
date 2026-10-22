@@ -1,0 +1,1083 @@
+﻿{
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "44d2593f-e022-416d-ae9a-11ff71adc76d",
+                                                                                   "leftValue":  "={{$json.ok}}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       320,
+                                       -400
+                                   ],
+                      "id":  "38b35b10-0288-4798-807b-c782721f5db9",
+                      "name":  "If"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const headers = $input.first().json.headers || {};\nconst h = Object.fromEntries(\n  Object.entries(headers).map(([k, v]) =\u003e [String(k).toLowerCase(), v])\n);\n\n// Troque pelo mesmo token que vai em js/n8n-config.js\nconst expected = \u0027movfit_proxy_k7x9m2pQ4wR9\u0027;\nconst got = h[\u0027x-movfit-proxy\u0027] || \u0027\u0027;\n\nif (got !== expected) {\n  return [{ json: { ok: false, error: \u0027Unauthorized\u0027 } }];\n}\n\nconst body = $input.first().json.body || $input.first().json;\nreturn [{\n  json: {\n    ok: true,\n    empresaId: String(body.empresaId || \u00271\u0027),\n  }\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       -160,
+                                       112
+                                   ],
+                      "id":  "c561b469-0f52-4e43-994a-e6232b61d867",
+                      "name":  "Bloqueio de acesso"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "{\n  \"error\": \"Unauthorized\"\n}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       544,
+                                       -256
+                                   ],
+                      "id":  "c8855208-451a-422b-8331-1a1206e01c23",
+                      "name":  "NÃ£o autorizado"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ $json }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       928,
+                                       -416
+                                   ],
+                      "id":  "ff48c098-94a9-4aa2-ac97-0ffc5b0d8151",
+                      "name":  "Respond to Webhook"
+                  },
+                  {
+                      "parameters":  {
+                                         "content":  "## Envio de dados de Colaboradores Treino Web para Dash"
+                                     },
+                      "type":  "n8n-nodes-base.stickyNote",
+                      "position":  [
+                                       -432,
+                                       -64
+                                   ],
+                      "typeVersion":  1,
+                      "id":  "e4abd528-8771-48e8-8cb1-55aedbd03650",
+                      "name":  "Sticky Note"
+                  },
+                  {
+                      "parameters":  {
+                                         "rules":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  3
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "leftValue":  "={{ $(\u0027Webhook\u0027).item.json.body.action }}",
+                                                                                                                    "rightValue":  "stmpremium24",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals"
+                                                                                                                                 },
+                                                                                                                    "id":  "174b832b-242b-447d-a767-66fd33e2babe"
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "STM 24H"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  3
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "id":  "0bcc9f10-9b5d-4e66-9d0e-7ce542950f59",
+                                                                                                                    "leftValue":  "={{ $(\u0027Webhook\u0027).item.json.body.action }}",
+                                                                                                                    "rightValue":  "nrexpress",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals",
+                                                                                                                                     "name":  "filter.operator.equals"
+                                                                                                                                 }
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "STM NOVA REP"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  3
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "id":  "33a99df3-b05d-4f02-8099-efffdf72552c",
+                                                                                                                    "leftValue":  "={{ $(\u0027Webhook\u0027).item.json.body.action }}",
+                                                                                                                    "rightValue":  "itaituba",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals",
+                                                                                                                                     "name":  "filter.operator.equals"
+                                                                                                                                 }
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "itaituba"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  3
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "id":  "2c9ccca2-c368-4a21-bb5d-bd0c7af6e081",
+                                                                                                                    "leftValue":  "={{ $(\u0027Webhook\u0027).item.json.body.action }}",
+                                                                                                                    "rightValue":  "medicilandia",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals",
+                                                                                                                                     "name":  "filter.operator.equals"
+                                                                                                                                 }
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "medicilandia"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  3
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "id":  "844561a0-eeb2-4fb1-b341-f9ab79ff3f24",
+                                                                                                                    "leftValue":  "={{ Webhook.item.json.body.action }}",
+                                                                                                                    "rightValue":  "novoprogresso",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals",
+                                                                                                                                     "name":  "filter.operator.equals"
+                                                                                                                                 }
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "novo progresso"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.switch",
+                      "typeVersion":  3.4,
+                      "position":  [
+                                       32,
+                                       80
+                                   ],
+                      "id":  "a944fa1c-fc73-44e4-8b2e-3f83779fd9e0",
+                      "name":  "Switch"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "44d2593f-e022-416d-ae9a-11ff71adc76d",
+                                                                                   "leftValue":  "={{$json.ok}}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       336,
+                                       -80
+                                   ],
+                      "id":  "ad873926-dfff-48e2-8e60-4cbbaf998786",
+                      "name":  "If1"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "{\n  \"error\": \"Unauthorized\"\n}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       560,
+                                       64
+                                   ],
+                      "id":  "3eeab94c-f1ec-414e-962d-677335137f74",
+                      "name":  "NÃ£o autorizado1"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ $json }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       960,
+                                       -96
+                                   ],
+                      "id":  "acc7dcfd-3344-441e-a4ba-7bb37c724556",
+                      "name":  "Respond to Webhook1"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "44d2593f-e022-416d-ae9a-11ff71adc76d",
+                                                                                   "leftValue":  "={{$json.ok}}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       352,
+                                       272
+                                   ],
+                      "id":  "9765fa11-b568-4855-9251-c6a86dd26f9b",
+                      "name":  "If2"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "{\n  \"error\": \"Unauthorized\"\n}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       576,
+                                       416
+                                   ],
+                      "id":  "3fb4b1fc-d1c7-47b8-826c-04064d31db9a",
+                      "name":  "NÃ£o autorizado2"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ $json }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       1008,
+                                       256
+                                   ],
+                      "id":  "35ff65f4-f9dd-4db3-a988-92c86fed7f9b",
+                      "name":  "Respond to Webhook2"
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "44d2593f-e022-416d-ae9a-11ff71adc76d",
+                                                                                   "leftValue":  "={{$json.ok}}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       368,
+                                       640
+                                   ],
+                      "id":  "3870fc71-190a-4ade-9f48-be0616216601",
+                      "name":  "If3"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "{\n  \"error\": \"Unauthorized\"\n}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       592,
+                                       784
+                                   ],
+                      "id":  "5bc9420a-46da-467b-a7d5-2dd76b6391b0",
+                      "name":  "NÃ£o autorizado3"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ $json }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       1008,
+                                       624
+                                   ],
+                      "id":  "4c1997d9-2799-4b76-8924-4142107623a7",
+                      "name":  "Respond to Webhook3"
+                  },
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "movfit/pacto",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+                                                         "allowedOrigins":  "*"
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       -416,
+                                       112
+                                   ],
+                      "id":  "271e95bb-1c3e-4794-a24e-adc5f6d7ba8e",
+                      "name":  "Webhook",
+                      "webhookId":  "cf84fad4-9add-421e-bf3f-efe06128adf8"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "return [{\n  json: {\n    professores: items.map(i =\u003e i.json),\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       768,
+                                       -416
+                                   ],
+                      "id":  "cd5d26cb-8925-4450-85f5-a680840ec40d",
+                      "name":  "Code in JavaScript4"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "return [{\n  json: {\n    professores: items.map(i =\u003e i.json),\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       736,
+                                       -96
+                                   ],
+                      "id":  "3946e77e-bc85-445d-91fd-93d5ef0511b5",
+                      "name":  "Code in JavaScript5"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "return [{\n  json: {\n    professores: items.map(i =\u003e i.json),\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       800,
+                                       256
+                                   ],
+                      "id":  "5cfcb8c2-5b39-4011-a7ab-b9b641f4a859",
+                      "name":  "Code in JavaScript6"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "return [{\n  json: {\n    professores: items.map(i =\u003e i.json),\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       784,
+                                       624
+                                   ],
+                      "id":  "07769d6a-d994-4329-b315-bde9438d2982",
+                      "name":  "Code in JavaScript7"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "select",
+                                         "schema":  {
+                                                        "__rl":  true,
+                                                        "mode":  "list",
+                                                        "value":  "public"
+                                                    },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "cash_professores_bi_mfgestao",
+                                                       "mode":  "list",
+                                                       "cachedResultName":  "cash_professores_bi_mfgestao"
+                                                   },
+                                         "returnAll":  true,
+                                         "where":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "column":  "unidade",
+                                                                          "value":  "stm_24h"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       560,
+                                       -416
+                                   ],
+                      "id":  "c93bac5e-d32e-4c92-9f35-0027f073b00a",
+                      "name":  "stm 24h",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "select",
+                                         "schema":  {
+                                                        "__rl":  true,
+                                                        "mode":  "list",
+                                                        "value":  "public"
+                                                    },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "cash_professores_bi_mfgestao",
+                                                       "mode":  "list",
+                                                       "cachedResultName":  "cash_professores_bi_mfgestao"
+                                                   },
+                                         "returnAll":  true,
+                                         "where":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "column":  "unidade",
+                                                                          "value":  "stm_nova_republica"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       544,
+                                       -96
+                                   ],
+                      "id":  "3afc63b5-1534-442a-a287-c948dfc033ee",
+                      "name":  "stm nova republica",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "select",
+                                         "schema":  {
+                                                        "__rl":  true,
+                                                        "mode":  "list",
+                                                        "value":  "public"
+                                                    },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "cash_professores_bi_mfgestao",
+                                                       "mode":  "list",
+                                                       "cachedResultName":  "cash_professores_bi_mfgestao"
+                                                   },
+                                         "returnAll":  true,
+                                         "where":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "column":  "unidade",
+                                                                          "value":  "itaituba"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       576,
+                                       256
+                                   ],
+                      "id":  "33391f5d-a470-44f2-8a8a-53906d0bdaf7",
+                      "name":  "itaituba",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "select",
+                                         "schema":  {
+                                                        "__rl":  true,
+                                                        "mode":  "list",
+                                                        "value":  "public"
+                                                    },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "cash_professores_bi_mfgestao",
+                                                       "mode":  "list",
+                                                       "cachedResultName":  "cash_professores_bi_mfgestao"
+                                                   },
+                                         "returnAll":  true,
+                                         "where":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "column":  "unidade",
+                                                                          "value":  "medicilandia"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       592,
+                                       624
+                                   ],
+                      "id":  "b4fa0c8c-ef4d-4021-9c50-5cc4cbc2c8e7",
+                      "name":  "medicilandia",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  3
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "id":  "44d2593f-e022-416d-ae9a-11ff71adc76d",
+                                                                                   "leftValue":  "={{$json.ok}}",
+                                                                                   "rightValue":  "",
+                                                                                   "operator":  {
+                                                                                                    "type":  "boolean",
+                                                                                                    "operation":  "true",
+                                                                                                    "singleValue":  true
+                                                                                                }
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.3,
+                      "position":  [
+                                       384,
+                                       1008
+                                   ],
+                      "id":  "109fd4cd-8881-4052-aeaf-069a2aaca901",
+                      "name":  "If Novo Progresso"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "{\n  \"error\": \"Unauthorized\"\n}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       608,
+                                       1152
+                                   ],
+                      "id":  "47f51576-26b8-4314-9035-6a6fb7e770aa",
+                      "name":  "NÃ£o autorizado Novo Progresso"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "select",
+                                         "schema":  {
+                                                        "__rl":  true,
+                                                        "mode":  "list",
+                                                        "value":  "public"
+                                                    },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "cash_professores_bi_mfgestao",
+                                                       "mode":  "list",
+                                                       "cachedResultName":  "cash_professores_bi_mfgestao"
+                                                   },
+                                         "returnAll":  true,
+                                         "where":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "column":  "unidade",
+                                                                          "value":  "novo_progresso"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.postgres",
+                      "typeVersion":  2.6,
+                      "position":  [
+                                       608,
+                                       992
+                                   ],
+                      "id":  "26044e5a-0bba-4a55-bf16-dc4e56f8eac8",
+                      "name":  "novo progresso",
+                      "credentials":  {
+                                          "postgres":  {
+                                                           "id":  "jnHp29TLth10XuTY",
+                                                           "name":  "Movfit"
+                                                       }
+                                      }
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "return [{\n  json: {\n    professores: items.map(i =\u003e i.json),\n  },\n}];"
+                                     },
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       800,
+                                       992
+                                   ],
+                      "id":  "a31e7f1b-981b-42b6-a813-c268592bd9be",
+                      "name":  "Agrupar professores Novo Progresso"
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{ $json }}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       1024,
+                                       992
+                                   ],
+                      "id":  "47514349-5748-4f3c-99a8-e684955def72",
+                      "name":  "Responder Novo Progresso"
+                  }
+              ],
+    "connections":  {
+                        "If":  {
+                                   "main":  [
+                                                [
+                                                    {
+                                                        "node":  "stm 24h",
+                                                        "type":  "main",
+                                                        "index":  0
+                                                    }
+                                                ],
+                                                [
+                                                    {
+                                                        "node":  "NÃ£o autorizado",
+                                                        "type":  "main",
+                                                        "index":  0
+                                                    }
+                                                ]
+                                            ]
+                               },
+                        "Bloqueio de acesso":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Switch",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Switch":  {
+                                       "main":  [
+                                                    [
+                                                        {
+                                                            "node":  "If",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "node":  "If1",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "node":  "If2",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "node":  "If3",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ],
+                                                    [
+                                                        {
+                                                            "node":  "If Novo Progresso",
+                                                            "type":  "main",
+                                                            "index":  0
+                                                        }
+                                                    ]
+                                                ]
+                                   },
+                        "If1":  {
+                                    "main":  [
+                                                 [
+                                                     {
+                                                         "node":  "stm nova republica",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ],
+                                                 [
+                                                     {
+                                                         "node":  "NÃ£o autorizado1",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ]
+                                             ]
+                                },
+                        "If2":  {
+                                    "main":  [
+                                                 [
+                                                     {
+                                                         "node":  "itaituba",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ],
+                                                 [
+                                                     {
+                                                         "node":  "NÃ£o autorizado2",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ]
+                                             ]
+                                },
+                        "If3":  {
+                                    "main":  [
+                                                 [
+                                                     {
+                                                         "node":  "medicilandia",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ],
+                                                 [
+                                                     {
+                                                         "node":  "NÃ£o autorizado3",
+                                                         "type":  "main",
+                                                         "index":  0
+                                                     }
+                                                 ]
+                                             ]
+                                },
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Bloqueio de acesso",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Code in JavaScript4":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Respond to Webhook",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Code in JavaScript5":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Respond to Webhook1",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Code in JavaScript6":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Respond to Webhook2",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "Code in JavaScript7":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "Respond to Webhook3",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "stm 24h":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Code in JavaScript4",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "stm nova republica":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Code in JavaScript5",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "itaituba":  {
+                                         "main":  [
+                                                      [
+                                                          {
+                                                              "node":  "Code in JavaScript6",
+                                                              "type":  "main",
+                                                              "index":  0
+                                                          }
+                                                      ]
+                                                  ]
+                                     },
+                        "medicilandia":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Code in JavaScript7",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "If Novo Progresso":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "novo progresso",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ],
+                                                               [
+                                                                   {
+                                                                       "node":  "NÃ£o autorizado Novo Progresso",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "novo progresso":  {
+                                               "main":  [
+                                                            {
+                                                                "node":  "Agrupar professores Novo Progresso",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                           },
+                        "Agrupar professores Novo Progresso":  {
+                                                                   "main":  [
+                                                                                {
+                                                                                    "node":  "Responder Novo Progresso",
+                                                                                    "type":  "main",
+                                                                                    "index":  0
+                                                                                }
+                                                                            ]
+                                                               }
+                    },
+    "pinData":  {
+
+                },
+    "meta":  {
+                 "templateCredsSetupCompleted":  true,
+                 "instanceId":  "79075fb22e5045e1beb3493444de048310c5aee705e7f3d3f6b2ea7d89bc4b09"
+             }
+}

@@ -45,6 +45,12 @@ const N8N_AVALIACOES_REALIZADAS_URL = 'https://n8n2.mov.pro.br/webhook/avaliacoe
 const N8N_FECHAMENTO_SEMANAL_AVALIACOES_URL = 'https://n8n2.mov.pro.br/webhook/fechamento_semanal_avaliacoes';
 
 /**
+ * Proxy opcional para MCP Pacto Reports (evita CORS no navegador).
+ * Body: { url, token, method, params, sessionId } → { result, sessionId }
+ */
+const N8N_PACTO_MCP_PROXY_URL = '';
+
+/**
  * Cabeçalhos usados nas chamadas ao n8n.
  * Durante a migração, envia a sessão Firebase e mantém o token legado para que
  * os webhooks ainda não migrados continuem funcionando sem interrupção.
