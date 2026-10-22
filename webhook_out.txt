@@ -1,1 +1,0 @@
-﻿{"sucesso":true,"unidades":[],"gerado_em":"2026-09-30T18:00:09.783815+00:00","competencia":"2026-09","resumo_geral":{"ultima_coleta":null,"total_unidades":0,"total_contratos":0,"ultima_atualizacao":null,"total_alunos_unicos":0}}
