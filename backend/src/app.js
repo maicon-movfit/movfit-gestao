@@ -9,8 +9,12 @@ import { unitsRouter } from './routes/units.js';
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(pinoHttp());
+  app.use(pinoHttp({
+    level: config.LOG_LEVEL,
+    redact: ['req.headers.authorization', 'req.headers.cookie']
+  }));
   app.use(helmet());
   app.use(cors({
     credentials: false,

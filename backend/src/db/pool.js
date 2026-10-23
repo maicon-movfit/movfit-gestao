@@ -3,8 +3,18 @@ import { config } from '../config.js';
 
 const { Pool } = pg;
 
+const connection = config.DATABASE_URL
+  ? { connectionString: config.DATABASE_URL }
+  : {
+      host: config.DB_HOST,
+      port: config.DB_PORT,
+      database: config.DB_NAME,
+      user: config.DB_USER,
+      password: config.DB_PASSWORD
+    };
+
 export const pool = new Pool({
-  connectionString: config.DATABASE_URL,
+  ...connection,
   ssl: config.DATABASE_SSL ? { rejectUnauthorized: true } : false,
   max: 10,
   idleTimeoutMillis: 30_000,

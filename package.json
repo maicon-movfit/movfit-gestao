@@ -10,6 +10,8 @@
     "dev:api": "npm --workspace backend run dev",
     "start:api": "npm --workspace backend start",
     "check": "npm --workspace backend run check && npm --workspace frontend run check",
-    "test": "npm --workspace backend test && npm --workspace frontend test"
+    "test": "npm --workspace backend test && npm --workspace frontend test",
+    "docker:config": "docker compose config --quiet",
+    "docker:build": "docker compose build"
   }
 }

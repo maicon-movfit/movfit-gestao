@@ -10,6 +10,7 @@ const migrationsDirectory = resolve(currentDirectory, '../migrations');
 const client = await pool.connect();
 
 try {
+  await client.query('SELECT pg_advisory_lock($1)', [20261022]);
   await client.query(`
     CREATE TABLE IF NOT EXISTS app_schema_migrations (
       arquivo text PRIMARY KEY,
@@ -48,6 +49,7 @@ try {
     }
   }
 } finally {
+  await client.query('SELECT pg_advisory_unlock($1)', [20261022]).catch(() => {});
   client.release();
   await pool.end();
 }

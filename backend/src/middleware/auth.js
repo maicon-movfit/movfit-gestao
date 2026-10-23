@@ -1,10 +1,13 @@
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { config } from '../config.js';
 import { query } from '../db/pool.js';
 
 if (!getApps().length) {
-  initializeApp({ credential: applicationDefault(), projectId: config.FIREBASE_PROJECT_ID });
+  const credential = config.FIREBASE_SERVICE_ACCOUNT_BASE64
+    ? cert(JSON.parse(Buffer.from(config.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8')))
+    : applicationDefault();
+  initializeApp({ credential, projectId: config.FIREBASE_PROJECT_ID });
 }
 
 function bearerToken(header = '') {

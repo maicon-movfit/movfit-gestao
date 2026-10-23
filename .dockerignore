@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+**/node_modules
+.env
+.env.*
+!.env.production.example
+coverage
+dist
+backups
+*.log
+functions
+n8n
+docs
+ops

@@ -4,33 +4,45 @@ O projeto está em transição segura de uma aplicação estática monolítica p
 
 ## Estrutura
 
-- `index.html`, `css/` e `js/`: frontend legado ainda publicado pelo GitHub Pages.
-- `frontend/`: camada nova do frontend. Os serviços daqui isolam acesso a dados e permitem trocar Firestore por API sem reescrever telas.
-- `backend/`: API própria em Node.js, responsável por autorização e persistência no PostgreSQL.
-- `n8n/`: integrações externas existentes com Pacto. Permanecem independentes durante a migração.
+- `index.html`, `css/` e `js/`: frontend legado, preservado para não interromper o painel atual.
+- `frontend/`: configuração do servidor web e camada nova de acesso a dados.
+- `backend/`: API Node.js, autorização, migrations e persistência no PostgreSQL.
+- `n8n/`: integrações externas existentes com a Pacto; permanecem independentes durante a migração.
+- `compose.yaml`: stack com frontend, API e PostgreSQL.
+- `ops/`: backup e restauração do PostgreSQL.
+- `docs/`: guias de migração e publicação.
 
-## Regra de compatibilidade
-
-O frontend legado continua sendo a entrada de produção até cada módulo ser migrado e validado. Nenhum arquivo publicado foi movido nesta etapa. A troca de fonte é feita gradualmente pelo `DataProvider`, com possibilidade de retorno ao modo legado.
-
-## Fronteiras
+## Topologia de produção
 
 ```text
-Navegador -> frontend -> API própria -> PostgreSQL
-                              |
-                              +-> dados sincronizados pelo n8n/Pacto
+Internet -> proxy HTTPS -> Nginx/frontend -> API privada -> PostgreSQL privado
+                                      |
+                                      +-> dados sincronizados pelo n8n/Pacto
 
-Firebase Auth -> identidade temporária -> API própria valida o token
-Firestore -> legado temporário, retirado por módulo
+Firebase Auth -> identidade temporária -> API valida token e permissões
+Firestore -> legado temporário, retirado módulo a módulo
 ```
 
-O navegador não deve receber credenciais do PostgreSQL, tokens da Pacto ou segredos do n8n.
+Somente o frontend publica uma porta. O navegador nunca deve receber credenciais do PostgreSQL, tokens da Pacto ou segredos do n8n.
 
-## Ordem de migração
+## Persistência e segurança
 
-1. Criar banco e executar migrations.
-2. Cadastrar usuários autorizados e vínculos com unidades.
-3. Publicar a API em HTTPS.
-4. Configurar o frontend para o modo `api` em um módulo por vez.
-5. Comparar respostas do legado e da API.
-6. Desligar coleções Firestore somente após conferência e backup.
+- Dados próprios ficam em volume persistente do PostgreSQL.
+- Migrations são incrementais, transacionais e protegidas por advisory lock.
+- A API valida usuário e acesso à unidade antes de documentos protegidos.
+- Senhas e credenciais são fornecidas apenas por variáveis do Portainer.
+- Logs removem cabeçalhos de autorização e cookies.
+- Volume não substitui backup: o dump deve ser diário e armazenado fora do servidor.
+
+## Compatibilidade e migração
+
+O frontend legado continua como entrada até cada módulo ser migrado e validado. O `DataProvider` permite alternar gradualmente entre Firestore e API. A ordem segura é:
+
+1. Subir PostgreSQL e API em homologação.
+2. Executar migrations e cadastrar usuários/unidades.
+3. Importar e conferir o conteúdo exportado do Firestore.
+4. Trocar um módulo por vez para a API própria.
+5. Comparar resultados e manter rollback durante a validação.
+6. Desligar o Firestore somente após backup e aceite funcional.
+
+Consulte `docs/DEPLOY_PORTAINER.md` e `docs/FIREBASE_EXPORT_CHECKLIST.md`.

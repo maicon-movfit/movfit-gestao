@@ -6,10 +6,19 @@ const server = createApp().listen(config.PORT, () => {
   console.log(`MOV FIT API disponível na porta ${config.PORT}`);
 });
 
-async function shutdown(signal) {
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`${signal} recebido; encerrando API.`);
+
+  const forcedExit = setTimeout(() => process.exit(1), 10_000);
+  forcedExit.unref();
+
   server.close(async () => {
     await pool.end();
+    clearTimeout(forcedExit);
     process.exit(0);
   });
 }
