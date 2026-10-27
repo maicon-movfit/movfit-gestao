@@ -5,6 +5,7 @@ import pinoHttp from 'pino-http';
 import { config } from './config.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
+import { monthlyClosuresRouter } from './routes/monthly-closures.js';
 import { unitsRouter } from './routes/units.js';
 
 export function createApp() {
@@ -28,6 +29,7 @@ export function createApp() {
   app.use('/api/v1/health', healthRouter);
   app.use('/api/v1/units', unitsRouter);
   app.use('/api/v1/documents', documentsRouter);
+  app.use('/api/v1/monthly-closures', monthlyClosuresRouter);
 
   app.use((_request, response) => response.status(404).json({ error: 'route_not_found' }));
   app.use((error, request, response, _next) => {

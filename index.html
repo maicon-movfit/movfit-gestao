@@ -689,6 +689,16 @@
 </div>
 
 <div id="tab-historico" class="page">
+  <div id="monthlyClosureStatus" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span id="monthlyClosureStatusDot" style="width:9px;height:9px;border-radius:50%;background:var(--c-amber);margin-top:5px;flex:0 0 auto;"></span>
+      <div>
+        <div id="monthlyClosureStatusTitle" style="font-size:13px;font-weight:700;color:var(--text);">Fechamento mensal automático</div>
+        <div id="monthlyClosureStatusText" style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5;">Consultando fechamentos registrados…</div>
+      </div>
+    </div>
+    <button class="btn sm" onclick="goTab('dados')" title="Use apenas quando houver uma correção administrativa autorizada">Correção manual excepcional</button>
+  </div>
   <div style="font-size:18px;font-weight:700;margin-bottom:16px;color:var(--text);">Histórico de meses</div>
   <div id="hist-empty" class="empty-state"><div class="es-icon">🗂️</div><p>Nenhum mês salvo ainda.</p></div>
   <div id="hist-content" style="display:none">
@@ -706,6 +716,19 @@
         <div class="hist-sig-box"><div class="hist-sig-lbl">Sem treino</div><div class="hist-sig-val" id="sig-semtreino">—</div><div id="sig-semtreino-d"></div></div>
       </div>
       <div style="position:relative;height:90px;"><canvas id="histSparkChart" role="img" aria-label="Sparkline % em dia"></canvas></div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:end;">
+      <label style="font-size:11px;color:var(--muted);display:grid;gap:4px;">PerÃ­odo
+        <select id="histPeriodFilter" onchange="renderHistorico()"><option value="all">Todo o histÃ³rico</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12" selected>1 ano</option><option value="24">2 anos</option></select>
+      </label>
+      <label style="font-size:11px;color:var(--muted);display:grid;gap:4px;">Professor
+        <select id="histProfessorFilter" onchange="renderHistorico()"><option value="">Toda a equipe</option></select>
+      </label>
+      <label style="font-size:11px;color:var(--muted);display:grid;gap:4px;">Indicador
+        <select id="histIndicatorFilter" onchange="renderHistorico()"><option value="percentUpToDate">% em dia</option><option value="withTraining">Com treino</option><option value="upToDate">Em dia</option><option value="expired">Vencidos</option><option value="toRenew">A renovar</option><option value="withoutTraining">Sem treino</option></select>
+      </label>
+      <span style="font-size:11px;color:var(--muted);padding-bottom:6px;">Unidade: <strong id="histUnitFilter">—</strong></span>
     </div>
 
     <!-- TOOLBAR -->
@@ -2333,6 +2356,8 @@ const UNIDADES = [
 ];
 let unidadeAtual = null;
 const _cache = {};
+const _automaticMonthlyCache = {};
+const _automaticMonthlyLoaded = {};
 const _listeners = {};
 
 function encerrarListenersTempoReal() {
@@ -2348,6 +2373,8 @@ function encerrarListenersTempoReal() {
 function limparSessaoLocal() {
   encerrarListenersTempoReal();
   Object.keys(_cache).forEach(key => delete _cache[key]);
+  Object.keys(_automaticMonthlyCache).forEach(key => delete _automaticMonthlyCache[key]);
+  Object.keys(_automaticMonthlyLoaded).forEach(key => delete _automaticMonthlyLoaded[key]);
   Object.keys(_inativosHistMeta).forEach(key => delete _inativosHistMeta[key]);
   unidadeAtual = null;
   clearTimeout(window._syncTimer);
@@ -2572,25 +2599,102 @@ function mostrarBadgeSync() {
   window._syncTimer=setTimeout(()=>{ lbl.textContent='Ao vivo'; }, 2000);
 }
 
+function nomeMesAutomatico(competencia) {
+  const data = new Date(`${String(competencia).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(data.getTime())) return String(competencia || '');
+  const mes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(data);
+  return `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${String(data.getFullYear()).slice(-2)}`;
+}
+
+function numeroSnapshot(origem, ...campos) {
+  for (const campo of campos) {
+    const valor = origem?.[campo];
+    if (valor !== undefined && valor !== null && valor !== '') return Number(valor) || 0;
+  }
+  return 0;
+}
+
+function normalizarProfessorSnapshot(professor) {
+  return {
+    profId: String(professor?.id ?? professor?.codigo ?? professor?.profId ?? ''),
+    nome: professor?.name || professor?.nome || 'Professor sem nome',
+    shortName: professor?.shortName || professor?.nome_curto || professor?.name || professor?.nome || '',
+    total: numeroSnapshot(professor, 'total'),
+    ativo: numeroSnapshot(professor, 'active', 'ativos', 'ativo'),
+    trancado: numeroSnapshot(professor, 'suspended', 'trancados', 'trancado'),
+    cancelado: numeroSnapshot(professor, 'cancelled', 'cancelados', 'cancelado'),
+    comTreino: numeroSnapshot(professor, 'withTraining', 'comTreino', 'com_treino'),
+    vencido: numeroSnapshot(professor, 'expired', 'vencido', 'vencidos'),
+    aRenovar: numeroSnapshot(professor, 'toRenew', 'aRenovar', 'a_renovar'),
+    emDia: numeroSnapshot(professor, 'upToDate', 'emDia', 'em_dia'),
+    semTreino: numeroSnapshot(professor, 'withoutTraining', 'semTreino', 'sem_treino'),
+    duracao: numeroSnapshot(professor, 'averageDurationDays', 'duracao', 'duracao_media'),
+    bioEmDia: numeroSnapshot(professor, 'bioUpToDate', 'bioEmDia', 'bio_em_dia'),
+    bioVencida: numeroSnapshot(professor, 'bioExpired', 'bioVencida', 'bio_vencida'),
+    bioSemAval: numeroSnapshot(professor, 'withoutEvaluation', 'bioSemAval', 'sem_avaliacao'),
+  };
+}
+
+function normalizarFechamentoAutomatico(item) {
+  const snapshot = item?.snapshot || {};
+  const professores = snapshot.teachers || snapshot.professores || snapshot.training?.teachers || [];
+  return {
+    nome: nomeMesAutomatico(item.competencia),
+    competencia: String(item.competencia || '').slice(0, 10),
+    professores: Array.isArray(professores) ? professores.map(normalizarProfessorSnapshot) : [],
+    savedAt: item.closedAt || item.collectedAt || null,
+    automatico: true,
+    somenteLeitura: true,
+    source: item.source || 'n8n-monthly-close',
+  };
+}
+
+async function carregarFechamentosAutomaticos(unidId) {
+  if (!unidId || _automaticMonthlyLoaded[unidId]) return _automaticMonthlyCache[unidId] || [];
+  const usuario = auth.currentUser;
+  if (!usuario) return [];
+  try {
+    const token = await usuario.getIdToken(false);
+    const resposta = await fetch(`/api/v1/monthly-closures?unitId=${encodeURIComponent(unidId)}&limit=120`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!resposta.ok) throw new Error(`API respondeu ${resposta.status}`);
+    const payload = await resposta.json();
+    _automaticMonthlyCache[unidId] = (payload.data || [])
+      .map(normalizarFechamentoAutomatico)
+      .sort((a, b) => compararMeses(a.nome, b.nome));
+    _automaticMonthlyLoaded[unidId] = true;
+    return _automaticMonthlyCache[unidId];
+  } catch (erro) {
+    console.warn('[fechamento mensal] histórico automático indisponível:', erro);
+    _automaticMonthlyCache[unidId] = [];
+    _automaticMonthlyLoaded[unidId] = true;
+    return [];
+  }
+}
+
 async function getHistoricoAsync(unidId) {
   const uid=unidId||(unidadeAtual&&unidadeAtual.id)||'premium24';
   ativarListenerTempoReal(uid);
   const keysP = atualizarCacheInativosProfessores(uid);
+  const automaticosP = carregarFechamentosAutomaticos(uid);
   if(_cache[uid]) {
-    await keysP.catch(()=>{});
+    await Promise.all([keysP.catch(()=>{}), automaticosP.catch(()=>{})]);
     return getHistorico(uid);
   }
   try {
     const snap=await db.collection('unidades').doc(uid).collection('meses').orderBy('nome').get();
     _cache[uid]=snap.docs.map(d=>d.data()).sort((a,b)=>compararMeses(a.nome,b.nome));
-    await keysP.catch(()=>{});
+    await Promise.all([keysP.catch(()=>{}), automaticosP.catch(()=>{})]);
     return getHistorico(uid);
-  } catch(e){ console.warn('Firebase read error:',e); return []; }
+  } catch(e){ console.warn('Firebase read error:',e); await automaticosP.catch(()=>{}); return getHistorico(uid); }
 }
 
 function getHistorico(unidId) {
   const uid=unidId||(unidadeAtual&&unidadeAtual.id)||'premium24';
-  return historicoComRegraInativos(_cache[uid]||[], uid);
+  const porMes = new Map((_cache[uid] || []).map(mes => [mes.nome, mes]));
+  (_automaticMonthlyCache[uid] || []).forEach(mes => porMes.set(mes.nome, mes));
+  return historicoComRegraInativos([...porMes.values()].sort((a,b)=>compararMeses(a.nome,b.nome)), uid);
 }
 
 async function adicionarMes(mesObj, unidId) {
@@ -8957,9 +9061,143 @@ function histBadge(score){
   return'<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:16px;background:var(--amber-bg);color:var(--c-amber);margin-left:6px;">→ Estagnado</span>';
 }
 let _histSparkChart=null;
+const HIST_INDICADORES = {
+  percentUpToDate: { label: '% em dia', color: '#e01f2d', percentual: true },
+  withTraining: { label: 'Com treino', color: '#ff2b70', campo: 'comTreino' },
+  upToDate: { label: 'Em dia', color: '#2196f3', campo: 'emDia' },
+  expired: { label: 'Treinos vencidos', color: '#f6c343', campo: 'vencido' },
+  toRenew: { label: 'Treinos a renovar', color: '#e63946', campo: 'aRenovar' },
+  withoutTraining: { label: 'Sem treino', color: '#f59e0b', campo: 'semTreino' },
+};
+
+function atualizarFiltrosHistorico(hist) {
+  const unidEl = document.getElementById('histUnitFilter');
+  if (unidEl) unidEl.textContent = unidadeAtual?.nome || 'Todas';
+  const professorEl = document.getElementById('histProfessorFilter');
+  if (!professorEl) return;
+  const atual = professorEl.value;
+  const professores = [...new Set(hist.flatMap(m => (m.professores || []).map(p => p.nome)).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  professorEl.innerHTML = '<option value="">Toda a equipe</option>';
+  professores.forEach(nome => {
+    const option = document.createElement('option');
+    option.value = nome;
+    option.textContent = nome;
+    professorEl.appendChild(option);
+  });
+  if (professores.includes(atual)) professorEl.value = atual;
+}
+
+function filtrarHistoricoVisual(hist) {
+  const periodo = document.getElementById('histPeriodFilter')?.value || 'all';
+  const professor = document.getElementById('histProfessorFilter')?.value || '';
+  let resultado = hist.map(mes => ({
+    ...mes,
+    professores: professor ? (mes.professores || []).filter(p => p.nome === professor) : (mes.professores || []),
+  }));
+  if (periodo !== 'all') resultado = resultado.slice(-Number(periodo));
+  return resultado;
+}
+
+function valorHistoricoIndicador(mes, indicador) {
+  const config = HIST_INDICADORES[indicador] || HIST_INDICADORES.percentUpToDate;
+  const profs = mes.professores || [];
+  if (config.percentual) {
+    return pct(profs.reduce((s, p) => s + (p.emDia || 0), 0), profs.reduce((s, p) => s + (p.comTreino || 0), 0));
+  }
+  return profs.reduce((s, p) => s + (p[config.campo] || 0), 0);
+}
+
+function atualizarStatusFechamentoMensal() {
+  const titulo = document.getElementById('monthlyClosureStatusTitle');
+  const texto = document.getElementById('monthlyClosureStatusText');
+  const ponto = document.getElementById('monthlyClosureStatusDot');
+  if (!titulo || !texto || !ponto) return;
+  const uid = unidadeAtual?.id;
+  const automaticos = uid ? (_automaticMonthlyCache[uid] || []) : [];
+  const ultimo = automaticos[automaticos.length - 1];
+  if (!ultimo) {
+    titulo.textContent = 'Aguardando primeiro fechamento automático';
+    texto.textContent = 'Quando a rotina mensal for ativada, o snapshot final aparecerá aqui e alimentará os gráficos sem preenchimento manual.';
+    ponto.style.background = 'var(--c-amber)';
+    return;
+  }
+  const quando = ultimo.savedAt ? new Date(ultimo.savedAt).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }) : 'data não informada';
+  titulo.textContent = 'Fechamento mensal automático ativo';
+  texto.textContent = `Último snapshot: ${ultimo.nome} · fechado em ${quando}. Este mês é imutável e já alimenta os gráficos.`;
+  ponto.style.background = 'var(--green)';
+}
+
+let _liveTrainingChart = null;
+function garantirPreviewTreinoAoVivo() {
+  let root = document.getElementById('liveTrainingPreview');
+  if (root) return root;
+  const vazio = document.getElementById('hist-empty');
+  if (!vazio) return null;
+  root = document.createElement('div');
+  root.id = 'liveTrainingPreview';
+  root.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;';
+  root.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <div><div style="font-size:13px;font-weight:700;color:var(--text);">Treino ao vivo</div><div id="liveTrainingPreviewMeta" style="font-size:11px;color:var(--muted);margin-top:4px;">Carregando dados do webhook…</div></div>
+    <div style="display:flex;gap:8px;align-items:center;"><select id="liveTrainingChartType" onchange="renderPreviewTreinoAoVivo(false)" style="font-size:11px;padding:6px 8px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text);"><option value="bar">Barras</option><option value="doughnut">Distribuição</option></select><button class="btn sm" onclick="renderPreviewTreinoAoVivo(true)">Atualizar</button></div>
+  </div><div style="position:relative;height:230px;"><canvas id="liveTrainingChart" role="img" aria-label="Distribuição ao vivo dos treinos"></canvas></div>`;
+  vazio.before(root);
+  return root;
+}
+
+async function renderPreviewTreinoAoVivo(forcarAtualizacao) {
+  const root = garantirPreviewTreinoAoVivo();
+  const meta = document.getElementById('liveTrainingPreviewMeta');
+  if (!root || !meta || !unidadeAtual || typeof janelaBuscarDados !== 'function') return;
+  if (forcarAtualizacao && typeof _janelaCache !== 'undefined') {
+    _janelaCache.data = null;
+    _janelaCache.at = 0;
+  }
+  meta.textContent = 'Consultando dados ao vivo…';
+  const dados = await janelaBuscarDados();
+  const unidade = dados && typeof janelaEncontrarUnidade === 'function'
+    ? janelaEncontrarUnidade(dados, unidadeAtual.id) : null;
+  if (!unidade) {
+    meta.textContent = 'Dados ao vivo indisponíveis. Verifique o webhook da Janela de Treino.';
+    return;
+  }
+  const resumo = unidade.resumo || {};
+  const aVencer = typeof janelaContarAVencer === 'function' ? janelaContarAVencer(unidade) : Number(resumo.a_vencer || 0);
+  const valores = [Number(resumo.em_dia || 0), Number(aVencer || 0), Number(resumo.vencidos || 0), Number(resumo.sem_treino || 0)];
+  const atualizado = unidade.sincronizacao?.ultima_atualizacao;
+  meta.textContent = atualizado ? `Dados ao vivo · atualizado em ${janelaFmtData(atualizado)}` : 'Dados ao vivo · horário não informado pelo webhook';
+  const canvas = document.getElementById('liveTrainingChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_liveTrainingChart) _liveTrainingChart.destroy();
+  const tipoGrafico = document.getElementById('liveTrainingChartType')?.value || 'bar';
+  _liveTrainingChart = new Chart(canvas, {
+    type: tipoGrafico,
+    data: {
+      labels: ['Em dia', 'A vencer', 'Vencidos', 'Sem treino'],
+      datasets: [{ label: 'Alunos', data: valores, backgroundColor: ['#34c47c', '#eab308', '#f05c5c', '#f5a623'], borderRadius: 7, maxBarThickness: 56 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: item => ` ${item.parsed.y.toLocaleString('pt-BR')} alunos` } } },
+      scales: tipoGrafico === 'bar' ? { x: { grid: { display: false }, ticks: { color: '#94A3B8' } }, y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.06)' }, ticks: { color: '#94A3B8', precision: 0 } } } : {},
+    },
+  });
+}
+if (!window._liveTrainingPreviewPolling) {
+  window._liveTrainingPreviewPolling = window.setInterval(() => {
+    const historicoAtivo = document.getElementById('tab-historico')?.classList.contains('active');
+    if (!document.hidden && historicoAtivo) void renderPreviewTreinoAoVivo(true);
+  }, 3 * 60 * 1000);
+}
 async function renderHistorico(){
   if(unidadeAtual)await getHistoricoAsync(unidadeAtual.id);
-  const hist=getHistorico();
+  void renderPreviewTreinoAoVivo(false);
+  atualizarStatusFechamentoMensal();
+  const historicoCompleto=getHistorico();
+  atualizarFiltrosHistorico(historicoCompleto);
+  const hist=filtrarHistoricoVisual(historicoCompleto);
   document.getElementById('hist-empty').style.display=hist.length?'none':'block';
   document.getElementById('hist-content').style.display=hist.length?'block':'none';
   if(!hist.length)return;
@@ -9003,10 +9241,10 @@ async function renderHistorico(){
     if(_histSparkChart){_histSparkChart.destroy();_histSparkChart=null;}
     _histSparkChart=new Chart(canvas,{
       type:'line',
-      data:{labels:hist.map(m=>m.nome),datasets:[{data:hist.map(m=>pct(soma(m.professores,p=>p.emDia),soma(m.professores,p=>p.comTreino))),borderColor:'#e01f2d',backgroundColor:'transparent',borderWidth:2,pointBackgroundColor:'#e01f2d',pointRadius:4,tension:.3}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.y}% em dia`}}},
+      data:{labels:hist.map(m=>m.nome),datasets:[{data:hist.map(m=>valorHistoricoIndicador(m,document.getElementById('histIndicatorFilter')?.value)),borderColor:(HIST_INDICADORES[document.getElementById('histIndicatorFilter')?.value]||HIST_INDICADORES.percentUpToDate).color,backgroundColor:'transparent',borderWidth:3,pointBackgroundColor:(HIST_INDICADORES[document.getElementById('histIndicatorFilter')?.value]||HIST_INDICADORES.percentUpToDate).color,pointRadius:4,tension:.3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.y}${(HIST_INDICADORES[document.getElementById('histIndicatorFilter')?.value]||HIST_INDICADORES.percentUpToDate).percentual?'%':''}`}}},
         scales:{x:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#94A3B8',font:{size:10}}},
-                y:{min:0,max:100,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#94A3B8',font:{size:10},callback:v=>v+'%'}}}}
+                y:{min:0,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#94A3B8',font:{size:10},callback:v=>(HIST_INDICADORES[document.getElementById('histIndicatorFilter')?.value]||HIST_INDICADORES.percentUpToDate).percentual?v+'%':v.toLocaleString('pt-BR')}}}}
     });
     }catch(e){console.warn('Sparkline erro:',e);}
   }
@@ -9045,7 +9283,7 @@ async function renderHistorico(){
     const peBio=bioTot>0?pct(bioED,bioTot):null;
     return`<div class="hcard${sel?' selected':''}" id="hc-${esc(m.nome)}" data-mes-nome="${esc(m.nome)}" onclick="toggleSel(this.getAttribute('data-mes-nome'))">
       <div class="hcard-top">
-        <div class="hcard-month">${m.nome}${badgeHtml}</div>
+        <div class="hcard-month">${m.nome}${m.automatico?'<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:16px;background:var(--green-bg);color:var(--green);margin-left:6px;">AutomÃ¡tico</span>':badgeHtml}</div>
         <div class="hcard-check">${sel?'✓':''}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">

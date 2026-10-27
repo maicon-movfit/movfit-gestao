@@ -17,6 +17,7 @@ const schema = z.object({
   AUTH_MODE: z.enum(['firebase']).default('firebase'),
   FIREBASE_PROJECT_ID: z.string().min(1),
   FIREBASE_SERVICE_ACCOUNT_BASE64: z.string().optional(),
+  INTEGRATION_API_KEY: z.string().min(32).optional(),
   LOG_LEVEL: z.string().default('info')
 });
 
