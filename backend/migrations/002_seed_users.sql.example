@@ -1,0 +1,12 @@
+-- Copie este arquivo para 002_seed_users.sql somente no ambiente de implantação.
+-- Não coloque senhas nem credenciais aqui. O login continua no Firebase Auth;
+-- esta tabela define autorização e unidades permitidas na API.
+
+BEGIN;
+
+INSERT INTO app_usuarios (email, nome, papel)
+VALUES ('administrador@exemplo.com', 'Administrador', 'admin')
+ON CONFLICT ((lower(email))) DO UPDATE
+SET nome = EXCLUDED.nome, papel = EXCLUDED.papel, ativo = true, atualizado_em = now();
+
+COMMIT;
